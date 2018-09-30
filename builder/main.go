@@ -48,7 +48,7 @@ func main() {
 		fmt.Println("Could not create server : " + err.Error())
 	}
 
-	server.RegisterTask("build", Build)
+	server.RegisterTask("clone", Clone)
 
 	worker := server.NewWorker("builder", 2)
 	err = worker.Launch()
