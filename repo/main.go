@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	machinery "github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
@@ -13,12 +15,19 @@ var (
 	server     *machinery.Server
 )
 
-func init() {
+func loadConfig() (*config.Config, error) {
+	if configPath != "" {
+		return config.NewFromYaml(configPath, true)
+	}
+	return config.NewFromEnvironment(true)
+}
+
+func main() {
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
 	app.Usage = "irgsh-go distributed packager"
-	app.Author = "BlankOn"
-	app.Email = "herpiko@blankon.id"
+	app.Author = "BlankOn Developer"
+	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = "0.0.1"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -28,16 +37,9 @@ func init() {
 			Usage:       "Path to a configuration file",
 		},
 	}
-}
 
-func loadConfig() (*config.Config, error) {
-	if configPath != "" {
-		return config.NewFromYaml(configPath, true)
-	}
-	return config.NewFromEnvironment(true)
-}
+	app.Action = func(c *cli.Context) error {
 
-func main() {
 	conf, err := loadConfig()
 	if err != nil {
 		fmt.Println("Failed to load : " + err.Error())
@@ -55,4 +57,8 @@ func main() {
 	if err != nil {
 		fmt.Println("Could not launch worker : " + err.Error())
 	}
+		return nil
+
+	}
+	app.Run(os.Args)
 }
