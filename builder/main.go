@@ -12,6 +12,7 @@ var (
 	app        *cli.App
 	configPath string
 	server     *machinery.Server
+	workdir    string
 )
 
 func loadConfig() (*config.Config, error) {
@@ -42,6 +43,12 @@ func main() {
 		conf, err := loadConfig()
 		if err != nil {
 			fmt.Println("Failed to load : " + err.Error())
+		}
+
+		// IRGSH related config from ENV
+		workdir = os.Getenv("WORKDIR")
+		if len(workdir) == 0 {
+			workdir = "/tmp"
 		}
 
 		server, err = machinery.NewServer(conf)
