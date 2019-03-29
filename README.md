@@ -4,25 +4,35 @@
 
 ## Builder
 
-- Clone
-- Extract
-- Build
-- Uploading
+- Init:
+  - Identity
+  - base.tgz :heavy_check_mark:
+- Clone :heavy_check_mark:
+- Signing :heavy_check_mark:
+- Build :heavy_check_mark:
+- Upload
 
 ## Repo
 
-- Downloading
+- Download
 - Inject
 - Rebuild repo
 
 ## PabrikCD
 
 - Build
-- Uploading
+- Upload
+
+## Env
+
+- `IRGSH_BUILDER_SIGNING_KEY` (required)
+- `IRGSH_BUILDER_WORKDIR`
 
 ## Practial Usage (in one machine)
 
-Prepare redis as backend
+Please prepare your GPG key for signing purpose and set it on env var.
+
+Spin up redis as backend
 
 ```
 $ make redis
@@ -31,13 +41,19 @@ $ make redis
 Run the nodes in different terminal
 
 ```
-$ make builder
+$ make irgsh-builder
 ```
 ```
-$ make repo
+$ make irgsh-repo
 ```
 ```
-$ make chief
+$ make irgsh-chief
+```
+
+Testing
+
+```
+$ make submit
 ```
 
 
@@ -52,7 +68,7 @@ The `chief` will live on port 8080.
 Submit new build pipeline,
 
 ```
-curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"git@github.com:BlankOn/manokwari.git","packageUrl":"git@github.com:blankon-packages/manokwari.git"}' http://localhost:8080/api/v1/submit
+curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"git@github.com:BlankOn/bromo-theme.git","packageUrl":"git@github.com:blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
 ```
 
 Check the status of a pipeline
