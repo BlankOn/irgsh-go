@@ -32,6 +32,8 @@
 
 Please prepare your GPG key for signing purpose and set it on env var.
 
+For builder, you need initialize the base.tgz first with `make irgsh-builder-init`
+
 Spin up redis as backend
 
 ```

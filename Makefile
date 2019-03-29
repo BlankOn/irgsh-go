@@ -4,6 +4,9 @@ irgsh-chief:
 irgsh-builder:
 	cd builder && go build && ./builder -c ../config.yml
 
+irgsh-builder-init:
+	cd builder && go build && ./builder init
+
 irgsh-repo:
 	cd repo && go build && ./repo -c ../config.yml
 
