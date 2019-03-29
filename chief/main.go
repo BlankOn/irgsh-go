@@ -68,58 +68,6 @@ func main() {
 		http.HandleFunc("/api/v1/submit", SubmitHandler)
 		http.HandleFunc("/api/v1/status", BuildStatusHandler)
 
-		// DIRECT TEST BEGIN
-		// For direct test purpose
-		/*
-			submission := Submission{}
-			submission.TaskUUID = uuid.New().String()
-			submission.SourceURL = "git@github.com:BlankOn/manokwari.git"
-			submission.PackageURL = "git@github.com:blankon-packages/manokwari.git"
-			jsonStr, err := json.Marshal(submission)
-			if err != nil {
-				return err
-			}
-			builderCloneSignature := tasks.Signature{
-				Name: "clone",
-				UUID: submission.TaskUUID,
-				Args: []tasks.Arg{
-					{
-						Type:  "string",
-						Value: string(jsonStr),
-					},
-				},
-			}
-			repoSignature := tasks.Signature{
-				Name: "repo",
-				UUID: uuid.New().String(),
-			}
-			fmt.Println("BuilderCloneTaskUUID : " + builderCloneSignature.UUID)
-			fmt.Println("RepoTaskUUID : " + repoSignature.UUID)
-
-			chain, _ := tasks.NewChain(&builderCloneSignature, &repoSignature)
-			_, err = server.SendChain(chain) // the ChainAsyncResult are not used
-			if err != nil {
-				fmt.Println("Could not create server : " + err.Error())
-			}
-
-			// Recreate the AsyncResult instance using the signature and server.backend
-			builderCloneSignature2 := tasks.Signature{
-				Name: "clone",
-				UUID: builderCloneSignature.UUID,
-			}
-			time.Sleep(10 * time.Second)
-			car := result.NewAsyncResult(&builderCloneSignature2, server.GetBackend())
-			car.Touch()
-			taskState := car.GetState()
-			fmt.Printf("Current state of %v task is:\n", taskState.TaskUUID)
-			fmt.Println(taskState.State)
-			car.Touch()
-			taskState = car.GetState()
-			fmt.Printf("Current state of %v task is:\n", taskState.TaskUUID)
-			fmt.Println(taskState.State)
-		*/
-		// DIRECT TEST END
-
 		log.Println("irgsh-go now live on port 8080")
 		log.Fatal(http.ListenAndServe(":8080", nil))
 		return nil
@@ -154,8 +102,8 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cloneSignature := tasks.Signature{
-		Name: "clone",
+	buildSignature := tasks.Signature{
+		Name: "build",
 		UUID: submission.TaskUUID,
 		Args: []tasks.Arg{
 			{
@@ -172,14 +120,14 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "sending task...\n")
 	//fmt.Println("GroupTaskUUID : " + buildSignature.GroupUUID)
-	fmt.Println("BuildTaskUUID : " + cloneSignature.UUID)
+	fmt.Println("BuildTaskUUID : " + buildSignature.UUID)
 	fmt.Println("RepoTaskUUID : " + repoSignature.UUID)
-	chain, _ := tasks.NewChain(&cloneSignature, &repoSignature)
+	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
 	_, err = server.SendChain(chain)
 	if err != nil {
 		fmt.Println("Could not create server : " + err.Error())
 	}
-	fmt.Fprintf(w, "clone Job ID: "+cloneSignature.UUID+"\n")
+	fmt.Fprintf(w, "build Job ID: "+buildSignature.UUID+"\n")
 	fmt.Fprintf(w, "repo Job ID "+repoSignature.UUID+"\n")
 
 }
