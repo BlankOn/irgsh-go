@@ -9,3 +9,6 @@ irgsh-repo:
 
 redis:
 	docker run -d --network host redis
+
+submit:
+	curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"git@github.com:BlankOn/bromo-theme.git","packageUrl":"git@github.com:blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
