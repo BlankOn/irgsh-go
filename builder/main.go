@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+
 	machinery "github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
-	"os"
+	"github.com/hpcloud/tail"
 )
 
 var (
@@ -13,6 +16,8 @@ var (
 	configPath string
 	server     *machinery.Server
 	workdir    string
+	signingKey string
+	isBuild    string
 )
 
 func loadConfig() (*config.Config, error) {
@@ -23,6 +28,8 @@ func loadConfig() (*config.Config, error) {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
 	app.Usage = "irgsh-go distributed packager"
@@ -36,6 +43,32 @@ func main() {
 			Destination: &configPath,
 			Usage:       "Path to a configuration file",
 		},
+		cli.StringFlag{
+			Name:  "build",
+			Value: "true",
+			Usage: "Path to a configuration file",
+		},
+	}
+
+	app.Commands = []cli.Command{
+		{
+			Name:    "init",
+			Aliases: []string{"i"},
+			Usage:   "initialize builder",
+			Action: func(c *cli.Context) error {
+				err := InitBase()
+				return err
+			},
+		},
+		{
+			Name:    "update",
+			Aliases: []string{"i"},
+			Usage:   "update base.tgz",
+			Action: func(c *cli.Context) error {
+				err := UpdateBase()
+				return err
+			},
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
@@ -45,8 +78,14 @@ func main() {
 			fmt.Println("Failed to load : " + err.Error())
 		}
 
+		signingKey = os.Getenv("IRGSH_BUILDER_SIGNING_KEY")
+		if len(signingKey) == 0 {
+			log.Fatal("No signing key provided.")
+			os.Exit(1)
+		}
+
 		// IRGSH related config from ENV
-		workdir = os.Getenv("WORKDIR")
+		workdir = os.Getenv("IRGSH_BUILDER_WORKDIR")
 		if len(workdir) == 0 {
 			workdir = "/tmp"
 		}
@@ -56,7 +95,7 @@ func main() {
 			fmt.Println("Could not create server : " + err.Error())
 		}
 
-		server.RegisterTask("clone", Clone)
+		server.RegisterTask("build", Build)
 
 		worker := server.NewWorker("builder", 2)
 		err = worker.Launch()
@@ -67,4 +106,14 @@ func main() {
 
 	}
 	app.Run(os.Args)
+}
+
+func StreamLog(path string) {
+	t, err := tail.TailFile(path, tail.Config{Follow: true})
+	if err != nil {
+		log.Printf("error: %v\n", err)
+	}
+	for line := range t.Lines {
+		fmt.Println(line.Text)
+	}
 }
