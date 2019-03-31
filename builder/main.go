@@ -47,7 +47,7 @@ func main() {
 	app.Usage = "irgsh-go distributed packager"
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
-	app.Version = "0.0.1"
+	app.Version = "IRGSH_GO_VERSION"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:        "c",
