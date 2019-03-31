@@ -13,12 +13,13 @@ import (
 )
 
 var (
-	app        *cli.App
-	configPath string
-	server     *machinery.Server
-	workdir    string
-	signingKey string
-	isBuild    string
+	app          *cli.App
+	configPath   string
+	server       *machinery.Server
+	workdir      string
+	chiefAddress string
+	signingKey   string
+	isBuild      string
 )
 
 func loadConfig() (*config.Config, error) {
@@ -32,6 +33,12 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// IRGSH related config from ENV
+	chiefAddress = os.Getenv("IRGSH_CHIEF_ADDRESS")
+	if len(chiefAddress) == 0 {
+		log.Fatal("No IRGSH Chief address provided.")
+		os.Exit(1)
+	}
+
 	signingKey = os.Getenv("IRGSH_BUILDER_SIGNING_KEY")
 	if len(signingKey) == 0 {
 		log.Fatal("No signing key provided.")

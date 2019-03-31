@@ -141,7 +141,7 @@ func StorePackage(payload string) (next string, err error) {
 	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Building package
-	cmdStr := "cd " + workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' localhost:8080/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
+	cmdStr := "cd " + workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + chiefAddress + "/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
 	err = Execute(cmdStr)
 	if err != nil {
 		log.Println(cmdStr)
