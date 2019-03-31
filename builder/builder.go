@@ -81,18 +81,11 @@ func BuildPreparation(payload string) (next string, err error) {
 
 	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
-	// Collect deps
-	/*
-		err = Execute("cat " + workdir+"/"+raw["taskUUID"].(string)+"/package" + " | grep Depends | tr \" \" \"\n\" | tr \",\" \" \"  | sed '/)/d' | sed '/(/d' | sed '/{/d' | sed '/}/d' | sed '/:/d' | tr \"\n\" \" \"")
-		if err != nil {
-			log.Printf("error: %v\n", err)
-			return err
-		}
-	*/
-
 	// Signing DSC
-	err = Execute("cd " + workdir + "/" + raw["taskUUID"].(string) + "/package" + " && debuild -S -k" + signingKey + "  > " + logPath)
+	cmdStr := "cd " + workdir + "/" + raw["taskUUID"].(string) + "/package" + " && debuild -S -k" + signingKey + "  > " + logPath
+	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -109,27 +102,28 @@ func BuildPackage(payload string) (next string, err error) {
 	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Copy the source files
-	err = Execute("cp -vR " + workdir + "/" + raw["taskUUID"].(string) + "/source/* " + workdir + "/" + raw["taskUUID"].(string) + "/package/" + " >> " + logPath)
+	cmdStr := "cp -vR " + workdir + "/" + raw["taskUUID"].(string) + "/source/* " + workdir + "/" + raw["taskUUID"].(string) + "/package/" + " >> " + logPath
+	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
 
 	// Cleanup pbuilder cache result
-	err = Execute("sudo rm -rf /var/cache/pbuilder/result/*")
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return
-	}
+	_ = Execute("sudo rm -rf /var/cache/pbuilder/result/*")
 
 	// Building the package
-	err = Execute("cd " + workdir + "/" + raw["taskUUID"].(string) + " && sudo pbuilder build *.dsc >> " + logPath)
+	cmdStr = "cd " + workdir + "/" + raw["taskUUID"].(string) + " && sudo pbuilder build *.dsc >> " + logPath
+	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
 
-	err = Execute("cp /var/cache/pbuilder/result/* " + workdir + "/" + raw["taskUUID"].(string))
+	cmdStr = "cp /var/cache/pbuilder/result/* " + workdir + "/" + raw["taskUUID"].(string)
+	err = Execute(cmdStr)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -148,9 +142,9 @@ func StorePackage(payload string) (next string, err error) {
 
 	// Building package
 	cmdStr := "cd " + workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' localhost:8080/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
-	log.Println(cmdStr)
 	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}

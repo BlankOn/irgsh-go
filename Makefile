@@ -10,7 +10,7 @@ release:
 	mkdir -p irgsh-go/usr/share/irgsh
 	mkdir -p irgsh-go/bin
 	cp bin/* irgsh-go/bin/
-	cp -R share irgsh-go/usr/share/irgsh
+	cp -R share/* irgsh-go/usr/share/irgsh/
 	tar -zcvf release.tar.gz irgsh-go
 	rm -rf irgsh-go
 	cp tmp/chief-main.go chief/main.go

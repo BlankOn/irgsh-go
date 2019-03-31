@@ -16,10 +16,10 @@ func Repo(payload string) (err error) {
 	logPath := workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
 
 	cmdStr := "mkdir -p " + workdir + "/artifacts/ && cd " + workdir + "/artifacts/ && wget " + chiefAddress + "/" + raw["taskUUID"].(string) + ".tar.gz && tar -xvf " + raw["taskUUID"].(string) + ".tar.gz"
-	log.Println(cmdStr)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -49,7 +49,7 @@ func InitRepo() (err error) {
 	logPath := workdir + "/init.log"
 	go StreamLog(logPath)
 
-	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR ../share/reprepro-template " + workdir + "/" + repository.DistCodename
+	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR /usr/share/irgsh/share/reprepro-template " + workdir + "/" + repository.DistCodename
 	cmd := exec.Command("bash", "-c", cmdStr)
 	_ = cmd.Run()
 
@@ -62,10 +62,10 @@ func InitRepo() (err error) {
 		repository.DistSupportedArchitectures,
 		repository.UpstreamDistComponents,
 	)
-	log.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -86,6 +86,7 @@ func InitRepo() (err error) {
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -99,6 +100,7 @@ func InitRepo() (err error) {
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -111,6 +113,7 @@ func InitRepo() (err error) {
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -133,6 +136,7 @@ func UpdateRepo() (err error) {
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}

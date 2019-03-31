@@ -27,16 +27,19 @@ func InitBase() (err error) {
 
 	log.Println("Installing pbuilder and friends...")
 
-	err = Execute("sudo apt-get install pbuilder debootstrap devscripts equivs > " + logPath)
+	cmdStr := "sudo apt-get install pbuilder debootstrap devscripts equivs > " + logPath
+	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return err
 	}
 
 	_ = Execute("sudo rm /var/cache/pbuilder/base.*")
-
-	err = Execute("sudo pbuilder create --debootstrapopts --variant=buildd >> " + logPath)
+	cmdStr = "sudo pbuilder create --debootstrapopts --variant=buildd >> " + logPath
+	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return err
 	}
@@ -55,9 +58,10 @@ func UpdateBase() (err error) {
 	go StreamLog(logPath)
 
 	log.Println("Updating base.tgz...")
-
-	err = Execute("sudo pbuilder update >> " + logPath)
+	cmdStr := "sudo pbuilder update >> " + logPath
+	err = Execute(cmdStr)
 	if err != nil {
+		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return err
 	}
