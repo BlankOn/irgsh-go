@@ -3,16 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/backends/result"
 	"github.com/RichardKnop/machinery/v1/config"
 	"github.com/RichardKnop/machinery/v1/tasks"
+	"github.com/google/uuid"
 	"github.com/urfave/cli"
 )
 
@@ -20,6 +22,7 @@ var (
 	app        *cli.App
 	configPath string
 	server     *machinery.Server
+	workdir    string
 )
 
 type Submission struct {
@@ -37,6 +40,14 @@ func loadConfig() (*config.Config, error) {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	workdir = os.Getenv("IRGSH_CHIEF_WORKDIR")
+	if len(workdir) == 0 {
+		workdir = "/tmp/irgsh/chief"
+	}
+	log.Println("WORKDIR=" + workdir)
+
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
 	app.Usage = "irgsh-go distributed packager"
@@ -64,17 +75,24 @@ func main() {
 			fmt.Println("Could not create server : " + err.Error())
 		}
 
-		http.HandleFunc("/", IndexHandler)
-		http.HandleFunc("/api/v1/submit", SubmitHandler)
-		http.HandleFunc("/api/v1/status", BuildStatusHandler)
+		serve()
 
-		log.Println("irgsh-go now live on port 8080")
-		log.Fatal(http.ListenAndServe(":8080", nil))
 		return nil
 
 	}
 	app.Run(os.Args)
 
+}
+
+func serve() {
+	fs := http.FileServer(http.Dir(workdir + "/artifacts"))
+	http.Handle("/", fs)
+	http.HandleFunc("/api/v1/submit", SubmitHandler)
+	http.HandleFunc("/api/v1/status", BuildStatusHandler)
+	http.HandleFunc("/upload", uploadFileHandler())
+
+	log.Println("irgsh-go chief now live on port 8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +110,7 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	submission.Timestamp = time.Now()
-	submission.TaskUUID = uuid.New().String()
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String()
 
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
@@ -115,7 +133,13 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 
 	repoSignature := tasks.Signature{
 		Name: "repo",
-		UUID: uuid.New().String(),
+		UUID: submission.TaskUUID,
+		Args: []tasks.Arg{
+			{
+				Type:  "string",
+				Value: string(jsonStr),
+			},
+		},
 	}
 
 	fmt.Fprintf(w, "sending task...\n")
@@ -160,4 +184,64 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	res := fmt.Sprintf("Current state of %v task is: %s\n", taskState.TaskUUID, taskState.State)
 	fmt.Println(res)
 	fmt.Fprintf(w, res)
+}
+
+func uploadFileHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		keys, ok := r.URL.Query()["id"]
+
+		if !ok || len(keys[0]) < 1 {
+			log.Println("Url Param 'uuid' is missing")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		id := keys[0]
+
+		artifactPath := workdir + "/artifacts"
+
+		// parse and validate file and post parameters
+		file, _, err := r.FormFile("uploadFile")
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+		fileBytes, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// check file type, detectcontenttype only needs the first 512 bytes
+		filetype := http.DetectContentType(fileBytes)
+		switch filetype {
+		case "application/gzip", "application/x-gzip":
+			break
+		default:
+			log.Println("File upload rejected: should be a compressed tar.gz file.")
+			w.WriteHeader(http.StatusBadRequest)
+		}
+
+		fileName := id + ".tar.gz"
+		newPath := filepath.Join(artifactPath, fileName)
+
+		// write file
+		newFile, err := os.Create(newPath)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer newFile.Close() // idempotent, okay to call twice
+		if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte("SUCCESS"))
+	})
 }

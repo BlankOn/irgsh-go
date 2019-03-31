@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	machinery "github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/config"
-	"github.com/urfave/cli"
 	"github.com/hpcloud/tail"
+	"github.com/urfave/cli"
 )
 
 var (
@@ -29,6 +30,17 @@ func loadConfig() (*config.Config, error) {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	// IRGSH related config from ENV
+	signingKey = os.Getenv("IRGSH_BUILDER_SIGNING_KEY")
+	if len(signingKey) == 0 {
+		log.Fatal("No signing key provided.")
+		os.Exit(1)
+	}
+	workdir = os.Getenv("IRGSH_BUILDER_WORKDIR")
+	if len(workdir) == 0 {
+		workdir = "/tmp/irgsh/builder"
+	}
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -78,17 +90,7 @@ func main() {
 			fmt.Println("Failed to load : " + err.Error())
 		}
 
-		signingKey = os.Getenv("IRGSH_BUILDER_SIGNING_KEY")
-		if len(signingKey) == 0 {
-			log.Fatal("No signing key provided.")
-			os.Exit(1)
-		}
-
-		// IRGSH related config from ENV
-		workdir = os.Getenv("IRGSH_BUILDER_WORKDIR")
-		if len(workdir) == 0 {
-			workdir = "/tmp"
-		}
+		go serve()
 
 		server, err = machinery.NewServer(conf)
 		if err != nil {
@@ -102,10 +104,18 @@ func main() {
 		if err != nil {
 			fmt.Println("Could not launch worker : " + err.Error())
 		}
+
 		return nil
 
 	}
 	app.Run(os.Args)
+}
+
+func serve() {
+	fs := http.FileServer(http.Dir(workdir))
+	http.Handle("/", fs)
+	log.Println("irgsh-go builder now live on port 8081, serving path : " + workdir)
+	log.Fatal(http.ListenAndServe(":8081", nil))
 }
 
 func StreamLog(path string) {
