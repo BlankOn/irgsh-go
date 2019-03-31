@@ -49,7 +49,7 @@ func InitRepo() (err error) {
 	logPath := workdir + "/init.log"
 	go StreamLog(logPath)
 
-	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR /usr/share/irgsh/share/reprepro-template " + workdir + "/" + repository.DistCodename
+	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR /usr/share/irgsh/reprepro-template " + workdir + "/" + repository.DistCodename
 	cmd := exec.Command("bash", "-c", cmdStr)
 	_ = cmd.Run()
 

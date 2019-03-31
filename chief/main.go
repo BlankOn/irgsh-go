@@ -134,25 +134,15 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	repoSignature := tasks.Signature{
 		Name: "repo",
 		UUID: submission.TaskUUID,
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: string(jsonStr),
-			},
-		},
 	}
 
-	fmt.Fprintf(w, "sending task...\n")
-	//fmt.Println("GroupTaskUUID : " + buildSignature.GroupUUID)
-	fmt.Println("BuildTaskUUID : " + buildSignature.UUID)
-	fmt.Println("RepoTaskUUID : " + repoSignature.UUID)
+	fmt.Fprintf(w, "Sending task to workers...\n")
 	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
 	_, err = server.SendChain(chain)
 	if err != nil {
 		fmt.Println("Could not create server : " + err.Error())
 	}
-	fmt.Fprintf(w, "build Job ID: "+buildSignature.UUID+"\n")
-	fmt.Fprintf(w, "repo Job ID "+repoSignature.UUID+"\n")
+	fmt.Fprintf(w, "PipelineID %s \n", submission.TaskUUID)
 
 }
 
