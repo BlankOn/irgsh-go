@@ -1,43 +1,24 @@
 # irgsh-go
 
-## CLI
+## Requirements
 
-- Auth
-- GPG signing
+```
+sudo apt-get install -y pbuilder debootstrap devscripts python-apt
+```
 
-## Chief
+## Install
 
-- Auth
-- WebSocket
+Before install, make sure you stopped all the running irgsh-\* instances. To install or update irgsh-go, you can use the install script using cURL:
 
-## Builder
-
-- Init:
-  - Identity
-  - base.tgz :heavy_check_mark:
-- Clone :heavy_check_mark:
-- Signing :heavy_check_mark:
-- Build :heavy_check_mark:
-- Upload :heavy_check_mark:
-
-## Repo
-
-- Init :heavy_check_mark:
-- Sync :heavy_check_mark:
-- Download :heavy_check_mark:
-- Inject :heavy_check_mark:
-- Rebuild repo :heavy_check_mark:
-
-## PabrikCD
-
-- Build
-- Upload
+```
+curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/scripts/install.sh | bash
+```
 
 ## Env
 
 See `env.local` for entire env vars reference.
 
-## Practial Usage (in one machine)
+## Practial usage in development on one machine
 
 Please prepare your GPG key for signing purpose and set it on env var.
 
@@ -89,3 +70,39 @@ Check the status of a pipeline
 ```
 curl http://localhost:8080/api/v1/status?uuid=uuidstring
 ```
+
+## Todos
+
+### CLI
+
+- Auth
+- GPG signing
+
+### Chief
+
+- Auth
+- WebSocket
+
+### Builder
+
+- Init:
+  - Identity
+  - base.tgz :heavy_check_mark:
+- Clone :heavy_check_mark:
+- Signing :heavy_check_mark:
+- Build :heavy_check_mark:
+- Upload :heavy_check_mark:
+
+### Repo
+
+- Init :heavy_check_mark:
+- Sync :heavy_check_mark:
+- Download :heavy_check_mark:
+- Inject :heavy_check_mark:
+- Rebuild repo :heavy_check_mark:
+
+### PabrikCD
+
+- Build
+- Upload
+
