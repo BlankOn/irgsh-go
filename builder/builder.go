@@ -115,8 +115,21 @@ func BuildPackage(payload string) (next string, err error) {
 		return
 	}
 
+	// Cleanup pbuilder cache result
+	err = Execute("sudo rm -rf /var/cache/pbuilder/result/*")
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		return
+	}
+
 	// Building the package
 	err = Execute("cd " + workdir + "/" + raw["taskUUID"].(string) + " && sudo pbuilder build *.dsc >> " + logPath)
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		return
+	}
+
+	err = Execute("cp /var/cache/pbuilder/result/* " + workdir + "/" + raw["taskUUID"].(string))
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -134,7 +147,9 @@ func StorePackage(payload string) (next string, err error) {
 	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Building package
-	err = Execute("cp -vR /var/cache/pbuilder/result/$(ls | grep source | grep changes | sed 's/_source.changes//g')* " + workdir + "/" + raw["taskUUID"].(string) + "/" + " >> " + logPath)
+	cmdStr := "cd " + workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' localhost:8080/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
+	log.Println(cmdStr)
+	err = Execute(cmdStr)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return

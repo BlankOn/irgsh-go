@@ -1,11 +1,14 @@
 irgsh-chief:
 	cd chief && go build && ./chief -c ../config.yml
 
+irgsh-builder-init:
+	cd builder && go build && ./builder init
+
 irgsh-builder:
 	cd builder && go build && ./builder -c ../config.yml
 
-irgsh-builder-init:
-	cd builder && go build && ./builder init
+irgsh-repo-init:
+	cd repo && go build && ./repo init
 
 irgsh-repo:
 	cd repo && go build && ./repo -c ../config.yml
