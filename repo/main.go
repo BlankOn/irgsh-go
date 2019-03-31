@@ -48,18 +48,18 @@ func loadConfig() (*config.Config, error) {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	workdir = os.Getenv("IRGSH_REPO_WORKDIR")
-	if len(workdir) == 0 {
-		workdir = "/tmp/irgsh/repo"
-	}
-
+	// IRGSH related config from ENV
 	chiefAddress = os.Getenv("IRGSH_CHIEF_ADDRESS")
 	if len(chiefAddress) == 0 {
 		log.Fatal("No IRGSH Chief address provided.")
 		os.Exit(1)
 	}
 
-	// IRGSH related config from ENV
+	workdir = os.Getenv("IRGSH_REPO_WORKDIR")
+	if len(workdir) == 0 {
+		workdir = "/tmp/irgsh/repo"
+	}
+
 	repository.DistName = os.Getenv("IRGSH_REPO_DIST_NAME")
 	repository.DistLabel = os.Getenv("IRGSH_REPO_DIST_LABEL")
 	repository.DistCodename = os.Getenv("IRGSH_REPO_DIST_CODENAME")
