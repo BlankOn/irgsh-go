@@ -1,0 +1,67 @@
+# WARNING
+# Avoid giving - string into Update field as it could removing blankon specific packages
+
+Origin: DIST_NAME
+Label: DIST_LABEL
+Codename: DIST_CODENAME
+Suite: DIST_CODENAME
+Components: DIST_COMPONENTS
+UDebComponents: main
+Architectures: DIST_SUPPORTED_ARCHITECTURES
+Version: DIST_VERSION
+Description: DIST_VERSION_DESC
+Update: UPSTREAM_NAME
+SignWith: DIST_SIGNING_KEY
+DebIndices: Packages Release . .gz .bz2 tiffany.py
+UDebIndices: Packages . .gz .bz2 
+DscIndices: Sources Release . .gz .bz2 tiffany.py
+#Pull: pull.verbeek
+Contents: udebs nodebs . .gz
+ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
+ContentsComponents: DIST_COMPONENTS
+ContentsUComponents: main
+Log: DIST_CODENAME.log
+ --type=dsc changelogs.sh
+
+Origin: DIST_NAME
+Label: DIST_LABEL
+Codename: DIST_CODENAME-security
+Suite: DIST_CODENAME-security
+Components: DIST_COMPONENTS
+UDebComponents: main 
+Architectures: DIST_SUPPORTED_ARCHITECTURES
+Version: DIST_VERSION
+Description: DIST_VERSION_DESC Security
+Update: 
+SignWith: DIST_SIGNING_KEY
+DebIndices: Packages Release . .gz .bz2 tiffany.py
+UDebIndices: Packages . .gz .bz2
+DscIndices: Sources Release . .gz .bz2 tiffany.py
+Contents: udebs nodebs . .gz 
+ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
+ContentsComponents: DIST_COMPONENTS
+ContentsUComponents: main 
+Log: DIST_CODENAME-security.log
+ --type=dsc changelogs.sh
+
+Origin: DIST_NAME
+Label: DIST_LABEL
+Codename: DIST_CODENAME-updates
+Suite: DIST_CODENAME-updates
+Components: DIST_COMPONENTS
+UDebComponents: main 
+Architectures: DIST_SUPPORTED_ARCHITECTURES
+Version: DIST_VERSION
+Description: DIST_VERSION_DESC Updates
+Update:
+SignWith: DIST_SIGNING_KEY
+DebIndices: Packages Release . .gz .bz2 tiffany.py
+UDebIndices: Packages . .gz .bz2
+DscIndices: Sources Release . .gz .bz2 tiffany.py
+Contents: udebs nodebs . .gz
+ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
+ContentsComponents: DIST_COMPONENTS
+ContentsUComponents: main
+Log: DIST_CODENAME-updates.log 
+ --type=dsc changelogs.sh 
+
