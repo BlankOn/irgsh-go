@@ -1,6 +1,14 @@
 # irgsh-go
 
+## CLI
+
+- Auth
+- GPG signing
+
 ## Chief
+
+- Auth
+- WebSocket
 
 ## Builder
 
@@ -10,13 +18,15 @@
 - Clone :heavy_check_mark:
 - Signing :heavy_check_mark:
 - Build :heavy_check_mark:
-- Upload
+- Upload :heavy_check_mark:
 
 ## Repo
 
-- Download
-- Inject
-- Rebuild repo
+- Init :heavy_check_mark:
+- Sync :heavy_check_mark:
+- Download :heavy_check_mark:
+- Inject :heavy_check_mark:
+- Rebuild repo :heavy_check_mark:
 
 ## PabrikCD
 
@@ -25,8 +35,7 @@
 
 ## Env
 
-- `IRGSH_BUILDER_SIGNING_KEY` (required)
-- `IRGSH_BUILDER_WORKDIR`
+See `env.local` for entire env vars reference.
 
 ## Practial Usage (in one machine)
 
