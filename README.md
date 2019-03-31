@@ -3,7 +3,7 @@
 ## Requirements
 
 ```
-sudo apt-get install -y pbuilder debootstrap devscripts python-apt
+sudo apt-get install -y pbuilder debootstrap devscripts python-apt reprepro
 ```
 
 ## Install

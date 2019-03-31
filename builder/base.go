@@ -33,11 +33,7 @@ func InitBase() (err error) {
 		return err
 	}
 
-	err = Execute("sudo rm /var/cache/pbuilder/base.tgz.tmp >> " + logPath)
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return err
-	}
+	_ = Execute("sudo rm /var/cache/pbuilder/base.*")
 
 	err = Execute("sudo pbuilder create --debootstrapopts --variant=buildd >> " + logPath)
 	if err != nil {

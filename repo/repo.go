@@ -51,12 +51,7 @@ func InitRepo() (err error) {
 
 	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR ../share/reprepro-template " + workdir + "/" + repository.DistCodename
 	cmd := exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
-	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
-		return
-	}
+	_ = cmd.Run()
 
 	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat updates.orig | sed 's/UPSTREAM_NAME/%s/g' | sed 's/UPSTREAM_DIST_CODENAME/%s/g' | sed 's/UPSTREAM_DIST_URL/%s/g' | sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig",
 		workdir,
