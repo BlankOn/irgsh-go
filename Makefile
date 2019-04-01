@@ -3,9 +3,11 @@ release:
 	cp chief/main.go tmp/chief-main.go
 	cp builder/main.go tmp/builder-main.go
 	cp repo/main.go tmp/repo-main.go
+	cp cli/main.go tmp/cli-main.go
 	cat tmp/chief-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > chief/main.go
 	cat tmp/builder-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > builder/main.go
 	cat tmp/repo-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > repo/main.go
+	cat tmp/cli-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > cli/main.go
 	make build
 	mkdir -p irgsh-go/usr/share/irgsh
 	mkdir -p irgsh-go/bin
@@ -16,12 +18,14 @@ release:
 	cp tmp/chief-main.go chief/main.go
 	cp tmp/builder-main.go builder/main.go
 	cp tmp/repo-main.go repo/main.go
+	cp tmp/cli-main.go cli/main.go
 
 build:
 	mkdir -p bin
 	go build -o ./bin/irgsh-chief ./chief
 	go build -o ./bin/irgsh-builder ./builder
 	go build -o ./bin/irgsh-repo ./repo
+	go build -o ./bin/irgsh-cli ./cli
 
 irgsh-chief:
 	go build -o ./bin/irgsh-chief ./chief && ./bin/irgsh-chief -c ./config.yml
@@ -42,4 +46,4 @@ redis:
 	docker run -d --network host redis
 
 submit:
-	curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"git@github.com:BlankOn/bromo-theme.git","packageUrl":"git@github.com:blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
+	curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"https://github.com/BlankOn/bromo-theme.git","packageUrl":"https://github.com/BlankOn-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
