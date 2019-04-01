@@ -35,7 +35,7 @@ func main() {
 	// IRGSH related config from ENV
 	chiefAddress = os.Getenv("IRGSH_CHIEF_ADDRESS")
 	if len(chiefAddress) == 0 {
-		log.Fatal("No IRGSH Chief address provided.")
+		log.Fatal("No IRGSH_CHIEF_ADDRESS env var provided.")
 		os.Exit(1)
 	}
 
@@ -54,7 +54,7 @@ func main() {
 	app.Usage = "irgsh-go distributed packager"
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
-	app.Version = "0.0.3-alpha"
+	app.Version = "IRGSH_GO_VERSION"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:        "c",
