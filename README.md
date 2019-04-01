@@ -31,7 +31,7 @@ Running the chief is quite simple as `irgsh-chief -c config.yml`, as well for `i
 Initialize the builder to create and prepare pbuilder,
 
 ```
-irgsh-pbuilder init
+irgsh-builder init
 ```
 
 Initialize the repo to create and prepare reprepro repository,
