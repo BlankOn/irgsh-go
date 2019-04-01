@@ -14,9 +14,7 @@ Before install, make sure you stopped all the running irgsh-\* instances. To ins
 curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/scripts/install.sh | bash
 ```
 
-## Env
-
-## IRGSH instances
+## The Instances
 
 Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depends on Redis as backend (queue, pubsub).
 
@@ -26,7 +24,7 @@ Minimal IRGSH ecosystem contains three instances that supposed to be live on dif
 
 We may need more than one `irgsh`builder`, depends on our available resources.
 
-Please refer to `env.local` and `config.yml` for available preference variables
+Before going to run any of these, you need to prepare your GPG key for signing purpose and set it on env var (see `GPG-EN.md`). Please refer to `env.local` and `config.yml` for available preference variables
 
 Running the chief is quite simple as `irgsh-chief -c config.yml`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
 
@@ -44,8 +42,6 @@ irgsh-repo init
 ```
 
 After these three instances are up and running, you may continue to work with `irgsh-cli`.
-
-
 
 ## CLI
 
