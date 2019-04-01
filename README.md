@@ -14,62 +14,34 @@ Before install, make sure you stopped all the running irgsh-\* instances. To ins
 curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/scripts/install.sh | bash
 ```
 
-## Env
+## The Instances
 
-See `env.local` for entire env vars reference.
+Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depends on Redis as backend (queue, pubsub).
 
-## Practial usage in development on one machine
+- `irgsh-chief` acts as the master. The the others (also applied to`irgsh-cli`) will talks to the chief.
+- `irgsh-builder` is the builder worker of IRGSH. Machine with speed CPU and high RAM is favored.
+- `irgsh-repo` will serve as repository so it may need huge volume of storage.
 
-Please prepare your GPG key for signing purpose and set it on env var.
+We may need more than one `irgsh`builder`, depends on our available resources.
 
-For builder, you need initialize the base.tgz first with `make irgsh-builder-init`
+Before going to run any of these, you need to prepare your GPG key for signing purpose and set it on env var (see `GPG-EN.md`). Please refer to `env.local` and `config.yml` for available preference variables
 
-For repo, you need initialize the reprepro repository first with `make irgsh-repo-init`
+Running the chief is quite simple as `irgsh-chief -c config.yml`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
 
-Spin up redis as backend
-
-```
-$ make redis
-```
-
-Run the nodes in different terminal
+Initialize the builder to create and prepare pbuilder,
 
 ```
-$ make irgsh-builder
-```
-```
-$ make irgsh-repo
-```
-```
-$ make irgsh-chief
+irgsh-pbuilder init
 ```
 
-Testing
+Initialize the repo to create and prepare reprepro repository,
 
 ```
-$ make submit
-```
-
-
-## Endpoints
-
-The `chief` will be live on port 8080.
-
-- `/api/v1/submit` - POST
-- `/api/v1/status` - GET
-
-
-Submit new build pipeline,
+irgsh-repo init
 
 ```
-curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"https://github.com/BlankOn/bromo-theme.git","packageUrl":"https://github.com/blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
-```
 
-Check the status of a pipeline
-
-```
-curl http://localhost:8080/api/v1/status?uuid=uuidstring
-```
+After these three instances are up and running, you may continue to work with `irgsh-cli`.
 
 ## CLI
 
