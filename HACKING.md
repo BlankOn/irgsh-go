@@ -1,7 +1,5 @@
 ## Practial usage in development on one machine
 
-Please prepare your GPG key for signing purpose and set it on env var.
-
 For builder, you need initialize the base.tgz first with `make irgsh-builder-init`
 
 For repo, you need initialize the reprepro repository first with `make irgsh-repo-init`
