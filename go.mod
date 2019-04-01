@@ -6,6 +6,7 @@ require (
 	github.com/go-playground/universal-translator v0.16.0 // indirect
 	github.com/google/uuid v1.1.0
 	github.com/hpcloud/tail v1.0.0
+	github.com/imroc/req v0.2.3
 	github.com/leodido/go-urn v1.1.0 // indirect
 	github.com/urfave/cli v1.20.0
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect

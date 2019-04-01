@@ -53,7 +53,7 @@ $ make submit
 
 ## Endpoints
 
-The `chief` will live on port 8080.
+The `chief` will be live on port 8080.
 
 - `/api/v1/submit` - POST
 - `/api/v1/status` - GET
@@ -62,7 +62,7 @@ The `chief` will live on port 8080.
 Submit new build pipeline,
 
 ```
-curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"git@github.com:BlankOn/bromo-theme.git","packageUrl":"git@github.com:blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
+curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"https://github.com/BlankOn/bromo-theme.git","packageUrl":"https://github.com/blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
 ```
 
 Check the status of a pipeline
@@ -71,12 +71,34 @@ Check the status of a pipeline
 curl http://localhost:8080/api/v1/status?uuid=uuidstring
 ```
 
+## CLI
+
+`irgsh-cli` need to be initialized first to define the `irgsh-chief` instance address,
+
+```
+irgsh-cli --chief http://irgsh.blankonlinux.or.id:8080 init
+```
+
+Then you can submit a package,
+
+```
+irgsh-cli --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git submit
+```
+
+And checking the status of a pipeline,
+
+```
+irgsh-cli --pipeline 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9 status
+```
+
+
 ## Todos
 
 ### CLI
 
-- Auth
+- Submit :heavy_check_mark:
 - GPG signing
+- Auth
 
 ### Chief
 
