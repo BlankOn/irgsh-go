@@ -70,12 +70,11 @@ irgsh-cli --pipeline 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9 stat
 
 - Submit :heavy_check_mark:
 - GPG signing
-- Auth (GPG or mutuah auth)
 - Live logging via WebSocket
 
 ### Chief
 
-- Auth (GPG or mutuah auth)
+- Auth (GPG or mutual auth)
 - WebSocket
 - Builder registration
 - Repo registration
