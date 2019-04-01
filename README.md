@@ -19,12 +19,12 @@ curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/scripts/insta
 Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depends on Redis as backend (queue, pubsub).
 
 - `irgsh-chief` acts as the master. The the others (also applied to`irgsh-cli`) will talks to the chief.
-- `irgsh-builder` is the builder worker of IRGSH. Machine with speed CPU and high RAM is favored.
+- `irgsh-builder` is the builder worker of IRGSH. Machines with speed CPU and high RAM are prefered.
 - `irgsh-repo` will serve as repository so it may need huge volume of storage.
 
-We may need more than one `irgsh`builder`, depends on our available resources.
+We may need more than one `irgsh-builder`, depends on our available resources.
 
-Before going to run any of these, you need to prepare your GPG key for signing purpose and set it on env var (see `GPG-EN.md`). Please refer to `env.local` and `config.yml` for available preference variables
+Before going to run any of these, you need to prepare your GPG key for signing purpose and set it on environment variable (see `GPG-EN.md`). Please refer to `env.local` and `config.yml` for available preference variables
 
 Running the chief is quite simple as `irgsh-chief -c config.yml`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
 
@@ -70,22 +70,25 @@ irgsh-cli --pipeline 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9 stat
 
 - Submit :heavy_check_mark:
 - GPG signing
-- Auth
+- Auth (GPG or mutuah auth)
+- Live logging via WebSocket
 
 ### Chief
 
-- Auth
+- Auth (GPG or mutuah auth)
 - WebSocket
+- Builder registration
+- Repo registration
 
 ### Builder
 
 - Init:
-  - Identity
   - base.tgz :heavy_check_mark:
 - Clone :heavy_check_mark:
 - Signing :heavy_check_mark:
 - Build :heavy_check_mark:
 - Upload :heavy_check_mark:
+- Dockerized pbuilder
 
 ### Repo
 
@@ -100,3 +103,8 @@ irgsh-cli --pipeline 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9 stat
 - Build
 - Upload
 
+### Others
+
+- Daemonized instances
+- No sudo needed
+- Secure Redis connection
