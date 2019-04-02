@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 )
@@ -15,16 +14,22 @@ func Repo(payload string) (err error) {
 
 	logPath := workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
 
-	cmdStr := "mkdir -p " + workdir + "/artifacts/ && cd " + workdir + "/artifacts/ && wget " + chiefAddress + "/" + raw["taskUUID"].(string) + ".tar.gz && tar -xvf " + raw["taskUUID"].(string) + ".tar.gz"
+	cmdStr := fmt.Sprintf("mkdir -p %s/artifacts/ && cd %s/artifacts/ && wget %s/%s.tar.gz && tar -xvf %s.tar.gz",
+		workdir,
+		workdir,
+		chiefAddress,
+		raw["taskUUID"].(string),
+		raw["taskUUID"].(string),
+	)
+	fmt.Println(cmdStr)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/ && sudo reprepro -v -v -v includedeb %s %s/artifacts/%s/*.deb >>  %s",
+	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v includedeb %s %s/artifacts/%s/*.deb >>  %s",
 		workdir,
 		repository.DistCodename,
 		repository.DistCodename,
@@ -32,11 +37,11 @@ func Repo(payload string) (err error) {
 		raw["taskUUID"],
 		logPath,
 	)
-	log.Println(cmdStr)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -44,16 +49,27 @@ func Repo(payload string) (err error) {
 }
 
 func InitRepo() (err error) {
-	fmt.Println("Initialize repository")
+	fmt.Println("========== Initializing new repository")
 
 	logPath := workdir + "/init.log"
 	go StreamLog(logPath)
 
-	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR /usr/share/irgsh/reprepro-template " + workdir + "/" + repository.DistCodename
+	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR /usr/share/irgsh/reprepro-template %s/%s",
+		workdir,
+		workdir,
+		repository.DistCodename,
+		workdir,
+		repository.DistCodename,
+	)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	_ = cmd.Run()
 
-	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat updates.orig | sed 's/UPSTREAM_NAME/%s/g' | sed 's/UPSTREAM_DIST_CODENAME/%s/g' | sed 's/UPSTREAM_DIST_URL/%s/g' | sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig",
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat updates.orig | 
+		sed 's/UPSTREAM_NAME/%s/g' | 
+		sed 's/UPSTREAM_DIST_CODENAME/%s/g' | 
+		sed 's/UPSTREAM_DIST_URL/%s/g' | 
+		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | 
+		sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig`,
 		workdir,
 		repository.DistCodename,
 		repository.UpstreamName,
@@ -62,15 +78,24 @@ func InitRepo() (err error) {
 		repository.DistSupportedArchitectures,
 		repository.UpstreamDistComponents,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat distributions.orig | sed 's/DIST_NAME/%s/g' | sed 's/DIST_LABEL/%s/g' | sed 's/DIST_CODENAME/%s/g' | sed 's/DIST_COMPONENTS/%s/g' | sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | sed 's/DIST_VERSION_DESC/%s/g' | sed 's/DIST_VERSION/%s/g' | sed 's/DIST_SIGNING_KEY/%s/g' | sed 's/UPSTREAM_NAME/%s/g' > distributions && rm distributions.orig",
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat distributions.orig |
+		sed 's/DIST_NAME/%s/g' |
+		sed 's/DIST_LABEL/%s/g' |
+		sed 's/DIST_CODENAME/%s/g' |
+		sed 's/DIST_COMPONENTS/%s/g' |
+		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' |
+		sed 's/DIST_VERSION_DESC/%s/g' |
+		sed 's/DIST_VERSION/%s/g' |
+		sed 's/DIST_SIGNING_KEY/%s/g' |
+		sed 's/UPSTREAM_NAME/%s/g'> distributions && rm distributions.orig`,
 		workdir,
 		repository.DistCodename,
 		repository.DistName,
@@ -83,11 +108,11 @@ func InitRepo() (err error) {
 		repository.DistSigningKey,
 		repository.UpstreamName,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -97,11 +122,11 @@ func InitRepo() (err error) {
 		repository.DistCodename,
 		repositoryPath,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -110,11 +135,11 @@ func InitRepo() (err error) {
 		repository.DistCodename,
 		logPath,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -132,12 +157,11 @@ func UpdateRepo() (err error) {
 		repository.DistCodename,
 		logPath,
 	)
-	log.Println(cmdStr)
+	fmt.Println(cmdStr)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 

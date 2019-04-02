@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 
 	machinery "github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/config"
@@ -152,6 +153,7 @@ func serve() {
 }
 
 func StreamLog(path string) {
+	_ = exec.Command("bash", "-c", "touch "+path).Run()
 	t, err := tail.TailFile(path, tail.Config{Follow: true})
 	if err != nil {
 		log.Printf("error: %v\n", err)
