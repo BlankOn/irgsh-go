@@ -2,84 +2,54 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 
 	machinery "github.com/RichardKnop/machinery/v1"
-	"github.com/RichardKnop/machinery/v1/config"
+	machineryConfig "github.com/RichardKnop/machinery/v1/config"
+	"github.com/ghodss/yaml"
 	"github.com/hpcloud/tail"
 	"github.com/urfave/cli"
 	validator "gopkg.in/go-playground/validator.v9"
 )
 
-type Repository struct {
-	// Distribution repository related values
-	DistName                   string `validate:"required"` // BlankOn
-	DistLabel                  string `validate:"required"` // BlankOn
-	DistCodename               string `validate:"required"` // verbeek
-	DistComponents             string `validate:"required"` // main restricted extras extras-restricted
-	DistSupportedArchitectures string `validate:"required"` // amd64 source
-	DistVersion                string `validate:"required"` // 12.0
-	DistVersionDesc            string `validate:"required"` // BlankOn Linux 12.0 Verbeek
-	DistSigningKey             string `validate:"required"` // 55BD65A0B3DA3A59ACA60932E2FE388D53B56A71
-	UpstreamName               string `validate:"required"` // merge.sid
-	UpstreamDistCodename       string `validate:"required"` // sid
-	UpstreamDistUrl            string `validate:"required"` // http://kartolo.sby.datautama.net.id/debian
-	UpstreamDistComponents     string `validate:"required"` // main non-free>restricted contrib>extras
-}
-
 var (
-	app          *cli.App
-	configPath   string
-	server       *machinery.Server
-	workdir      string
-	chiefAddress string
-	repository   Repository
-)
+	app        *cli.App
+	configPath string
+	server     *machinery.Server
 
-func loadConfig() (*config.Config, error) {
-	if configPath != "" {
-		return config.NewFromYaml(configPath, true)
-	}
-	return config.NewFromEnvironment(true)
-}
+	irgshConfig IrgshConfig
+)
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// IRGSH related config from ENV
-	chiefAddress = os.Getenv("IRGSH_CHIEF_ADDRESS")
-	if len(chiefAddress) == 0 {
-		log.Fatal("No IRGSH_CHIEF_ADDRESS env var provided.")
+	// Load config
+	configPath = os.Getenv("IRGSH_CONFIG_PATH")
+	if len(configPath) == 0 {
+		configPath = "/etc/irgsh/config.yml"
+	}
+	irgshConfig = IrgshConfig{}
+	yamlFile, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		fmt.Println(err.Error())
 		os.Exit(1)
 	}
-
-	workdir = os.Getenv("IRGSH_REPO_WORKDIR")
-	if len(workdir) == 0 {
-		workdir = "/tmp/irgsh/repo"
+	err = yaml.Unmarshal(yamlFile, &irgshConfig)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
-
-	repository.DistName = os.Getenv("IRGSH_REPO_DIST_NAME")
-	repository.DistLabel = os.Getenv("IRGSH_REPO_DIST_LABEL")
-	repository.DistCodename = os.Getenv("IRGSH_REPO_DIST_CODENAME")
-	repository.DistComponents = os.Getenv("IRGSH_REPO_DIST_COMPONENTS")
-	repository.DistSupportedArchitectures = os.Getenv("IRGSH_REPO_DIST_SUPPORTED_ARCHITECTURES")
-	repository.DistVersion = os.Getenv("IRGSH_REPO_DIST_VERSION")
-	repository.DistVersionDesc = os.Getenv("IRGSH_REPO_DIST_VERSION_DESC")
-	repository.DistSigningKey = os.Getenv("IRGSH_REPO_DIST_SIGNING_KEY")
-	repository.UpstreamName = os.Getenv("IRGSH_REPO_UPSTREAM_NAME")
-	repository.UpstreamDistCodename = os.Getenv("IRGSH_REPO_UPSTREAM_DIST_CODENAME")
-	repository.UpstreamDistUrl = os.Getenv("IRGSH_REPO_UPSTREAM_DIST_URL")
-	repository.UpstreamDistComponents = os.Getenv("IRGSH_REPO_UPSTREAM_DIST_COMPONENTS")
-
 	validate := validator.New()
-	err := validate.Struct(repository)
+	err = validate.Struct(irgshConfig.Repo)
 	if err != nil {
 		log.Fatal(err.Error())
 		os.Exit(1)
 	}
+	_ = exec.Command("bash", "-c", "mkdir -p "+irgshConfig.Repo.Workdir)
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -87,15 +57,6 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = "IRGSH_GO_VERSION"
-
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "c",
-			Value:       "",
-			Destination: &configPath,
-			Usage:       "Path to a configuration file",
-		},
-	}
 
 	app.Commands = []cli.Command{
 		{
@@ -120,14 +81,15 @@ func main() {
 
 	app.Action = func(c *cli.Context) error {
 
-		conf, err := loadConfig()
-		if err != nil {
-			fmt.Println("Failed to load : " + err.Error())
-		}
-
 		go serve()
 
-		server, err = machinery.NewServer(conf)
+		server, err := machinery.NewServer(
+			&machineryConfig.Config{
+				Broker:        irgshConfig.Redis,
+				ResultBackend: irgshConfig.Redis,
+				DefaultQueue:  "irgsh",
+			},
+		)
 		if err != nil {
 			fmt.Println("Could not create server : " + err.Error())
 		}
@@ -146,7 +108,7 @@ func main() {
 }
 
 func serve() {
-	fs := http.FileServer(http.Dir(workdir + "/" + repository.DistCodename + "/www"))
+	fs := http.FileServer(http.Dir(irgshConfig.Repo.Workdir + "/" + irgshConfig.Repo.DistCodename + "/www"))
 	http.Handle("/", fs)
 	log.Println("irgsh-go chief now live on port 8082")
 	log.Fatal(http.ListenAndServe(":8082", nil))

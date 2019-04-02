@@ -8,16 +8,17 @@ import (
 )
 
 func Repo(payload string) (err error) {
+	fmt.Println("========== Submitting the package into the repository")
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
+	logPath := irgshConfig.Repo.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
 
 	cmdStr := fmt.Sprintf("mkdir -p %s/artifacts/ && cd %s/artifacts/ && wget %s/%s.tar.gz && tar -xvf %s.tar.gz",
-		workdir,
-		workdir,
-		chiefAddress,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Chief.Address,
 		raw["taskUUID"].(string),
 		raw["taskUUID"].(string),
 	)
@@ -30,10 +31,10 @@ func Repo(payload string) (err error) {
 	}
 
 	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v includedeb %s %s/artifacts/%s/*.deb >>  %s",
-		workdir,
-		repository.DistCodename,
-		repository.DistCodename,
-		workdir,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.Workdir,
 		raw["taskUUID"],
 		logPath,
 	)
@@ -51,15 +52,15 @@ func Repo(payload string) (err error) {
 func InitRepo() (err error) {
 	fmt.Println("========== Initializing new repository")
 
-	logPath := workdir + "/init.log"
+	logPath := irgshConfig.Repo.Workdir + "/init.log"
 	go StreamLog(logPath)
 
 	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR /usr/share/irgsh/reprepro-template %s/%s",
-		workdir,
-		workdir,
-		repository.DistCodename,
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 	)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	_ = cmd.Run()
@@ -70,13 +71,13 @@ func InitRepo() (err error) {
 		sed 's/UPSTREAM_DIST_URL/%s/g' | 
 		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | 
 		sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig`,
-		workdir,
-		repository.DistCodename,
-		repository.UpstreamName,
-		repository.UpstreamDistCodename,
-		strings.Replace(repository.UpstreamDistUrl, "/", "\\/", -1),
-		repository.DistSupportedArchitectures,
-		repository.UpstreamDistComponents,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.UpstreamName,
+		irgshConfig.Repo.UpstreamDistCodename,
+		strings.Replace(irgshConfig.Repo.UpstreamDistUrl, "/", "\\/", -1),
+		irgshConfig.Repo.DistSupportedArchitectures,
+		irgshConfig.Repo.UpstreamDistComponents,
 	)
 	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
@@ -96,17 +97,17 @@ func InitRepo() (err error) {
 		sed 's/DIST_VERSION/%s/g' |
 		sed 's/DIST_SIGNING_KEY/%s/g' |
 		sed 's/UPSTREAM_NAME/%s/g'> distributions && rm distributions.orig`,
-		workdir,
-		repository.DistCodename,
-		repository.DistName,
-		repository.DistLabel,
-		repository.DistCodename,
-		repository.DistComponents,
-		repository.DistSupportedArchitectures,
-		repository.DistVersionDesc,
-		repository.DistVersion,
-		repository.DistSigningKey,
-		repository.UpstreamName,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistName,
+		irgshConfig.Repo.DistLabel,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistComponents,
+		irgshConfig.Repo.DistSupportedArchitectures,
+		irgshConfig.Repo.DistVersionDesc,
+		irgshConfig.Repo.DistVersion,
+		irgshConfig.Repo.DistSigningKey,
+		irgshConfig.Repo.UpstreamName,
 	)
 	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
@@ -116,10 +117,10 @@ func InitRepo() (err error) {
 		return
 	}
 
-	repositoryPath := strings.Replace(workdir+"/"+repository.DistCodename, "/", "\\/", -1)
+	repositoryPath := strings.Replace(irgshConfig.Repo.Workdir+"/"+irgshConfig.Repo.DistCodename, "/", "\\/", -1)
 	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat options.orig | sed 's/IRGSH_REPO_WORKDIR/%s/g' > options && rm options.orig",
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		repositoryPath,
 	)
 	fmt.Println(cmdStr)
@@ -131,8 +132,8 @@ func InitRepo() (err error) {
 	}
 
 	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export > %s",
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		logPath,
 	)
 	fmt.Println(cmdStr)
@@ -147,14 +148,14 @@ func InitRepo() (err error) {
 }
 
 func UpdateRepo() (err error) {
-	fmt.Println("Syncing repository against %s at %s...", repository.UpstreamDistCodename, repository.UpstreamDistUrl)
+	fmt.Println("Syncing irgshConfig.Repo.against %s at %s...", irgshConfig.Repo.UpstreamDistCodename, irgshConfig.Repo.UpstreamDistUrl)
 
-	logPath := workdir + "/update.log"
+	logPath := irgshConfig.Repo.Workdir + "/update.log"
 	go StreamLog(logPath)
 
 	cmdStr := fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v update > %s",
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		logPath,
 	)
 	fmt.Println(cmdStr)

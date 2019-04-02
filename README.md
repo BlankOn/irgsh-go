@@ -18,20 +18,18 @@ curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/scripts/insta
 
 Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depends on Redis as backend (queue, pubsub).
 
-- `irgsh-chief` acts as the master. The the others (also applied to`irgsh-cli`) will talks to the chief.
-- `irgsh-builder` is the builder worker of IRGSH. Machines with speed CPU and high RAM are prefered.
+- `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talks to the chief.
+- `irgsh-builder` is the builder worker of IRGSH.
 - `irgsh-repo` will serve as repository so it may need huge volume of storage.
 
-We may need more than one `irgsh-builder`, depends on our available resources.
+We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `config.yml` (see `GPG-EN.md`).
 
-Before going to run any of these, you need to prepare your GPG key for signing purpose and set it on environment variable (see `GPG-EN.md`). Please refer to `env.local` and `config.yml` for available preference variables
-
-Running the chief is quite simple as `irgsh-chief -c config.yml`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
+Running the chief is quite simple as `irgsh-chief`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the user who will be running `irgsh-builder` need to be able to run sudo without password.
 
 Initialize the builder to create and prepare pbuilder,
 
 ```
-irgsh-builder init
+sudo irgsh-builder init
 ```
 
 Initialize the repo to create and prepare reprepro repository,

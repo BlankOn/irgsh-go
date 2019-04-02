@@ -3,3 +3,6 @@ latest
 tmp
 release.tar.gz
 irgsh-go
+builder/config.go
+repo/config.go
+cli/config.go

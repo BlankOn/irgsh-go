@@ -17,7 +17,7 @@ func Build(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
+	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 	go StreamLog(logPath)
 
 	next, err = Clone(payload)
@@ -51,7 +51,7 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning source files
 	sourceURL := raw["sourceUrl"].(string)
-	_, err = git.PlainClone(workdir+"/"+raw["taskUUID"].(string)+"/source", false, &git.CloneOptions{
+	_, err = git.PlainClone(irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/source", false, &git.CloneOptions{
 		URL:      sourceURL,
 		Progress: os.Stdout,
 	})
@@ -61,7 +61,7 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning Debian package files
 	packageURL := raw["packageUrl"].(string)
-	_, err = git.PlainClone(workdir+"/"+raw["taskUUID"].(string)+"/package", false, &git.CloneOptions{
+	_, err = git.PlainClone(irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/package", false, &git.CloneOptions{
 		URL:      packageURL,
 		Progress: os.Stdout,
 	})
@@ -79,10 +79,10 @@ func BuildPreparation(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
+	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Signing DSC
-	cmdStr := "cd " + workdir + "/" + raw["taskUUID"].(string) + "/package" + " && debuild -S -k" + signingKey + "  > " + logPath
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/package" + " && debuild -S -k" + irgshConfig.Repo.DistSigningKey + "  > " + logPath
 	err = Execute(cmdStr)
 	if err != nil {
 		log.Println(cmdStr)
@@ -99,10 +99,10 @@ func BuildPackage(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
+	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Copy the source files
-	cmdStr := "cp -vR " + workdir + "/" + raw["taskUUID"].(string) + "/source/* " + workdir + "/" + raw["taskUUID"].(string) + "/package/" + " >> " + logPath
+	cmdStr := "cp -vR " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/package/" + " >> " + logPath
 	err = Execute(cmdStr)
 	if err != nil {
 		log.Println(cmdStr)
@@ -114,7 +114,7 @@ func BuildPackage(payload string) (next string, err error) {
 	_ = Execute("sudo rm -rf /var/cache/pbuilder/result/*")
 
 	// Building the package
-	cmdStr = "cd " + workdir + "/" + raw["taskUUID"].(string) + " && sudo pbuilder build *.dsc >> " + logPath
+	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + " && sudo pbuilder build *.dsc >> " + logPath
 	err = Execute(cmdStr)
 	if err != nil {
 		log.Println(cmdStr)
@@ -122,7 +122,7 @@ func BuildPackage(payload string) (next string, err error) {
 		return
 	}
 
-	cmdStr = "cp /var/cache/pbuilder/result/* " + workdir + "/" + raw["taskUUID"].(string)
+	cmdStr = "cp /var/cache/pbuilder/result/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	err = Execute(cmdStr)
 	if err != nil {
 		log.Printf("error: %v\n", err)
@@ -138,10 +138,10 @@ func StorePackage(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := workdir + "/" + raw["taskUUID"].(string) + "/build.log"
+	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Building package
-	cmdStr := "cd " + workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + chiefAddress + "/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + irgshConfig.Chief.Address + "/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
 	err = Execute(cmdStr)
 	if err != nil {
 		log.Println(cmdStr)
