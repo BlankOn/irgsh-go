@@ -9,8 +9,8 @@ release:
 	cat tmp/repo-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > repo/main.go
 	cat tmp/cli-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > cli/main.go
 	make build
-	mkdir -p irgsh-go/bin
-	cp bin/* irgsh-go/bin/
+	mkdir -p irgsh-go/usr/bin
+	cp bin/* irgsh-go/usr/bin/
 	mkdir -p irgsh-go/etc/irgsh
 	cp config.yml irgsh-go/etc/irgsh/
 	mkdir -p irgsh-go/usr/share/irgsh
