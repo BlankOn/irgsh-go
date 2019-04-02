@@ -3,4 +3,7 @@ sudo rm -f /tmp/irgsh-go.tar.gz && cd /tmp && wget https://github.com/BlankOn/ir
 sudo cp /tmp/irgsh-go/usr/bin/* /usr/bin
 sudo mkdir -p /usr/share/irgsh && sudo cp -R /tmp/irgsh-go/usr/share/irgsh/* /usr/share/irgsh/
 sudo mkdir -p /etc/irgsh && sudo cp -R /tmp/irgsh-go/etc/irgsh/* /etc/irgsh/
-
+sudo mkdir -p /var/irgsh/chief
+sudo mkdir -p /var/irgsh/builder
+sudo mkdir -p /var/irgsh/repo
+sudo chmod -vR a+rw /var/irgsh/*
