@@ -7,22 +7,26 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/backends/result"
-	"github.com/RichardKnop/machinery/v1/config"
+	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/RichardKnop/machinery/v1/tasks"
+	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
 	"github.com/urfave/cli"
+	validator "gopkg.in/go-playground/validator.v9"
 )
 
 var (
 	app        *cli.App
 	configPath string
 	server     *machinery.Server
-	workdir    string
+
+	irgshConfig IrgshConfig
 )
 
 type Submission struct {
@@ -32,21 +36,32 @@ type Submission struct {
 	PackageURL string    `json:"packageUrl"`
 }
 
-func loadConfig() (*config.Config, error) {
-	if configPath != "" {
-		return config.NewFromYaml(configPath, true)
-	}
-	return config.NewFromEnvironment(true)
-}
-
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	workdir = os.Getenv("IRGSH_CHIEF_WORKDIR")
-	if len(workdir) == 0 {
-		workdir = "/tmp/irgsh/chief"
+	// Load config
+	configPath = os.Getenv("IRGSH_CONFIG_PATH")
+	if len(configPath) == 0 {
+		configPath = "/etc/irgsh/config.yml"
 	}
-	log.Println("WORKDIR=" + workdir)
+	irgshConfig = IrgshConfig{}
+	yamlFile, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	err = yaml.Unmarshal(yamlFile, &irgshConfig)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	validate := validator.New()
+	err = validate.Struct(irgshConfig.Chief)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
+	}
+	_ = exec.Command("bash", "-c", "mkdir -p "+irgshConfig.Chief.Workdir+"/artifacts")
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -54,23 +69,16 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = "IRGSH_GO_VERSION"
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "c",
-			Value:       "",
-			Destination: &configPath,
-			Usage:       "Path to a configuration file",
-		},
-	}
 
 	app.Action = func(c *cli.Context) error {
 
-		conf, err := loadConfig()
-		if err != nil {
-			fmt.Println("Failed to load : " + err.Error())
-		}
-
-		server, err = machinery.NewServer(conf)
+		server, err = machinery.NewServer(
+			&machineryConfig.Config{
+				Broker:        irgshConfig.Redis,
+				ResultBackend: irgshConfig.Redis,
+				DefaultQueue:  "irgsh",
+			},
+		)
 		if err != nil {
 			fmt.Println("Could not create server : " + err.Error())
 		}
@@ -85,7 +93,7 @@ func main() {
 }
 
 func serve() {
-	fs := http.FileServer(http.Dir(workdir + "/artifacts"))
+	fs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
 	http.Handle("/", fs)
 	http.HandleFunc("/api/v1/submit", SubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
@@ -189,7 +197,7 @@ func uploadFileHandler() http.HandlerFunc {
 
 		id := keys[0]
 
-		artifactPath := workdir + "/artifacts"
+		artifactPath := irgshConfig.Chief.Workdir + "/artifacts"
 
 		// parse and validate file and post parameters
 		file, _, err := r.FormFile("uploadFile")

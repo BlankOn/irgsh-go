@@ -2,52 +2,54 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 
 	machinery "github.com/RichardKnop/machinery/v1"
-	"github.com/RichardKnop/machinery/v1/config"
+	machineryConfig "github.com/RichardKnop/machinery/v1/config"
+	"github.com/ghodss/yaml"
 	"github.com/hpcloud/tail"
 	"github.com/urfave/cli"
+	validator "gopkg.in/go-playground/validator.v9"
 )
 
 var (
-	app          *cli.App
-	configPath   string
-	server       *machinery.Server
-	workdir      string
-	chiefAddress string
-	signingKey   string
-	isBuild      string
-)
+	app        *cli.App
+	configPath string
+	server     *machinery.Server
 
-func loadConfig() (*config.Config, error) {
-	if configPath != "" {
-		return config.NewFromYaml(configPath, true)
-	}
-	return config.NewFromEnvironment(true)
-}
+	irgshConfig IrgshConfig
+)
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// IRGSH related config from ENV
-	chiefAddress = os.Getenv("IRGSH_CHIEF_ADDRESS")
-	if len(chiefAddress) == 0 {
-		log.Fatal("No IRGSH_CHIEF_ADDRESS env var provided.")
+	// Load config
+	configPath = os.Getenv("IRGSH_CONFIG_PATH")
+	if len(configPath) == 0 {
+		configPath = "/etc/irgsh/config.yml"
+	}
+	irgshConfig = IrgshConfig{}
+	yamlFile, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		fmt.Println(err.Error())
 		os.Exit(1)
 	}
-
-	signingKey = os.Getenv("IRGSH_BUILDER_SIGNING_KEY")
-	if len(signingKey) == 0 {
-		log.Fatal("No signing key provided.")
+	err = yaml.Unmarshal(yamlFile, &irgshConfig)
+	if err != nil {
+		fmt.Println(err.Error())
 		os.Exit(1)
 	}
-	workdir = os.Getenv("IRGSH_BUILDER_WORKDIR")
-	if len(workdir) == 0 {
-		workdir = "/tmp/irgsh/builder"
+	validate := validator.New()
+	err = validate.Struct(irgshConfig.Builder)
+	if err != nil {
+		log.Fatal(err.Error())
+		os.Exit(1)
 	}
+	_ = exec.Command("bash", "-c", "mkdir -p "+irgshConfig.Builder.Workdir)
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -55,19 +57,6 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = "IRGSH_GO_VERSION"
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "c",
-			Value:       "",
-			Destination: &configPath,
-			Usage:       "Path to a configuration file",
-		},
-		cli.StringFlag{
-			Name:  "build",
-			Value: "true",
-			Usage: "Path to a configuration file",
-		},
-	}
 
 	app.Commands = []cli.Command{
 		{
@@ -92,14 +81,15 @@ func main() {
 
 	app.Action = func(c *cli.Context) error {
 
-		conf, err := loadConfig()
-		if err != nil {
-			fmt.Println("Failed to load : " + err.Error())
-		}
-
 		go serve()
 
-		server, err = machinery.NewServer(conf)
+		server, err = machinery.NewServer(
+			&machineryConfig.Config{
+				Broker:        irgshConfig.Redis,
+				ResultBackend: irgshConfig.Redis,
+				DefaultQueue:  "irgsh",
+			},
+		)
 		if err != nil {
 			fmt.Println("Could not create server : " + err.Error())
 		}
@@ -119,9 +109,9 @@ func main() {
 }
 
 func serve() {
-	fs := http.FileServer(http.Dir(workdir))
+	fs := http.FileServer(http.Dir(irgshConfig.Builder.Workdir))
 	http.Handle("/", fs)
-	log.Println("irgsh-go builder now live on port 8081, serving path : " + workdir)
+	log.Println("irgsh-go builder now live on port 8081, serving path : " + irgshConfig.Builder.Workdir)
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
 

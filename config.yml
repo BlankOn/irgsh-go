@@ -1,16 +1,24 @@
 ---
-broker: 'redis://localhost:6379'
-#broker: 'redis://localhost:6379'
-#broker: 'https://sqs.us-west-2.amazonaws.com/123456789012'
-default_queue: irgsh_tasks
+redis: 'redis://localhost:6379'
 
-result_backend: 'redis://localhost:6379'
-#result_backend: 'memcache://localhost:11211'
-#result_backend: 'mongodb://localhost:27017'
-#results_expire_in: 3600000
+chief:
+  address: 'http://localhost:8080'
+  workdir: '/var/irgsh/chief'
 
-#amqp:
-#  binding_key: machinery_task
-#  exchange: machinery_exchange
-#  exchange_type: direct
-#  prefetch_count: 3
+builder:
+  workdir: '/var/irgsh/builder'
+
+repo:
+  workdir: '/var/irgsh/repo'
+  dist_name: 'BlankOn'
+  dist_label: 'BlankOn'
+  dist_codename: 'verbeek'
+  dist_components: 'main restricted extras extras-restricted'
+  dist_supported_architectures: 'amd64 source'
+  dist_version: '12.0'
+  dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
+  dist_signing_key: 'B113D905C417D9C31DAD9F0E509A356412B6E77F'
+  upstream_name: 'merge.sid'
+  upstream_dist_codename: 'sid'
+  upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
+  upstream_dist_components: 'main non-free>restricted contrib>extras'

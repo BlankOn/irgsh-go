@@ -3,40 +3,46 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 )
 
 func Repo(payload string) (err error) {
+	fmt.Println("========== Submitting the package into the repository")
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
+	logPath := irgshConfig.Repo.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
 
-	cmdStr := "mkdir -p " + workdir + "/artifacts/ && cd " + workdir + "/artifacts/ && wget " + chiefAddress + "/" + raw["taskUUID"].(string) + ".tar.gz && tar -xvf " + raw["taskUUID"].(string) + ".tar.gz"
+	cmdStr := fmt.Sprintf("mkdir -p %s/artifacts/ && cd %s/artifacts/ && wget %s/%s.tar.gz && tar -xvf %s.tar.gz",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Chief.Address,
+		raw["taskUUID"].(string),
+		raw["taskUUID"].(string),
+	)
+	fmt.Println(cmdStr)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/ && sudo reprepro -v -v -v includedeb %s %s/artifacts/%s/*.deb >>  %s",
-		workdir,
-		repository.DistCodename,
-		repository.DistCodename,
-		workdir,
+	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v includedeb %s %s/artifacts/%s/*.deb >>  %s",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.Workdir,
 		raw["taskUUID"],
 		logPath,
 	)
-	log.Println(cmdStr)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -44,77 +50,97 @@ func Repo(payload string) (err error) {
 }
 
 func InitRepo() (err error) {
-	fmt.Println("Initialize repository")
+	fmt.Println("========== Initializing new repository")
 
-	logPath := workdir + "/init.log"
+	logPath := irgshConfig.Repo.Workdir + "/init.log"
 	go StreamLog(logPath)
 
-	cmdStr := "sudo rm -rf " + workdir + "/" + repository.DistCodename + " && cp -vR /usr/share/irgsh/reprepro-template " + workdir + "/" + repository.DistCodename
+	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR /usr/share/irgsh/reprepro-template %s/%s",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+	)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	_ = cmd.Run()
 
-	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat updates.orig | sed 's/UPSTREAM_NAME/%s/g' | sed 's/UPSTREAM_DIST_CODENAME/%s/g' | sed 's/UPSTREAM_DIST_URL/%s/g' | sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig",
-		workdir,
-		repository.DistCodename,
-		repository.UpstreamName,
-		repository.UpstreamDistCodename,
-		strings.Replace(repository.UpstreamDistUrl, "/", "\\/", -1),
-		repository.DistSupportedArchitectures,
-		repository.UpstreamDistComponents,
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat updates.orig | 
+		sed 's/UPSTREAM_NAME/%s/g' | 
+		sed 's/UPSTREAM_DIST_CODENAME/%s/g' | 
+		sed 's/UPSTREAM_DIST_URL/%s/g' | 
+		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | 
+		sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.UpstreamName,
+		irgshConfig.Repo.UpstreamDistCodename,
+		strings.Replace(irgshConfig.Repo.UpstreamDistUrl, "/", "\\/", -1),
+		irgshConfig.Repo.DistSupportedArchitectures,
+		irgshConfig.Repo.UpstreamDistComponents,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat distributions.orig | sed 's/DIST_NAME/%s/g' | sed 's/DIST_LABEL/%s/g' | sed 's/DIST_CODENAME/%s/g' | sed 's/DIST_COMPONENTS/%s/g' | sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | sed 's/DIST_VERSION_DESC/%s/g' | sed 's/DIST_VERSION/%s/g' | sed 's/DIST_SIGNING_KEY/%s/g' | sed 's/UPSTREAM_NAME/%s/g' > distributions && rm distributions.orig",
-		workdir,
-		repository.DistCodename,
-		repository.DistName,
-		repository.DistLabel,
-		repository.DistCodename,
-		repository.DistComponents,
-		repository.DistSupportedArchitectures,
-		repository.DistVersionDesc,
-		repository.DistVersion,
-		repository.DistSigningKey,
-		repository.UpstreamName,
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat distributions.orig |
+		sed 's/DIST_NAME/%s/g' |
+		sed 's/DIST_LABEL/%s/g' |
+		sed 's/DIST_CODENAME/%s/g' |
+		sed 's/DIST_COMPONENTS/%s/g' |
+		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' |
+		sed 's/DIST_VERSION_DESC/%s/g' |
+		sed 's/DIST_VERSION/%s/g' |
+		sed 's/DIST_SIGNING_KEY/%s/g' |
+		sed 's/UPSTREAM_NAME/%s/g'> distributions && rm distributions.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistName,
+		irgshConfig.Repo.DistLabel,
+		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistComponents,
+		irgshConfig.Repo.DistSupportedArchitectures,
+		irgshConfig.Repo.DistVersionDesc,
+		irgshConfig.Repo.DistVersion,
+		irgshConfig.Repo.DistSigningKey,
+		irgshConfig.Repo.UpstreamName,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
-	repositoryPath := strings.Replace(workdir+"/"+repository.DistCodename, "/", "\\/", -1)
+	repositoryPath := strings.Replace(irgshConfig.Repo.Workdir+"/"+irgshConfig.Repo.DistCodename, "/", "\\/", -1)
 	cmdStr = fmt.Sprintf("cd %s/%s/conf && cat options.orig | sed 's/IRGSH_REPO_WORKDIR/%s/g' > options && rm options.orig",
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		repositoryPath,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
 	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export > %s",
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		logPath,
 	)
+	fmt.Println(cmdStr)
 	cmd = exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -122,22 +148,21 @@ func InitRepo() (err error) {
 }
 
 func UpdateRepo() (err error) {
-	fmt.Println("Syncing repository against %s at %s...", repository.UpstreamDistCodename, repository.UpstreamDistUrl)
+	fmt.Println("Syncing irgshConfig.Repo.against %s at %s...", irgshConfig.Repo.UpstreamDistCodename, irgshConfig.Repo.UpstreamDistUrl)
 
-	logPath := workdir + "/update.log"
+	logPath := irgshConfig.Repo.Workdir + "/update.log"
 	go StreamLog(logPath)
 
 	cmdStr := fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v update > %s",
-		workdir,
-		repository.DistCodename,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		logPath,
 	)
-	log.Println(cmdStr)
+	fmt.Println(cmdStr)
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
