@@ -24,12 +24,12 @@ Minimal IRGSH ecosystem contains three instances that supposed to be live on dif
 
 We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `config.yml` (see `GPG-EN.md`).
 
-Running the chief is quite simple as `irgsh-chief`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the user who will be running `irgsh-builder` need to be able to run sudo without password.
+Running the chief is quite simple as `irgsh-chief`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the initialization command should be running under root.
 
 Initialize the builder to create and prepare pbuilder,
 
 ```
-sudo irgsh-builder init
+irgsh-builder init
 ```
 
 Initialize the repo to create and prepare reprepro repository,
@@ -102,6 +102,6 @@ irgsh-cli --pipeline 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9 stat
 
 ### Others
 
-- Daemonized instances
-- No sudo needed
+- Daemonized instances :heavy_check_mark:
+- No sudo needed :heavy_check_mark:
 - Secure Redis connection

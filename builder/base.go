@@ -1,52 +1,40 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os/exec"
 
 	"github.com/google/uuid"
 )
 
-func Execute(command string) (err error) {
-	cmd := exec.Command("bash", "-c", command)
-	err = cmd.Run()
-
-	/*
-	   var stdoutBuff bytes.Buffer
-	   var stderrBuff bytes.Buffer
-	   cmd.Stdout = &stdoutBuff
-	   cmd.Stderr = &stderrBuff
-	*/
-
-	return err
-}
-
 func InitBase() (err error) {
 	logPath := "/tmp/irgsh-builder-init-" + uuid.New().String() + ".log"
 	go StreamLog(logPath)
 
-	log.Println("Installing pbuilder and friends...")
+	fmt.Println("Installing pbuilder and friends...")
 
-	cmdStr := "sudo apt-get install pbuilder debootstrap devscripts equivs > " + logPath
-	err = Execute(cmdStr)
+	cmdStr := "apt-get update && apt-get install -y pbuilder debootstrap devscripts equivs > " + logPath
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return err
 	}
 
-	_ = Execute("sudo rm /var/cache/pbuilder/base.*")
-	cmdStr = "sudo pbuilder create --debootstrapopts --variant=buildd >> " + logPath
-	err = Execute(cmdStr)
+	_ = exec.Command("bash", "-c", "rm /var/cache/pbuilder/base*").Run()
+
+	cmdStr = "pbuilder create --debootstrapopts --variant=buildd >> " + logPath
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return err
 	}
 
-	err = Execute("sudo pbuilder update >> " + logPath)
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", "pbuilder update >> "+logPath).Run()
 	if err != nil {
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return err
 	}
 
@@ -57,12 +45,12 @@ func UpdateBase() (err error) {
 	logPath := "/tmp/irgsh-builder-init-" + uuid.New().String() + ".log"
 	go StreamLog(logPath)
 
-	log.Println("Updating base.tgz...")
+	fmt.Println("Updating base.tgz...")
 	cmdStr := "sudo pbuilder update >> " + logPath
-	err = Execute(cmdStr)
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
-		log.Printf("error: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		return err
 	}
 
