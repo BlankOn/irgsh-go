@@ -11,7 +11,7 @@ sudo apt-get install -y pbuilder debootstrap devscripts python-apt reprepro
 Before install, make sure you stopped all the running irgsh-\* instances. To install or update irgsh-go, you can use the install script using cURL:
 
 ```
-curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/scripts/install.sh | bash
+curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts/install.sh | bash
 ```
 
 ## The Instances
