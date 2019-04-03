@@ -1,5 +1,6 @@
 release:
 	mkdir -p tmp
+	# Temporarily backup the original files to inject version string
 	cp chief/main.go tmp/chief-main.go
 	cp builder/main.go tmp/builder-main.go
 	cp repo/main.go tmp/repo-main.go
@@ -8,14 +9,19 @@ release:
 	cat tmp/builder-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > builder/main.go
 	cat tmp/repo-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > repo/main.go
 	cat tmp/cli-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > cli/main.go
+	# Build
 	make build
+	# Bundling
 	mkdir -p irgsh-go/usr/bin
-	cp bin/* irgsh-go/usr/bin/
 	mkdir -p irgsh-go/etc/irgsh
-	cp config.yml irgsh-go/etc/irgsh/
+	mkdir -p irgsh-go/etc/init.d
 	mkdir -p irgsh-go/usr/share/irgsh
-	cp -R share/* irgsh-go/usr/share/irgsh/
+	cp bin/* irgsh-go/usr/bin/
+	cp utils/config.yml irgsh-go/etc/irgsh/
+	cp utils/init irgsh-go/etc/init.d/
+	cp -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
+	# Clean up
 	rm -rf irgsh-go
 	cp tmp/chief-main.go chief/main.go
 	cp tmp/builder-main.go builder/main.go

@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"gopkg.in/src-d/go-git.v4"
 	"log"
 	"os"
+	"os/exec"
 	"time"
+
+	"gopkg.in/src-d/go-git.v4"
 )
 
 // Main wrapper
@@ -38,7 +40,7 @@ func Build(payload string) (next string, err error) {
 	next, err = StorePackage(payload)
 
 	if err == nil {
-		log.Println("[ BUILD DONE ]")
+		fmt.Println("[ BUILD DONE ]")
 	}
 
 	return
@@ -83,9 +85,9 @@ func BuildPreparation(payload string) (next string, err error) {
 
 	// Signing DSC
 	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/package" + " && debuild -S -k" + irgshConfig.Repo.DistSigningKey + "  > " + logPath
-	err = Execute(cmdStr)
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
@@ -103,27 +105,28 @@ func BuildPackage(payload string) (next string, err error) {
 
 	// Copy the source files
 	cmdStr := "cp -vR " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/package/" + " >> " + logPath
-	err = Execute(cmdStr)
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
 
 	// Cleanup pbuilder cache result
-	_ = Execute("sudo rm -rf /var/cache/pbuilder/result/*")
+	_ = exec.Command("bash", "-c", "rm -rf /var/cache/pbuilder/result/*").Run()
 
 	// Building the package
-	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + " && sudo pbuilder build *.dsc >> " + logPath
-	err = Execute(cmdStr)
+	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + " && pbuilder build *.dsc >> " + logPath
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
 
 	cmdStr = "cp /var/cache/pbuilder/result/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
-	err = Execute(cmdStr)
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -142,9 +145,9 @@ func StorePackage(payload string) (next string, err error) {
 
 	// Building package
 	cmdStr := "cd " + irgshConfig.Builder.Workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + irgshConfig.Chief.Address + "/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
-	err = Execute(cmdStr)
+	fmt.Println(cmdStr)
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		log.Println(cmdStr)
 		log.Printf("error: %v\n", err)
 		return
 	}
