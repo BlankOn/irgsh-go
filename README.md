@@ -1,5 +1,11 @@
 # irgsh-go
 
+IRGSH (https://groups.google.com/d/msg/blankon-dev/yvceclWjSw8/HZUL_m6-BS4J, pronunciation: *irgis*) is an all-in-one tool to create and maintain Debian-derived GNU/Linux distribution: from packaging to repository, from ISO build to release management. This codebase is a complete rewrite of the old IRGSH components (https://github.com/BlankOn?q=irgsh).
+
+This is still under heavy development, therefore you should not rely on this for production since it still subject to breaking API changes.
+
+Patches, suggestions and comments are welcome.
+
 ## Requirements
 
 ```
@@ -14,17 +20,29 @@ Before install, make sure you stopped all the running irgsh-\* instances. To ins
 curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts/install.sh | bash
 ```
 
-## The Instances
+## Components
 
-Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depends on Redis as backend (queue, pubsub).
+Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depend on Redis as backend (queue, pubsub).
 
-- `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talks to the chief.
+- `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for worker and pipeline monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
-- `irgsh-repo` will serve as repository so it may need huge volume of storage.
+- `irgsh-repo` will serves as repository so it may need huge volume of storage.
+- `irgsh-test` intended to do installation test against any successfully build package. [WIP]
+- `irgsh-iso` works as ISO builder and serves the ISO image files immediately. [WIP]
 
-We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `config.yml` (see `GPG-EN.md`).
+### Architecture
 
-Running the chief is quite simple as `irgsh-chief`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the initialization command should be running under root.
+<img src="utils/assets/irgsh-distributed-architecture.png">
+
+### Workflow
+
+<img src="utils/assets/irgsh-flow.png">
+
+### Setup
+
+We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `/etc/irgsh/config.yml` (see `GPG-EN.md`). Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`.
+
+For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the initialization command should be run under root user.
 
 Initialize the builder to create and prepare pbuilder,
 
@@ -39,7 +57,7 @@ irgsh-repo init
 
 ```
 
-After these three instances are up and running, you may continue to work with `irgsh-cli`.
+After these three instances are up and running, you may continue to work with `irgsh-cli` from anywhere.
 
 ## CLI
 
