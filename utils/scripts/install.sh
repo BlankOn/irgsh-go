@@ -20,4 +20,4 @@ sudo cp -vR /tmp/irgsh-go/usr/share/irgsh/* /usr/share/irgsh/
 # Configuration
 sudo cp -v /tmp/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
 # Daemon
-sudo cp -v /tmp/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
+sudo cp -v /tmp/irgsh-go/etc/init.d/* /etc/init.d/
