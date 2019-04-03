@@ -18,7 +18,7 @@ release:
 	mkdir -p irgsh-go/usr/share/irgsh
 	cp bin/* irgsh-go/usr/bin/
 	cp utils/config.yml irgsh-go/etc/irgsh/
-	cp utils/init irgsh-go/etc/init.d/
+	cp utils/init/* irgsh-go/etc/init.d/
 	cp -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
 	# Clean up
