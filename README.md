@@ -1,5 +1,7 @@
 # irgsh-go
 
+IRGSH (https://groups.google.com/d/msg/blankon-dev/yvceclWjSw8/HZUL_m6-BS4J, pronunciation: *irgis*) is an all-in-one tool to create and maintain Debian-derived GNU/Linux distribution: from packaging to repository, from ISO build to release management. This codebase is a complete rewrite of the old IRGSH components (https://github.com/BlankOn?q=irgsh).
+
 ## Requirements
 
 ```
@@ -24,7 +26,7 @@ Minimal IRGSH ecosystem contains three instances that supposed to be live on dif
 
 We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `config.yml` (see `GPG-EN.md`).
 
-Running the chief is quite simple as `irgsh-chief`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the initialization command should be running under root.
+Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the initialization command should be running under root.
 
 Initialize the builder to create and prepare pbuilder,
 
@@ -39,7 +41,7 @@ irgsh-repo init
 
 ```
 
-After these three instances are up and running, you may continue to work with `irgsh-cli`.
+After these three instances are up and running, you may continue to work with `irgsh-cli` from anywhere.
 
 ## CLI
 
