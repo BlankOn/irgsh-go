@@ -48,3 +48,11 @@ Check the status of a pipeline
 ```
 curl http://localhost:8080/api/v1/status?uuid=uuidstring
 ```
+
+## Test
+
+```
+make test
+```
+
+It will test the code and open the coverage result on your browser.
