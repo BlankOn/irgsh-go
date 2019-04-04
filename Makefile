@@ -39,6 +39,13 @@ build:
 	rm builder/config.go
 	rm repo/config.go
 
+test:
+	mkdir -p tmp
+	cp chief/config.go builder/config.go
+	cp chief/config.go repo/config.go
+	go test -coverprofile=./tmp/coverage.out ./builder
+	go tool cover -html=./tmp/coverage.out
+
 irgsh-chief:
 	go build -o ./bin/irgsh-chief ./chief && ./bin/irgsh-chief
 
