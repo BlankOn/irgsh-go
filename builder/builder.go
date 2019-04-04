@@ -59,6 +59,7 @@ func Clone(payload string) (next string, err error) {
 	})
 	if err != nil {
 		fmt.Println(err.Error())
+		return
 	}
 
 	// Cloning Debian package files
@@ -69,6 +70,7 @@ func Clone(payload string) (next string, err error) {
 	})
 	if err != nil {
 		fmt.Println(err.Error())
+		return
 	}
 	time.Sleep(0 * time.Second)
 
