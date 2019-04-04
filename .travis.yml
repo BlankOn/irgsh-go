@@ -1,9 +1,13 @@
 language: go
 
 go:
-- 1.11.x
+  - 1.11.x
 
 env:
-- GO111MODULE=on
+  - GO111MODULE=on
+  - CODECOV_TOKEN=becf7781-738f-4069-b835-e0155d987b6b
 
 script: make test
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
