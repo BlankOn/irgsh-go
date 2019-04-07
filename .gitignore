@@ -6,3 +6,4 @@ irgsh-go
 builder/config.go
 repo/config.go
 cli/config.go
+coverage.txt

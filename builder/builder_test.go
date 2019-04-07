@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"testing"
@@ -14,7 +15,7 @@ import (
 	validator "gopkg.in/go-playground/validator.v9"
 )
 
-func TestPreparation(t *testing.T) {
+func TestBuilderPreparation(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	configPath = "../utils/config.yml"
 	irgshConfig = IrgshConfig{}
@@ -34,10 +35,11 @@ func TestPreparation(t *testing.T) {
 		log.Println(err.Error())
 		assert.Equal(t, true, false, "Should not reach here")
 	}
-	irgshConfig.Builder.Workdir = "/tmp/"
+	dir, _ := os.Getwd()
+	irgshConfig.Builder.Workdir = dir + "/../tmp"
 }
 
-func TestClone(t *testing.T) {
+func TestBuilderClone(t *testing.T) {
 	id := time.Now().Format("2006-01-02-150405") + "_" + uuid.New().String()
 	log.Println(id)
 	payload := "{\"taskUUID\":\"" + id + "\",\"timestamp\":\"2019-04-03T07:23:02.826753827-04:00\",\"sourceUrl\":\"https://github.com/BlankOn/bromo-theme.git\",\"packageUrl\":\"https://github.com/BlankOn-packages/bromo-theme.git\"}"
@@ -47,10 +49,11 @@ func TestClone(t *testing.T) {
 		assert.Equal(t, true, false, "Should not reach here")
 	}
 
-	cmdStr := "du -s /tmp/" + id + "/source | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr := "du -s " + irgshConfig.Builder.Workdir + "/" + id + "/source | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
 	cmd := exec.Command("bash", "-c", cmdStr)
 	out, _ := cmd.CombinedOutput()
 	cmd.Run()
+	log.Println(string(out))
 	size, err := strconv.Atoi(string(out))
 	if err != nil {
 		log.Println(err.Error())
@@ -58,7 +61,7 @@ func TestClone(t *testing.T) {
 	}
 	assert.NotEqual(t, size, int(0))
 
-	cmdStr = "du -s /tmp/" + id + "/package | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr = "du -s " + irgshConfig.Builder.Workdir + "/" + id + "/package | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
 	cmd = exec.Command("bash", "-c", cmdStr)
 	out, _ = cmd.CombinedOutput()
 	cmd.Run()
@@ -70,14 +73,14 @@ func TestClone(t *testing.T) {
 	assert.NotEqual(t, size, int(0))
 }
 
-func TestCloneInvalidSourceUrl(t *testing.T) {
+func TestBuilderCloneInvalidSourceUrl(t *testing.T) {
 	id := time.Now().Format("2006-01-02-150405") + "_" + uuid.New().String()
 	log.Println(id)
 	payload := "{\"taskUUID\":\"" + id + "\",\"timestamp\":\"2019-04-03T07:23:02.826753827-04:00\",\"sourceUrl\":\"https://github.com/BlankOn/bromo-theme-xyz.git\",\"packageUrl\":\"https://github.com/BlankOn-packages/bromo-theme.git\"}"
 	_, err := Clone(payload)
 	assert.Equal(t, err != nil, true, "Should be error")
 
-	cmdStr := "du -s /tmp/" + id + "/source | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr := "du -s " + irgshConfig.Builder.Workdir + "/" + id + "/source | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
 	cmd := exec.Command("bash", "-c", cmdStr)
 	out, _ := cmd.CombinedOutput()
 	cmd.Run()
@@ -85,7 +88,7 @@ func TestCloneInvalidSourceUrl(t *testing.T) {
 	assert.Equal(t, err != nil, true, "Should be error")
 	assert.Equal(t, size, int(0))
 
-	cmdStr = "du -s /tmp/" + id + "/package | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr = "du -s " + irgshConfig.Builder.Workdir + "/" + id + "/package | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
 	cmd = exec.Command("bash", "-c", cmdStr)
 	out, _ = cmd.CombinedOutput()
 	cmd.Run()
@@ -94,14 +97,14 @@ func TestCloneInvalidSourceUrl(t *testing.T) {
 	assert.Equal(t, size, int(0))
 }
 
-func TestCloneInvalidPackadeUrl(t *testing.T) {
+func TestBuilderCloneInvalidPackadeUrl(t *testing.T) {
 	id := time.Now().Format("2006-01-02-150405") + "_" + uuid.New().String()
 	log.Println(id)
 	payload := "{\"taskUUID\":\"" + id + "\",\"timestamp\":\"2019-04-03T07:23:02.826753827-04:00\",\"sourceUrl\":\"https://github.com/BlankOn/bromo-theme.git\",\"packageUrl\":\"https://github.com/BlankOn-packages/bromo-theme-xyz.git\"}"
 	_, err := Clone(payload)
 	assert.Equal(t, err != nil, true, "Should be error")
 
-	cmdStr := "du -s /tmp/" + id + "/source | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr := "du -s " + irgshConfig.Builder.Workdir + "/" + id + "/source | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
 	cmd := exec.Command("bash", "-c", cmdStr)
 	out, _ := cmd.CombinedOutput()
 	cmd.Run()
@@ -112,11 +115,25 @@ func TestCloneInvalidPackadeUrl(t *testing.T) {
 	}
 	assert.NotEqual(t, size, int(0))
 
-	cmdStr = "du -s /tmp/" + id + "/package | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr = "du -s " + irgshConfig.Builder.Workdir + "/" + id + "/package | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
 	cmd = exec.Command("bash", "-c", cmdStr)
 	out, _ = cmd.CombinedOutput()
 	cmd.Run()
 	size, err = strconv.Atoi(string(out))
 	assert.Equal(t, err != nil, true, "Should be error")
 	assert.Equal(t, size, int(0))
+}
+
+// This tests below need pbuilder/sudo
+
+func TestBuilderBuildPreparation(t *testing.T) {
+	t.Skip()
+}
+
+func TestBuilderBuildPackage(t *testing.T) {
+	t.Skip()
+}
+
+func TestBuilderStorePackage(t *testing.T) {
+	t.Skip()
 }

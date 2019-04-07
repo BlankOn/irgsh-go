@@ -8,7 +8,7 @@ import (
 )
 
 func InitBase() (err error) {
-	logPath := "/tmp/irgsh-builder-init-" + uuid.New().String() + ".log"
+	logPath := irgshConfig.Builder.Workdir + "/irgsh-builder-init-" + uuid.New().String() + ".log"
 	go StreamLog(logPath)
 
 	fmt.Println("Installing pbuilder and friends...")
