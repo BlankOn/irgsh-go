@@ -148,7 +148,7 @@ func InitRepo() (err error) {
 }
 
 func UpdateRepo() (err error) {
-	fmt.Println("Syncing irgshConfig.Repo.against %s at %s...", irgshConfig.Repo.UpstreamDistCodename, irgshConfig.Repo.UpstreamDistUrl)
+	fmt.Printf("Syncing irgshConfig.Repo.against %s at %s...", irgshConfig.Repo.UpstreamDistCodename, irgshConfig.Repo.UpstreamDistUrl)
 
 	logPath := irgshConfig.Repo.Workdir + "/update.log"
 	go StreamLog(logPath)
