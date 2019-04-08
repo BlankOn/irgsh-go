@@ -8,11 +8,8 @@ env:
   - CODECOV_TOKEN=becf7781-738f-4069-b835-e0155d987b6b
 
 before_install:
+  - sudo apt-get update
   - sudo apt-get install -y pbuilder debootstrap devscripts python-apt reprepro
-
-addons:
-  apt:
-    update: true
 
 script: make test
 
