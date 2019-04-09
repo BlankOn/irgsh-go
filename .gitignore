@@ -7,3 +7,4 @@ builder/utils.go
 repo/utils.go
 cli/utils.go
 coverage.txt
+cli-rust/target
