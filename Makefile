@@ -30,19 +30,19 @@ release:
 
 build:
 	mkdir -p bin
-	cp chief/config.go builder/config.go
-	cp chief/config.go repo/config.go
+	cp chief/utils.go builder/utils.go
+	cp chief/utils.go repo/utils.go
 	go build -o ./bin/irgsh-chief ./chief
 	go build -o ./bin/irgsh-builder ./builder
 	go build -o ./bin/irgsh-repo ./repo
 	go build -o ./bin/irgsh-cli ./cli
-	rm builder/config.go
-	rm repo/config.go
+	rm builder/utils.go
+	rm repo/utils.go
 
 test:
 	mkdir -p tmp
-	cp chief/config.go builder/config.go
-	cp chief/config.go repo/config.go
+	cp chief/utils.go builder/utils.go
+	cp chief/utils.go repo/utils.go
 	go test -race -coverprofile=coverage.txt -covermode=atomic ./builder
 	go test -race -coverprofile=coverage.txt -covermode=atomic ./repo
 

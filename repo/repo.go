@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
+	"os"
 	"strings"
 )
 
 func Repo(payload string) (err error) {
-	fmt.Println("========== Submitting the package into the repository")
+	fmt.Println("##### Submitting the package into the repository")
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
@@ -22,9 +22,7 @@ func Repo(payload string) (err error) {
 		raw["taskUUID"].(string),
 		raw["taskUUID"].(string),
 	)
-	fmt.Println(cmdStr)
-	cmd := exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Downloading the artifact", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
@@ -38,9 +36,7 @@ func Repo(payload string) (err error) {
 		raw["taskUUID"],
 		logPath,
 	)
-	fmt.Println(cmdStr)
-	cmd = exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Injecting the deb files from artifact to the repository", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
@@ -50,20 +46,29 @@ func Repo(payload string) (err error) {
 }
 
 func InitRepo() (err error) {
-	fmt.Println("========== Initializing new repository")
+	fmt.Println("##### Initializing new repository")
 
 	logPath := irgshConfig.Repo.Workdir + "/init.log"
 	go StreamLog(logPath)
 
-	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR /usr/share/irgsh/reprepro-template %s/%s",
+	repoTemplatePath := "/usr/share/irgsh/reprepro-template"
+	if irgshConfig.IsTest {
+		dir, _ := os.Getwd()
+		repoTemplatePath = dir + "/../utils/reprepro-template"
+	}
+	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR %s %s/%s",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
+		repoTemplatePath,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
 	)
-	cmd := exec.Command("bash", "-c", cmdStr)
-	_ = cmd.Run()
+	err = CmdExec(cmdStr, "Preparing reprepro template", logPath)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
 
 	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat updates.orig | 
 		sed 's/UPSTREAM_NAME/%s/g' | 
@@ -79,9 +84,7 @@ func InitRepo() (err error) {
 		irgshConfig.Repo.DistSupportedArchitectures,
 		irgshConfig.Repo.UpstreamDistComponents,
 	)
-	fmt.Println(cmdStr)
-	cmd = exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Populate the reprepro's updates config file with values from irgsh's config.yml", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
@@ -109,9 +112,7 @@ func InitRepo() (err error) {
 		irgshConfig.Repo.DistSigningKey,
 		irgshConfig.Repo.UpstreamName,
 	)
-	fmt.Println(cmdStr)
-	cmd = exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Populate the reprepro's distributions config file with values from irgsh's config.yml", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
@@ -123,22 +124,17 @@ func InitRepo() (err error) {
 		irgshConfig.Repo.DistCodename,
 		repositoryPath,
 	)
-	fmt.Println(cmdStr)
-	cmd = exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Populate the reprepro's options config file with values from irgsh's config.yml", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export > %s",
+	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
-		logPath,
 	)
-	fmt.Println(cmdStr)
-	cmd = exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Initialize the reprepro repository for the first time", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
@@ -159,8 +155,7 @@ func UpdateRepo() (err error) {
 		logPath,
 	)
 	fmt.Println(cmdStr)
-	cmd := exec.Command("bash", "-c", cmdStr)
-	err = cmd.Run()
+	err = CmdExec(cmdStr, "Sync the repository against upstream repository", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return

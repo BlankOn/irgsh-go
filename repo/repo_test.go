@@ -35,6 +35,7 @@ func TestRepoPreparation(t *testing.T) {
 	}
 	dir, _ := os.Getwd()
 	irgshConfig.Repo.Workdir = dir + "/../tmp"
+	irgshConfig.IsTest = true
 }
 
 func TestBaseInitRepo(t *testing.T) {
@@ -57,5 +58,5 @@ func TestBaseInitRepo(t *testing.T) {
 }
 
 func TestBaseInitRepoConfigCheck(t *testing.T) {
-  t.Skip()
+	t.Skip()
 }

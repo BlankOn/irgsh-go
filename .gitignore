@@ -3,7 +3,7 @@ latest
 tmp
 release.tar.gz
 irgsh-go
-builder/config.go
-repo/config.go
-cli/config.go
+builder/utils.go
+repo/utils.go
+cli/utils.go
 coverage.txt
