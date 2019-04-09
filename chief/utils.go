@@ -1,10 +1,18 @@
 package main
 
+import (
+	"errors"
+	"os"
+	"os/exec"
+	"strings"
+)
+
 type IrgshConfig struct {
 	Redis   string        `json:"redis"`
 	Chief   ChiefConfig   `json:"chief"`
 	Builder BuilderConfig `json:"builder"`
 	Repo    RepoConfig    `json:"repo"`
+	IsTest  bool          `json:"is_test"`
 }
 
 type ChiefConfig struct {
@@ -30,4 +38,31 @@ type RepoConfig struct {
 	UpstreamDistCodename       string `json:"upstream_dist_codename" validate:"required"`       // sid
 	UpstreamDistUrl            string `json:"upstream_dist_url" validate:"required"`            // http://kartolo.sby.datautama.net.id/debian
 	UpstreamDistComponents     string `json:"upstream_dist_components" validate:"required"`     // main non-free>restricted contrib>extras
+}
+
+func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
+	if len(cmdStr) == 0 {
+		return errors.New("No command string provided.")
+	}
+
+	if len(logPath) > 0 {
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		_, _ = f.WriteString("\n")
+		if len(cmdDesc) > 0 {
+			cmdDescSplitted := strings.Split(cmdDesc, "\n")
+			for _, desc := range cmdDescSplitted {
+				_, _ = f.WriteString("##### " + desc + "\n")
+			}
+		}
+		_, _ = f.WriteString("##### RUN " + cmdStr + "\n")
+		f.Close()
+		cmdStr += " | tee -a " + logPath
+	}
+
+	cmd := exec.Command("bash", "-c", cmdStr)
+	err = cmd.Run()
+	return
 }
