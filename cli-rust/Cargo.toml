@@ -1,8 +1,9 @@
 [package]
 name = "cli-rust"
 version = "0.1.0"
-authors = ["Herpiko Dwi Aguno <herpiko@gmail.com>"]
+authors = ["BlankOn Developer <blankon-dev@googlegroups.com>","Herpiko Dwi Aguno <herpiko@aguno.xyz>"]
 edition = "2018"
 
 [dependencies]
 clap = "2.26.0"
+dirs = "1.0.5"

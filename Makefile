@@ -36,8 +36,7 @@ build:
 	go build -o ./bin/irgsh-builder ./builder
 	go build -o ./bin/irgsh-repo ./repo
 	go build -o ./bin/irgsh-cli ./cli
-	# Ignore rust for now
-	# cd cli-rust && cargo clean && cargo build --release
+	cd cli-rust && cargo clean && cargo build --release
 	rm builder/utils.go
 	rm repo/utils.go
 
