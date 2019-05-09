@@ -8,3 +8,4 @@ repo/utils.go
 cli/utils.go
 coverage.txt
 cli-rust/target
+irgsh-cli

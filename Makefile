@@ -43,7 +43,8 @@ build:
 
 build-cli:
 	mkdir -p bin
-	cd cli-rust && cargo clean && cargo build --release
+	cd cli-rust && cargo build --release
+	cp cli-rust/target/release/cli-rust ./irgsh-cli
 
 test:
 	mkdir -p tmp

@@ -1,5 +1,7 @@
 extern crate clap;
 extern crate dirs;
+extern crate reqwest;
+#[macro_use] extern crate serde_json;
 
 use clap::{App, Arg, SubCommand};
 use std::fs;
@@ -60,6 +62,7 @@ fn main() {
                         .required(true)
                         .index(1)))
     								.get_matches();
+
     let home_dir_path = dirs::home_dir().unwrap();
     let mut config_file = home_dir_path.into_os_string().into_string().unwrap();
 
@@ -85,7 +88,23 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("submit") {
         println!("Chief       : {}", chief_url);
+        println!("Source URL : {}", matches.value_of("source").unwrap());
         println!("Package URL : {}", matches.value_of("package").unwrap());
+        chief_url.push_str("/api/v1/submit");
+        println!("Submit URL  : {}", chief_url);
+
+    		let echo_json: serde_json::Value = reqwest::Client::new()
+    		    .post(chief_url)
+    		    .json(
+    		        &json!({
+                    "sourceUrl": matches.value_of("source").unwrap(),
+                    "packageUrl": matches.value_of("package").unwrap()
+    		        })
+    		    )
+    		    .send()?
+    		    .json();
+
+        println!("{:#?}", echo_json);
         return;
     } else if let Some(matches) = matches.subcommand_matches("status") {
         println!(
