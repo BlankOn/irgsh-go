@@ -20,6 +20,7 @@ release:
 	cp utils/config.yml irgsh-go/etc/irgsh/
 	cp utils/init/* irgsh-go/etc/init.d/
 	cp -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
+	cp cli-rust/target/release/cli-rust irgsh-go/usr/bin/irgsh-cli
 	tar -zcvf release.tar.gz irgsh-go
 	# Clean up
 	rm -rf irgsh-go
@@ -39,6 +40,10 @@ build:
 	cd cli-rust && cargo clean && cargo build --release
 	rm builder/utils.go
 	rm repo/utils.go
+
+build-cli:
+	mkdir -p bin
+	cd cli-rust && cargo clean && cargo build --release
 
 test:
 	mkdir -p tmp
