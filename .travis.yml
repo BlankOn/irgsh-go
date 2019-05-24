@@ -11,7 +11,14 @@ before_install:
   - sudo apt-get update
   - sudo apt-get install -y pbuilder debootstrap devscripts python-apt reprepro
 
-script: make test
+script:
+  - make test
+  - mkdir -p ~/.ssh || true
+  - eval `ssh-agent -s`
+  - ssh-add <(echo "$SSH_PRIVATE_KEY")
+  - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+  - ssh -o stricthostkeychecking=no root@irgsh.blankonlinux.or.id "(curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts/install.sh > /tmp/install.sh && chmod a_x /tmp/install.sh && /tmp/instal.sh)"
+
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
