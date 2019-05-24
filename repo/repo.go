@@ -14,8 +14,9 @@ func Repo(payload string) (err error) {
 	json.Unmarshal(in, &raw)
 
 	logPath := irgshConfig.Repo.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/repo.log"
+	go StreamLog(logPath)
 
-	cmdStr := fmt.Sprintf("mkdir -p %s/artifacts/ && cd %s/artifacts/ && wget %s/%s.tar.gz && tar -xvf %s.tar.gz",
+	cmdStr := fmt.Sprintf("mkdir -p %s/artifacts && cd %s/artifacts/ && wget %s/%s.tar.gz && tar -xvf %s.tar.gz",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Chief.Address,
