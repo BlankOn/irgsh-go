@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -34,6 +35,15 @@ type Submission struct {
 	Timestamp  time.Time `json:"timestamp"`
 	SourceURL  string    `json:"sourceUrl"`
 	PackageURL string    `json:"packageUrl"`
+}
+
+type ArtifactsPayloadResponse struct {
+	Data []string `json:"data"`
+}
+
+type SubmitPayloadResponse struct {
+	PipelineId string   `json:"pipelineId"`
+	Jobs       []string `json:"jobs,omitempty"`
 }
 
 func main() {
@@ -93,8 +103,8 @@ func main() {
 }
 
 func serve() {
-	fs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
-	http.Handle("/", fs)
+	http.HandleFunc("/", IndexHandler)
+	http.HandleFunc("/api/v1/artifacts", ArtifactsHandler)
 	http.HandleFunc("/api/v1/submit", SubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
 	http.HandleFunc("/upload", uploadFileHandler())
@@ -104,7 +114,24 @@ func serve() {
 }
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "irgsh-go")
+	fmt.Fprintf(w, "irgsh-go "+app.Version)
+}
+
+func ArtifactsHandler(w http.ResponseWriter, r *http.Request) {
+	files, err := filepath.Glob(irgshConfig.Chief.Workdir + "/artifacts/*")
+	if err != nil {
+		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+	}
+	artifacts := []string{}
+	for _, a := range files {
+		artifacts = append(artifacts, strings.Split(a, "artifacts/")[1])
+	}
+	// TODO pagination
+	payload := ArtifactsPayloadResponse{Data: artifacts}
+	jsonStr, _ := json.Marshal(payload)
+	fmt.Fprintf(w, string(jsonStr))
 }
 
 func SubmitHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,13 +171,15 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		UUID: submission.TaskUUID,
 	}
 
-	fmt.Fprintf(w, "Sending task to workers...\n")
 	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
 	_, err = server.SendChain(chain)
 	if err != nil {
 		fmt.Println("Could not create server : " + err.Error())
 	}
-	fmt.Fprintf(w, "PipelineID %s \n", submission.TaskUUID)
+
+	payload := SubmitPayloadResponse{PipelineId: submission.TaskUUID}
+	jsonStr, _ = json.Marshal(payload)
+	fmt.Fprintf(w, string(jsonStr))
 
 }
 
@@ -161,7 +190,6 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "403")
 		return
 	}
-	fmt.Println("UUID : " + keys[0])
 	var UUID string
 	UUID = keys[0]
 
@@ -179,7 +207,7 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	car := result.NewAsyncResult(&buildSignature, server.GetBackend())
 	car.Touch()
 	taskState := car.GetState()
-	res := fmt.Sprintf("Current state of %v task is: %s\n", taskState.TaskUUID, taskState.State)
+	res := fmt.Sprintf("{ pipelineId: \"" + taskState.TaskUUID + "\", state: \"" + taskState.State + "\" }")
 	fmt.Println(res)
 	fmt.Fprintf(w, res)
 }
@@ -240,6 +268,8 @@ func uploadFileHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		// TODO should be in JSON string
 		w.Write([]byte("SUCCESS"))
 	})
 }

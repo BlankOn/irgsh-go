@@ -66,19 +66,19 @@ After these three instances are up and running, you may continue to work with `i
 `irgsh-cli` need to be initialized first to define the `irgsh-chief` instance address,
 
 ```
-irgsh-cli --chief http://irgsh.blankonlinux.or.id:8080 init
+irgsh-cli init http://irgsh.blankonlinux.or.id:8080
 ```
 
 Then you can submit a package,
 
 ```
-irgsh-cli --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git submit
+irgsh-cli submit --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
 ```
 
 And checking the status of a pipeline,
 
 ```
-irgsh-cli --pipeline 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9 status
+irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 ```
 
 

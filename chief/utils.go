@@ -46,10 +46,15 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
 	}
 
 	if len(logPath) > 0 {
+		logPathArr := strings.Split(logPath, "/")
+		logPathArr = logPathArr[:len(logPathArr)-1]
+		logDir := "/" + strings.Join(logPathArr, "/")
+		os.MkdirAll(logDir, os.ModePerm)
 		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return err
 		}
+		defer f.Close()
 		_, _ = f.WriteString("\n")
 		if len(cmdDesc) > 0 {
 			cmdDescSplitted := strings.Split(cmdDesc, "\n")

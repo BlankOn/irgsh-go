@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
@@ -52,10 +53,16 @@ func main() {
 			Name:  "init",
 			Usage: "Initialize irgsh-cli",
 			Action: func(c *cli.Context) (err error) {
+				chiefAddress = c.Args().First()
 				if len(chiefAddress) < 1 {
-					err = errors.New("--chief should not be empty")
+					err = errors.New("Chief address should not be empty. Example: irgsh-cli init https://irgsh.blankonlinux.or.id")
 					return
 				}
+				_, err = url.ParseRequestURI(chiefAddress)
+				if err != nil {
+					return
+				}
+
 				cmdStr := "mkdir -p ~/.irgsh && echo -n '" + chiefAddress + "' > ~/.irgsh/IRGSH_CHIEF_ADDRESS"
 				cmd := exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
@@ -72,6 +79,20 @@ func main() {
 		{
 			Name:  "submit",
 			Usage: "Submit new build pipeline",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:        "source",
+					Value:       "",
+					Destination: &sourceUrl,
+					Usage:       "Source URL",
+				},
+				cli.StringFlag{
+					Name:        "package",
+					Value:       "",
+					Destination: &packageUrl,
+					Usage:       "Package URL",
+				},
+			},
 			Action: func(c *cli.Context) (err error) {
 				err = checkForChief()
 				if err != nil {
@@ -81,10 +102,20 @@ func main() {
 					err = errors.New("--source should not be empty")
 					return
 				}
+				_, err = url.ParseRequestURI(sourceUrl)
+				if err != nil {
+					return
+				}
+
 				if len(packageUrl) < 1 {
 					err = errors.New("--package should not be empty")
 					return
 				}
+				_, err = url.ParseRequestURI(packageUrl)
+				if err != nil {
+					return
+				}
+
 				fmt.Println("sourceUrl: " + sourceUrl)
 				fmt.Println("packageUrl: " + packageUrl)
 
@@ -103,6 +134,7 @@ func main() {
 			Name:  "status",
 			Usage: "Check status of a pipeline",
 			Action: func(c *cli.Context) (err error) {
+				pipelineId = c.Args().First()
 				err = checkForChief()
 				if err != nil {
 					os.Exit(1)
@@ -113,37 +145,13 @@ func main() {
 				}
 				fmt.Println("Checking the status of " + pipelineId + "...")
 				req.SetFlags(req.LrespBody)
-				result, _ := req.Get(chiefAddress+"/api/v1/status?uuid="+pipelineId, nil)
+				result, err := req.Get(chiefAddress+"/api/v1/status?uuid="+pipelineId, nil)
+				if err != nil {
+					log.Println(err.Error())
+				}
 				fmt.Printf("%+v", result)
 				return err
 			},
-		},
-	}
-
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "chief",
-			Value:       "",
-			Destination: &chiefAddress,
-			Usage:       "irgsh-chief address",
-		},
-		cli.StringFlag{
-			Name:        "source",
-			Value:       "",
-			Destination: &sourceUrl,
-			Usage:       "Source URL",
-		},
-		cli.StringFlag{
-			Name:        "package",
-			Value:       "",
-			Destination: &packageUrl,
-			Usage:       "Package URL",
-		},
-		cli.StringFlag{
-			Name:        "pipeline",
-			Value:       "",
-			Destination: &pipelineId,
-			Usage:       "Pipeline ID",
 		},
 	}
 

@@ -39,6 +39,12 @@ build:
 	rm builder/utils.go
 	rm repo/utils.go
 
+build-local: build
+	sudo cp ./bin/irgsh-chief /usr/bin/irgsh-chief
+	sudo cp ./bin/irgsh-builder /usr/bin/irgsh-builder
+	sudo cp ./bin/irgsh-repo /usr/bin/irgsh-repo
+	sudo cp ./bin/irgsh-cli /usr/bin/irgsh-cli
+
 test:
 	mkdir -p tmp
 	cp chief/utils.go builder/utils.go
