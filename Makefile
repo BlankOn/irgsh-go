@@ -32,6 +32,7 @@ build:
 	mkdir -p bin
 	cp chief/utils.go builder/utils.go
 	cp chief/utils.go repo/utils.go
+	cp chief/utils.go cli/utils.go
 	go build -o ./bin/irgsh-chief ./chief
 	go build -o ./bin/irgsh-builder ./builder
 	go build -o ./bin/irgsh-repo ./repo
@@ -39,7 +40,7 @@ build:
 	rm builder/utils.go
 	rm repo/utils.go
 
-build-local: build
+build-install: build
 	sudo cp ./bin/irgsh-chief /usr/bin/irgsh-chief
 	sudo cp ./bin/irgsh-builder /usr/bin/irgsh-builder
 	sudo cp ./bin/irgsh-repo /usr/bin/irgsh-repo
