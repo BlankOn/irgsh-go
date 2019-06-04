@@ -63,10 +63,10 @@ After these three instances are up and running, you may continue to work with `i
 
 ## CLI
 
-`irgsh-cli` need to be initialized first to define the `irgsh-chief` instance address,
+`irgsh-cli` need to be initialized first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
 
 ```
-irgsh-cli init http://irgsh.blankonlinux.or.id:8080
+irgsh-cli init --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
 ```
 
 Then you can submit a package,
