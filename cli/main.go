@@ -10,28 +10,36 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/imroc/req"
 	"github.com/urfave/cli"
+	"gopkg.in/src-d/go-git.v4"
 )
 
 var (
-	app          *cli.App
-	chiefAddress string
-	sourceUrl    string
-	packageUrl   string
-	pipelineId   string
+	app                  *cli.App
+	homeDir              string
+	chiefAddress         string
+	maintainerSigningKey string
+	sourceUrl            string
+	packageUrl           string
+	pipelineId           string
+	irgshConfig          IrgshConfig
 )
 
-func checkForChief() (err error) {
-	usr, err := user.Current()
-	if err != nil {
-		return
-	}
-	dat, _ := ioutil.ReadFile(usr.HomeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
+func checkForInitValues() (err error) {
+	dat, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
 	chiefAddress = string(dat)
 	if len(chiefAddress) < 1 {
-		err = errors.New("irgsh-cli need to be initialized first. Run: irgsh-cli --chief yourirgshchiefaddress init")
+		err = errors.New("irgsh-cli need to be initialized first. Run: irgsh-cli --chief yourirgshchiefaddress init --key yourgpgkeyfingerprint")
+		fmt.Println(err.Error())
+	}
+	dat, _ = ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY")
+	maintainerSigningKey = string(dat)
+	if len(maintainerSigningKey) < 1 {
+		err = errors.New("irgsh-cli need to be initialized first. Run: irgsh-cli --chief yourirgshchiefaddress init --key yourgpgkeyfingerprint")
 		fmt.Println(err.Error())
 	}
 	return
@@ -39,6 +47,12 @@ func checkForChief() (err error) {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	usr, err := user.Current()
+	if err != nil {
+		log.Fatal(err)
+	}
+	homeDir = usr.HomeDir
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -52,10 +66,27 @@ func main() {
 		{
 			Name:  "init",
 			Usage: "Initialize irgsh-cli",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:        "chief",
+					Value:       "",
+					Destination: &chiefAddress,
+					Usage:       "Chief address",
+				},
+				cli.StringFlag{
+					Name:        "key",
+					Value:       "",
+					Destination: &maintainerSigningKey,
+					Usage:       "Maintainer signing key",
+				},
+			},
 			Action: func(c *cli.Context) (err error) {
-				chiefAddress = c.Args().First()
 				if len(chiefAddress) < 1 {
-					err = errors.New("Chief address should not be empty. Example: irgsh-cli init https://irgsh.blankonlinux.or.id")
+					err = errors.New("Chief address should not be empty. Example: irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D9C31DAD9F0E509A356412B6E77F")
+					return
+				}
+				if len(maintainerSigningKey) < 1 {
+					err = errors.New("Signing key should not be empty. Example: irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D9C31DAD9F0E509A356412B6E77F")
 					return
 				}
 				_, err = url.ParseRequestURI(chiefAddress)
@@ -63,8 +94,16 @@ func main() {
 					return
 				}
 
-				cmdStr := "mkdir -p ~/.irgsh && echo -n '" + chiefAddress + "' > ~/.irgsh/IRGSH_CHIEF_ADDRESS"
+				cmdStr := "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + chiefAddress + "' > " + homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS"
 				cmd := exec.Command("bash", "-c", cmdStr)
+				err = cmd.Run()
+				if err != nil {
+					log.Println(cmdStr)
+					log.Printf("error: %v\n", err)
+					return
+				}
+				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + maintainerSigningKey + "' > " + homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY"
+				cmd = exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
@@ -94,7 +133,7 @@ func main() {
 				},
 			},
 			Action: func(c *cli.Context) (err error) {
-				err = checkForChief()
+				err = checkForInitValues()
 				if err != nil {
 					os.Exit(1)
 				}
@@ -119,10 +158,60 @@ func main() {
 				fmt.Println("sourceUrl: " + sourceUrl)
 				fmt.Println("packageUrl: " + packageUrl)
 
+				tmpID := uuid.New().String()
+				// Cloning Debian package files
+				_, err = git.PlainClone("/home/herpiko/.irgsh/tmp/"+tmpID+"/package", false, &git.CloneOptions{
+					URL:      packageUrl,
+					Progress: os.Stdout,
+				})
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+
+				// Signing DSC
+				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID + "/package && debuild -S -k" + maintainerSigningKey
+				fmt.Println(cmdStr)
+				err = exec.Command("bash", "-c", cmdStr).Run()
+				if err != nil {
+					log.Printf("error: %v\n", err)
+					return
+				}
+
+				// Clean up
+				cmdStr = "rm -rf " + homeDir + "/.irgsh/tmp/" + tmpID + "/package"
+				fmt.Println(cmdStr)
+				err = exec.Command("bash", "-c", cmdStr).Run()
+				if err != nil {
+					log.Printf("error: %v\n", err)
+					return
+				}
+
+				// Compressing
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID + " && tar -zcvf ../" + tmpID + ".tar.gz ."
+				fmt.Println(cmdStr)
+				err = exec.Command("bash", "-c", cmdStr).Run()
+				if err != nil {
+					log.Printf("error: %v\n", err)
+					return
+				}
+
+				// Encoding
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp && base64 -w0 " + tmpID + ".tar.gz"
+				fmt.Println(cmdStr)
+				tarballB64, err := exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Printf("error: %v\n", err)
+					return
+				}
+				tarballB64Trimmed := strings.TrimSuffix(string(tarballB64), "\n")
+
 				header := make(http.Header)
 				header.Set("Accept", "application/json")
 				req.SetFlags(req.LrespBody)
-				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON("{\"sourceUrl\":\""+sourceUrl+"\", \"packageUrl\":\""+packageUrl+"\"}"))
+				jsonStr := "{\"sourceUrl\":\"" + sourceUrl + "\", \"packageUrl\":\"" + packageUrl + "\", \"tarball\": \"" + tarballB64Trimmed + "\"}"
+				fmt.Println(jsonStr)
+				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(jsonStr))
 				if err != nil {
 					fmt.Println(err.Error())
 				}
@@ -135,7 +224,7 @@ func main() {
 			Usage: "Check status of a pipeline",
 			Action: func(c *cli.Context) (err error) {
 				pipelineId = c.Args().First()
-				err = checkForChief()
+				err = checkForInitValues()
 				if err != nil {
 					os.Exit(1)
 				}
@@ -155,7 +244,7 @@ func main() {
 		},
 	}
 
-	err := app.Run(os.Args)
+	err = app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -83,10 +85,22 @@ func BuildPreparation(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
+	tarballB64 := raw["tarball"].(string)
 
-	// Signing DSC
-	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/package" + " && debuild -S -k" + irgshConfig.Repo.DistSigningKey + "  > " + logPath
+	buff, err := base64.StdEncoding.DecodeString(tarballB64)
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		return
+	}
+
+	err = ioutil.WriteFile(irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/debuild.tar.gz", buff, 07440)
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		return
+	}
+
+	// Extract signed DSC
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + " && tar -xvf debuild.tar.gz && rm -f debuild.tar.gz"
 	fmt.Println(cmdStr)
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {

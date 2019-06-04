@@ -35,6 +35,7 @@ type Submission struct {
 	Timestamp  time.Time `json:"timestamp"`
 	SourceURL  string    `json:"sourceUrl"`
 	PackageURL string    `json:"packageUrl"`
+	Tarball    string    `json:"tarball"`
 }
 
 type ArtifactsPayloadResponse struct {
