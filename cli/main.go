@@ -180,7 +180,6 @@ func main() {
 
 				// Clean up
 				cmdStr = "rm -rf " + homeDir + "/.irgsh/tmp/" + tmpID + "/package"
-				fmt.Println(cmdStr)
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
 					log.Printf("error: %v\n", err)
@@ -189,7 +188,6 @@ func main() {
 
 				// Compressing
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID + " && tar -zcvf ../" + tmpID + ".tar.gz ."
-				fmt.Println(cmdStr)
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
 					log.Printf("error: %v\n", err)
@@ -198,7 +196,6 @@ func main() {
 
 				// Encoding
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp && base64 -w0 " + tmpID + ".tar.gz"
-				fmt.Println(cmdStr)
 				tarballB64, err := exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
 					log.Printf("error: %v\n", err)
@@ -210,7 +207,6 @@ func main() {
 				header.Set("Accept", "application/json")
 				req.SetFlags(req.LrespBody)
 				jsonStr := "{\"sourceUrl\":\"" + sourceUrl + "\", \"packageUrl\":\"" + packageUrl + "\", \"tarball\": \"" + tarballB64Trimmed + "\"}"
-				fmt.Println(jsonStr)
 				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(jsonStr))
 				if err != nil {
 					fmt.Println(err.Error())
