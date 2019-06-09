@@ -11,7 +11,7 @@ Patches, suggestions and comments are welcome.
 ## Requirements
 
 ```
-sudo apt-get install -y pbuilder debootstrap devscripts python-apt reprepro
+sudo apt-get install -y gpg pbuilder debootstrap devscripts python-apt reprepro
 ```
 
 ## Install

@@ -6,7 +6,7 @@ sudo rm -f /tmp/irgsh-go.tar.gz && cd /tmp && wget https://github.com/BlankOn/ir
 # Create required dirs
 sudo mkdir -p /etc/irgsh
 sudo mkdir -p /usr/share/irgsh
-sudo mkdir -p /var/irgsh/chief
+sudo mkdir -p /var/irgsh/chief/submissions
 sudo mkdir -p /var/irgsh/builder
 sudo mkdir -p /var/irgsh/repo
 sudo mkdir -p /var/log/irgsh
