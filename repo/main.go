@@ -96,7 +96,7 @@ func main() {
 
 		server.RegisterTask("repo", Repo)
 
-		worker := server.NewWorker("repo", 2)
+		worker := server.NewWorker("repo", 1)
 		err = worker.Launch()
 		if err != nil {
 			fmt.Println("Could not launch worker : " + err.Error())
