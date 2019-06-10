@@ -13,38 +13,59 @@ import (
 	"gopkg.in/src-d/go-git.v4"
 )
 
-// Main wrapper
+func uploadLog(logPath string, id string) {
+	// Upload the log to chief
+	cmdStr := "curl -v -F 'uploadFile=@" + logPath + "' '" + irgshConfig.Chief.Address + "/api/v1/log-upload?id=" + id + "&type=build'"
+	fmt.Println(cmdStr)
+	err := CmdExec(
+		cmdStr,
+		"Uploading log file to chief",
+		"",
+	)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+}
+
+// Main task wrapper
 func Build(payload string) (next string, err error) {
-	fmt.Println("Payload :")
-	fmt.Println(payload)
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
+
+	fmt.Println("Processing pipeline :" + raw["taskUUID"].(string))
 
 	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 	go StreamLog(logPath)
 
 	next, err = Clone(payload)
 	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		uploadLog(logPath, raw["taskUUID"].(string))
 		return
 	}
 
 	next, err = BuildPreparation(payload)
 	if err != nil {
+		uploadLog(logPath, raw["taskUUID"].(string))
 		return
 	}
 
 	next, err = BuildPackage(payload)
 	if err != nil {
+		uploadLog(logPath, raw["taskUUID"].(string))
 		return
 	}
 
 	next, err = StorePackage(payload)
 
-	if err == nil {
-		fmt.Println("[ BUILD DONE ]")
+	if err != nil {
+		uploadLog(logPath, raw["taskUUID"].(string))
+		return
 	}
 
+	uploadLog(logPath, raw["taskUUID"].(string))
+	fmt.Println("[ BUILD DONE ]")
 	return
 }
 
@@ -160,7 +181,7 @@ func StorePackage(payload string) (next string, err error) {
 	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Building package
-	cmdStr := "cd " + irgshConfig.Builder.Workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + irgshConfig.Chief.Address + "/upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + irgshConfig.Chief.Address + "/api/v1/artifact-upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
 	fmt.Println(cmdStr)
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
