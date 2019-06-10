@@ -28,6 +28,11 @@ release:
 	cp tmp/repo-main.go repo/main.go
 	cp tmp/cli-main.go cli/main.go
 
+preinstall:
+	sudo killall irgsh-chief || true
+	sudo killall irgsh-builder || true
+	sudo killall irgsh-repo || true
+
 build:
 	mkdir -p bin
 	cp chief/utils.go builder/utils.go
@@ -40,7 +45,7 @@ build:
 	rm builder/utils.go
 	rm repo/utils.go
 
-build-install: build
+build-install: preinstall build
 	sudo cp ./bin/irgsh-chief /usr/bin/irgsh-chief
 	sudo cp ./bin/irgsh-builder /usr/bin/irgsh-builder
 	sudo cp ./bin/irgsh-repo /usr/bin/irgsh-repo
