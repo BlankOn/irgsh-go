@@ -88,7 +88,7 @@ irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 
 - Submit :heavy_check_mark:
 - GPG signing :heavy_check_mark:
-- Live logging via WebSocket
+- Logging :heavy_check_mark:
 
 ### Chief
 
