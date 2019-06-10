@@ -118,7 +118,14 @@ func serve() {
 	http.HandleFunc("/api/v1/artifacts", ArtifactsHandler)
 	http.HandleFunc("/api/v1/submit", SubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
-	http.HandleFunc("/upload", uploadFileHandler())
+	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
+	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
+
+	artifactFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
+	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))
+
+	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
+	http.Handle("/logs/", http.StripPrefix("/logs/", logFs))
 
 	log.Println("irgsh-go chief now live on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -159,7 +166,7 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String()
 
 	// Verifying the signature against AUTHORIZED_KEYS
-  // TODO generic wrapper for auth check
+	// TODO generic wrapper for auth check
 	tarballB64 := submission.Tarball
 
 	buff, err := base64.StdEncoding.DecodeString(tarballB64)
@@ -257,12 +264,12 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	car := result.NewAsyncResult(&buildSignature, server.GetBackend())
 	car.Touch()
 	taskState := car.GetState()
-	res := fmt.Sprintf("{ pipelineId: \"" + taskState.TaskUUID + "\", state: \"" + taskState.State + "\" }")
+	res := fmt.Sprintf("{ \"pipelineId\": \"" + taskState.TaskUUID + "\", \"state\": \"" + taskState.State + "\" }")
 	fmt.Println(res)
 	fmt.Fprintf(w, res)
 }
 
-func uploadFileHandler() http.HandlerFunc {
+func artifactUploadHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		keys, ok := r.URL.Query()["id"]
@@ -275,7 +282,7 @@ func uploadFileHandler() http.HandlerFunc {
 
 		id := keys[0]
 
-		artifactPath := irgshConfig.Chief.Workdir + "/artifacts"
+		targetPath := irgshConfig.Chief.Workdir + "/artifacts"
 
 		// parse and validate file and post parameters
 		file, _, err := r.FormFile("uploadFile")
@@ -303,7 +310,7 @@ func uploadFileHandler() http.HandlerFunc {
 		}
 
 		fileName := id + ".tar.gz"
-		newPath := filepath.Join(artifactPath, fileName)
+		newPath := filepath.Join(targetPath, fileName)
 
 		// write file
 		newFile, err := os.Create(newPath)
@@ -312,7 +319,7 @@ func uploadFileHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		defer newFile.Close() // idempotent, okay to call twice
+		defer newFile.Close()
 		if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
 			log.Println(err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -320,6 +327,79 @@ func uploadFileHandler() http.HandlerFunc {
 		}
 
 		// TODO should be in JSON string
-		w.Write([]byte("SUCCESS"))
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+func logUploadHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		keys, ok := r.URL.Query()["id"]
+
+		if !ok || len(keys[0]) < 1 {
+			log.Println("Url Param 'id' is missing")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		id := keys[0]
+
+		keys, ok = r.URL.Query()["type"]
+
+		if !ok || len(keys[0]) < 1 {
+			log.Println("Url Param 'type' is missing")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		logType := keys[0]
+
+		targetPath := irgshConfig.Chief.Workdir + "/logs"
+
+		// parse and validate file and post parameters
+		file, _, err := r.FormFile("uploadFile")
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+		fileBytes, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// check file type, detectcontenttype only needs the first 512 bytes
+		filetype := strings.Split(http.DetectContentType(fileBytes), ";")[0]
+		fmt.Println(filetype)
+		switch filetype {
+		case "text/plain":
+			break
+		default:
+			log.Println("File upload rejected: should be a plain text log file.")
+			w.WriteHeader(http.StatusBadRequest)
+		}
+
+		fileName := id + "." + logType + ".log"
+		newPath := filepath.Join(targetPath, fileName)
+
+		// write file
+		newFile, err := os.Create(newPath)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer newFile.Close()
+		if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// TODO should be in JSON string
+		w.WriteHeader(http.StatusOK)
 	})
 }

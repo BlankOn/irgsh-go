@@ -64,10 +64,10 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
 		}
 		_, _ = f.WriteString("##### RUN " + cmdStr + "\n")
 		f.Close()
-		cmdStr += " | tee -a " + logPath
+		cmdStr += " 2>&1 | tee -a " + logPath
 	}
-
-	cmd := exec.Command("bash", "-c", cmdStr)
+	// `set -o pipefail` will forces to return the original exit code
+	cmd := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr)
 	err = cmd.Run()
 	return
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -30,16 +31,14 @@ var (
 )
 
 func checkForInitValues() (err error) {
-	dat, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
-	chiefAddress = string(dat)
-	if len(chiefAddress) < 1 {
-		err = errors.New("irgsh-cli need to be initialized first. Run: irgsh-cli --chief yourirgshchiefaddress init --key yourgpgkeyfingerprint")
-		fmt.Println(err.Error())
-	}
-	dat, _ = ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY")
-	maintainerSigningKey = string(dat)
-	if len(maintainerSigningKey) < 1 {
-		err = errors.New("irgsh-cli need to be initialized first. Run: irgsh-cli --chief yourirgshchiefaddress init --key yourgpgkeyfingerprint")
+	dat0, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
+	chiefAddress = string(dat0)
+	dat1, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY")
+	maintainerSigningKey = string(dat1)
+	if len(chiefAddress) < 1 || len(maintainerSigningKey) < 1 {
+		errMsg := "irgsh-cli need to be initialized first. Run: "
+		errMsg += "irgsh-cli --chief yourirgshchiefaddress init --key yourgpgkeyfingerprint"
+		err = errors.New(errMsg)
 		fmt.Println(err.Error())
 	}
 	return
@@ -99,7 +98,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
-					log.Printf("error: %v\n", err)
+					log.Println("error: %v\n", err)
 					return
 				}
 				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + maintainerSigningKey + "' > " + homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY"
@@ -107,7 +106,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
-					log.Printf("error: %v\n", err)
+					log.Println("error: %v\n", err)
 					return
 				}
 				fmt.Println("irgsh-cli is successfully initialized. Happy hacking!")
@@ -174,7 +173,7 @@ func main() {
 				fmt.Println(cmdStr)
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
-					log.Printf("error: %v\n", err)
+					log.Println("error: %v\n", err)
 					return
 				}
 
@@ -182,7 +181,6 @@ func main() {
 				cmdStr = "rm -rf " + homeDir + "/.irgsh/tmp/" + tmpID + "/package"
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
-					log.Printf("error: %v\n", err)
 					return
 				}
 
@@ -190,15 +188,13 @@ func main() {
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID + " && tar -zcvf ../" + tmpID + ".tar.gz ."
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
-					log.Printf("error: %v\n", err)
-					return
+					return err
 				}
 
 				// Encoding
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp && base64 -w0 " + tmpID + ".tar.gz"
 				tarballB64, err := exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Printf("error: %v\n", err)
 					return
 				}
 				tarballB64Trimmed := strings.TrimSuffix(string(tarballB64), "\n")
@@ -209,9 +205,26 @@ func main() {
 				jsonStr := "{\"sourceUrl\":\"" + sourceUrl + "\", \"packageUrl\":\"" + packageUrl + "\", \"tarball\": \"" + tarballB64Trimmed + "\"}"
 				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(jsonStr))
 				if err != nil {
-					fmt.Println(err.Error())
+					return
 				}
-				fmt.Printf("%+v", result)
+
+				responseStr := fmt.Sprintf("%+v", result)
+				type SubmitResponse struct {
+					PipelineID string `json:"pipelineId"`
+				}
+				responseJson := SubmitResponse{}
+				err = json.Unmarshal([]byte(responseStr), &responseJson)
+				if err != nil {
+					return
+				}
+				fmt.Println(responseJson.PipelineID)
+				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + responseJson.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"
+				cmd := exec.Command("bash", "-c", cmdStr)
+				err = cmd.Run()
+				if err != nil {
+					return
+				}
+
 				return err
 			},
 		},
@@ -225,17 +238,87 @@ func main() {
 					os.Exit(1)
 				}
 				if len(pipelineId) < 1 {
-					err = errors.New("--pipeline should not be empty")
-					return
+					dat, _ := ioutil.ReadFile(homeDir + "/.irgsh/LAST_PIPELINE_ID")
+					pipelineId = string(dat)
+					if len(pipelineId) < 1 {
+						err = errors.New("--pipeline should not be empty")
+						return
+					}
 				}
-				fmt.Println("Checking the status of " + pipelineId + "...")
+				fmt.Println("Checking the status of " + pipelineId + " ...")
 				req.SetFlags(req.LrespBody)
 				result, err := req.Get(chiefAddress+"/api/v1/status?uuid="+pipelineId, nil)
 				if err != nil {
-					log.Println(err.Error())
+					return err
 				}
-				fmt.Printf("%+v", result)
-				return err
+
+				responseStr := fmt.Sprintf("%+v", result)
+				type SubmitResponse struct {
+					PipelineID string `json:"pipelineId"`
+					State      string `json:"state"`
+				}
+				responseJson := SubmitResponse{}
+				err = json.Unmarshal([]byte(responseStr), &responseJson)
+				if err != nil {
+					return
+				}
+				fmt.Println(responseJson.State)
+
+				return
+			},
+		},
+		{
+			Name:  "log",
+			Usage: "Read the logs of a pipeline",
+			Action: func(c *cli.Context) (err error) {
+				pipelineId = c.Args().First()
+				err = checkForInitValues()
+				if err != nil {
+					os.Exit(1)
+				}
+				if len(pipelineId) < 1 {
+					dat, _ := ioutil.ReadFile(homeDir + "/.irgsh/LAST_PIPELINE_ID")
+					pipelineId = string(dat)
+					if len(pipelineId) < 1 {
+						err = errors.New("--pipeline should not be empty")
+						return
+					}
+				}
+				fmt.Println("Fetching the logs of " + pipelineId + " ...")
+				req.SetFlags(req.LrespBody)
+				result, err := req.Get(chiefAddress+"/api/v1/status?uuid="+pipelineId, nil)
+				if err != nil {
+					return err
+				}
+
+				responseStr := fmt.Sprintf("%+v", result)
+				type SubmitResponse struct {
+					PipelineID string `json:"pipelineId"`
+					State      string `json:"state"`
+				}
+				responseJson := SubmitResponse{}
+				err = json.Unmarshal([]byte(responseStr), &responseJson)
+				if err != nil {
+					return
+				}
+				if responseJson.State == "STARTED" {
+					fmt.Println("The pipeline is not finished yet")
+					return
+				}
+
+				result, err = req.Get(chiefAddress+"/logs/"+pipelineId+".build.log", nil)
+				if err != nil {
+					return err
+				}
+				fmt.Println(fmt.Sprintf("%+v", result))
+
+				result, err = req.Get(chiefAddress+"/logs/"+pipelineId+".repo.log", nil)
+				if err != nil {
+					return err
+				}
+				fmt.Println(fmt.Sprintf("%+v", result))
+
+				return
 			},
 		},
 	}
