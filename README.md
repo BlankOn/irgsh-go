@@ -133,6 +133,8 @@ irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 - Build :heavy_check_mark:
 - Upload :heavy_check_mark:
 - Dockerized pbuilder :heavy_check_mark:
+- Multiarch support
+- RPM support
 
 ### Repo
 
@@ -141,13 +143,21 @@ irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 - Download :heavy_check_mark:
 - Inject :heavy_check_mark:
 - Rebuild repo :heavy_check_mark:
+- Multiarch support
+- RPM support
 
 ### PabrikCD
 
 - Build
 - Upload
 
+### Release management
+
+- Release cycle (RC, alpha, beta, final)
+- Patches/Updates after release
+
 ### Others
 
-- Daemonized instances :heavy_check_mark:
 - No sudo needed :heavy_check_mark:
+- Daemonized instances :heavy_check_mark:
+- Dockerized instances (docker-compose)
