@@ -10,7 +10,7 @@ Patches, suggestions and comments are welcome.
 
 ## Requirements
 
-You need Docker and these packages,
+You need Docker, Redis and these packages,
 
 ```
 gpg pbuilder debootstrap devscripts python-apt reprepro
@@ -26,7 +26,7 @@ curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts
 
 ## Components
 
-Minimal IRGSH ecosystem contains three instances that supposed to be live on different machines. They depend on Redis as backend (queue, pubsub).
+Although these can be run in one machine, a minimal IRGSH ecosystem contains four instances that supposed to be live on different machines. They depend on Redis as backend (queue, pubsub).
 
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for worker and pipeline monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
@@ -43,7 +43,9 @@ Minimal IRGSH ecosystem contains three instances that supposed to be live on dif
 
 ### Setup
 
-We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `/etc/irgsh/config.yml` (see `GPG-EN.md`). Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
+Please refer to `/etc/irgsh/config.yml` for available preferences.
+
+We may need more than one `irgsh-builder`, depends on our available resources. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `/etc/irgsh/config.yml` (see `GPG-EN.md`). Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
 
 #### Builder
 
