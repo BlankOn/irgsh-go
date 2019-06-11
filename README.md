@@ -10,8 +10,10 @@ Patches, suggestions and comments are welcome.
 
 ## Requirements
 
+You need Docker and these packages,
+
 ```
-sudo apt-get install -y gpg pbuilder debootstrap devscripts python-apt reprepro
+gpg pbuilder debootstrap devscripts python-apt reprepro
 ```
 
 ## Install
@@ -29,7 +31,6 @@ Minimal IRGSH ecosystem contains three instances that supposed to be live on dif
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for worker and pipeline monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
 - `irgsh-repo` will serves as repository so it may need huge volume of storage.
-- `irgsh-test` intended to do installation test against any successfully build package. [WIP]
 - `irgsh-iso` works as ISO builder and serves the ISO image files immediately. [WIP]
 
 ### Architecture
@@ -42,21 +43,47 @@ Minimal IRGSH ecosystem contains three instances that supposed to be live on dif
 
 ### Setup
 
-We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `/etc/irgsh/config.yml` (see `GPG-EN.md`). Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`.
+We may need more than one `irgsh-builder`, depends on our available resources. Please refer to `/etc/irgsh/config.yml` for available preferences. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `/etc/irgsh/config.yml` (see `GPG-EN.md`). Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
 
-For `irgsh-builder` and `irgsh-repo`, we need to initialize them first. Please note that the initialization command should be run under root user.
+#### Builder
 
-Initialize the builder to create and prepare pbuilder,
+Initialize and prepare the pbuilder (this one need root user or sudo),
 
 ```
-irgsh-builder init
+sudo irgsh-builder init-base
 ```
+
+Prepare the containerized pbuilder,
+
+```
+irgsh-builder init-base
+```
+
+#### Repo
 
 Initialize the repo to create and prepare reprepro repository,
 
 ```
 irgsh-repo init
 
+```
+
+#### Chief
+
+Add the package maintainer GPG fingerprints,
+
+```
+echo B113D905C417D9C31DAD9F0E509A356412B6E77F > /var/irgsh/chief/AUTHORIZED_KEYS
+```
+
+#### Run
+
+You can start them from `service`,
+
+```
+service irgsh-chief start
+service irgsh-builder start
+service irgsh-repo start
 ```
 
 After these three instances are up and running, you may continue to work with `irgsh-cli` from anywhere.
@@ -105,7 +132,7 @@ irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 - Signing :heavy_check_mark:
 - Build :heavy_check_mark:
 - Upload :heavy_check_mark:
-- Dockerized pbuilder
+- Dockerized pbuilder :heavy_check_mark:
 
 ### Repo
 
@@ -124,4 +151,3 @@ irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 
 - Daemonized instances :heavy_check_mark:
 - No sudo needed :heavy_check_mark:
-- Secure Redis connection
