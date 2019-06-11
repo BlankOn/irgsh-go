@@ -11,7 +11,6 @@ import (
 	machinery "github.com/RichardKnop/machinery/v1"
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/ghodss/yaml"
-	"github.com/hpcloud/tail"
 	"github.com/urfave/cli"
 	validator "gopkg.in/go-playground/validator.v9"
 )
@@ -112,15 +111,4 @@ func serve() {
 	http.Handle("/", fs)
 	log.Println("irgsh-go chief now live on port 8082")
 	log.Fatal(http.ListenAndServe(":8082", nil))
-}
-
-func StreamLog(path string) {
-	_ = exec.Command("bash", "-c", "touch "+path).Run()
-	t, err := tail.TailFile(path, tail.Config{Follow: true})
-	if err != nil {
-		log.Printf("error: %v\n", err)
-	}
-	for line := range t.Lines {
-		fmt.Println(line.Text)
-	}
 }

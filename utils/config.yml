@@ -7,6 +7,7 @@ chief:
 
 builder:
   workdir: '/var/irgsh/builder'
+  upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
 
 repo:
   workdir: '/var/irgsh/repo'

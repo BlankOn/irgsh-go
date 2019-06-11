@@ -265,7 +265,6 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	car.Touch()
 	taskState := car.GetState()
 	res := fmt.Sprintf("{ \"pipelineId\": \"" + taskState.TaskUUID + "\", \"state\": \"" + taskState.State + "\" }")
-	fmt.Println(res)
 	fmt.Fprintf(w, res)
 }
 
@@ -373,7 +372,6 @@ func logUploadHandler() http.HandlerFunc {
 
 		// check file type, detectcontenttype only needs the first 512 bytes
 		filetype := strings.Split(http.DetectContentType(fileBytes), ";")[0]
-		fmt.Println(filetype)
 		switch filetype {
 		case "text/plain":
 			break
