@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"time"
 
 	"gopkg.in/src-d/go-git.v4"
@@ -15,8 +14,8 @@ import (
 
 func uploadLog(logPath string, id string) {
 	// Upload the log to chief
-	cmdStr := "curl -v -F 'uploadFile=@" + logPath + "' '" + irgshConfig.Chief.Address + "/api/v1/log-upload?id=" + id + "&type=build'"
-	fmt.Println(cmdStr)
+	cmdStr := "curl -v -F 'uploadFile=@" + logPath + "' '"
+	cmdStr += irgshConfig.Chief.Address + "/api/v1/log-upload?id=" + id + "&type=build'"
 	err := CmdExec(
 		cmdStr,
 		"Uploading log file to chief",
@@ -65,7 +64,9 @@ func Build(payload string) (next string, err error) {
 	}
 
 	uploadLog(logPath, raw["taskUUID"].(string))
-	fmt.Println("[ BUILD DONE ]")
+
+	fmt.Println("Done.")
+
 	return
 }
 
@@ -76,10 +77,14 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning source files
 	sourceURL := raw["sourceUrl"].(string)
-	_, err = git.PlainClone(irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/source", false, &git.CloneOptions{
-		URL:      sourceURL,
-		Progress: os.Stdout,
-	})
+	_, err = git.PlainClone(
+		irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/source",
+		false,
+		&git.CloneOptions{
+			URL:      sourceURL,
+			Progress: os.Stdout,
+		},
+	)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -87,10 +92,14 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning Debian package files
 	packageURL := raw["packageUrl"].(string)
-	_, err = git.PlainClone(irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/package", false, &git.CloneOptions{
-		URL:      packageURL,
-		Progress: os.Stdout,
-	})
+	_, err = git.PlainClone(
+		irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/package",
+		false,
+		&git.CloneOptions{
+			URL:      packageURL,
+			Progress: os.Stdout,
+		},
+	)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -114,16 +123,24 @@ func BuildPreparation(payload string) (next string, err error) {
 		return
 	}
 
-	err = ioutil.WriteFile(irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/debuild.tar.gz", buff, 07440)
+	err = ioutil.WriteFile(
+		irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/debuild.tar.gz",
+		buff,
+		07440,
+	)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
 	}
 
 	// Extract signed DSC
-	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + " && tar -xvf debuild.tar.gz && rm -f debuild.tar.gz"
-	fmt.Println(cmdStr)
-	err = exec.Command("bash", "-c", cmdStr).Run()
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr += " && tar -xvf debuild.tar.gz && rm -f debuild.tar.gz"
+	err = CmdExec(
+		cmdStr,
+		"",
+		"",
+	)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -141,29 +158,47 @@ func BuildPackage(payload string) (next string, err error) {
 	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
 	// Copy the source files
-	cmdStr := "cp -vR " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/package/" + " >> " + logPath
-	fmt.Println(cmdStr)
-	err = exec.Command("bash", "-c", cmdStr).Run()
+	cmdStr := "cp -vR " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr += "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr += "/package/"
+	err = CmdExec(
+		cmdStr,
+		"",
+		logPath,
+	)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
 	}
 
 	// Cleanup pbuilder cache result
-	_ = exec.Command("bash", "-c", "rm -rf /var/cache/pbuilder/result/*").Run()
+	_ = CmdExec(
+		"rm -rf /var/cache/pbuilder/result/*",
+		"",
+		"",
+	)
 
 	// Building the package
-	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + " && pbuilder build *.dsc >> " + logPath
+	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr += ":/tmp/build --privileged=true -i pbocker bash -c /build.sh"
 	fmt.Println(cmdStr)
-	err = exec.Command("bash", "-c", cmdStr).Run()
+	err = CmdExec(
+		cmdStr,
+		"Building the package",
+		logPath,
+	)
 	if err != nil {
-		log.Printf("error: %v\n", err)
+		log.Println(err.Error())
 		return
 	}
 
-	cmdStr = "cp /var/cache/pbuilder/result/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
-	fmt.Println(cmdStr)
-	err = exec.Command("bash", "-c", cmdStr).Run()
+	cmdStr = "cp /var/cache/pbuilder/result/* " + irgshConfig.Builder.Workdir
+	cmdStr += "/" + raw["taskUUID"].(string)
+	err = CmdExec(
+		cmdStr,
+		"",
+		"",
+	)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
@@ -180,10 +215,17 @@ func StorePackage(payload string) (next string, err error) {
 
 	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
 
-	// Building package
-	cmdStr := "cd " + irgshConfig.Builder.Workdir + " && tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string) + " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + ".tar.gz' " + irgshConfig.Chief.Address + "/api/v1/artifact-upload?id=" + raw["taskUUID"].(string) + " >> " + logPath
-	fmt.Println(cmdStr)
-	err = exec.Command("bash", "-c", cmdStr).Run()
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + " && "
+	cmdStr += "tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string)
+	cmdStr += " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir
+	cmdStr += "/" + raw["taskUUID"].(string) + ".tar.gz' "
+	cmdStr += irgshConfig.Chief.Address + "/api/v1/artifact-upload?id="
+	cmdStr += raw["taskUUID"].(string)
+	err = CmdExec(
+		cmdStr,
+		"",
+		logPath,
+	)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return

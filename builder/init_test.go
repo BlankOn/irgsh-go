@@ -45,7 +45,9 @@ func TestBaseInitBase(t *testing.T) {
 		assert.Equal(t, true, false, "Should not reach here")
 	}
 
-	cmdStr := "du -s /var/cache/pbuilder/base.tgz | cut -d '/' -f1 | head -n 1 | sed 's/ //g' | tr -d '\n' | tr -d '\t' "
+	cmdStr := "du -s /var/cache/pbuilder/base.tgz | "
+	cmdStr += "cut -d '/' -f1 | head -n 1 | sed 's/ //g' | "
+	cmdStr += "tr -d '\n' | tr -d '\t' "
 	cmd := exec.Command("bash", "-c", cmdStr)
 	out, _ := cmd.CombinedOutput()
 	cmd.Run()

@@ -11,7 +11,6 @@ import (
 	machinery "github.com/RichardKnop/machinery/v1"
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/ghodss/yaml"
-	"github.com/hpcloud/tail"
 	"github.com/urfave/cli"
 	validator "gopkg.in/go-playground/validator.v9"
 )
@@ -64,12 +63,21 @@ func main() {
 			Aliases: []string{"i"},
 			Usage:   "initialize builder",
 			Action: func(c *cli.Context) error {
+				err := InitBuilder()
+				return err
+			},
+		},
+		{
+			Name:    "init-base",
+			Aliases: []string{"i"},
+			Usage:   "initialize builder",
+			Action: func(c *cli.Context) error {
 				err := InitBase()
 				return err
 			},
 		},
 		{
-			Name:    "update",
+			Name:    "update-base",
 			Aliases: []string{"i"},
 			Usage:   "update base.tgz",
 			Action: func(c *cli.Context) error {
@@ -113,14 +121,4 @@ func serve() {
 	http.Handle("/", fs)
 	log.Println("irgsh-go builder now live on port 8081, serving path : " + irgshConfig.Builder.Workdir)
 	log.Fatal(http.ListenAndServe(":8081", nil))
-}
-
-func StreamLog(path string) {
-	t, err := tail.TailFile(path, tail.Config{Follow: true})
-	if err != nil {
-		log.Printf("error: %v\n", err)
-	}
-	for line := range t.Lines {
-		fmt.Println(line.Text)
-	}
 }
