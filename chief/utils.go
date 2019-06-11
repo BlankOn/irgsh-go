@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"github.com/hpcloud/tail"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,7 +24,8 @@ type ChiefConfig struct {
 }
 
 type BuilderConfig struct {
-	Workdir string `json:"workdir" validate:"required"`
+	Workdir         string `json:"workdir" validate:"required"`
+	UpstreamDistUrl string `json:"upstream_dist_url" validate:"required"` // http://kartolo.sby.datautama.net.id/debian
 }
 
 type RepoConfig struct {
@@ -46,6 +50,7 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
 	}
 
 	if len(logPath) > 0 {
+
 		logPathArr := strings.Split(logPath, "/")
 		logPathArr = logPathArr[:len(logPathArr)-1]
 		logDir := "/" + strings.Join(logPathArr, "/")
@@ -69,5 +74,16 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
 	// `set -o pipefail` will forces to return the original exit code
 	cmd := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr)
 	err = cmd.Run()
+
 	return
+}
+
+func StreamLog(path string) {
+	t, err := tail.TailFile(path, tail.Config{Follow: true})
+	if err != nil {
+		log.Printf("error: %v\n", err)
+	}
+	for line := range t.Lines {
+		fmt.Println(line.Text)
+	}
 }
