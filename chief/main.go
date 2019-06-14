@@ -182,7 +182,7 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "500")
 		return
 	}
-	cmdStr := "cd " + irgshConfig.Chief.Workdir + "/submissions && tar -xvf " + submission.TaskUUID + ".tar.gz && rm -f submission.TaskUUID.tar.gz"
+	cmdStr := "cd " + irgshConfig.Chief.Workdir + "/submissions && tar -xvf " + submission.TaskUUID + ".tar.gz && rm -f " + submission.TaskUUID + ".tar.gz"
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
