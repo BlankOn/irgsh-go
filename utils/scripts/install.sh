@@ -12,6 +12,7 @@ sudo mkdir -p /var/irgsh/chief/logs
 sudo mkdir -p /var/irgsh/builder
 sudo mkdir -p /var/irgsh/repo
 sudo mkdir -p /var/log/irgsh
+sudo chmod -R a+rw /var/irgsh/*
 
 # Install the files
 
@@ -23,3 +24,4 @@ sudo cp -vR /tmp/irgsh-go/usr/share/irgsh/* /usr/share/irgsh/
 sudo cp -v /tmp/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
 # Daemon
 sudo cp -v /tmp/irgsh-go/etc/init.d/* /etc/init.d/
+
