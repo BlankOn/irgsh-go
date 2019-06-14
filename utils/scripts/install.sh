@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Download and extract
-sudo rm -f /tmp/irgsh-go.tar.gz && cd /tmp && wget https://github.com/BlankOn/irgsh-go/releases/download/v0.0.11-alpha/release.tar.gz -O ./irgsh-go.tar.gz && tar -xvf irgsh-go.tar.gz 
+sudo rm -f /tmp/irgsh-go.tar.gz && cd /tmp && wget https://github.com/BlankOn/irgsh-go/releases/download/v0.0.12-alpha/release.tar.gz -O ./irgsh-go.tar.gz && tar -xvf irgsh-go.tar.gz 
 
 # Create required dirs
 sudo mkdir -p /etc/irgsh
@@ -12,7 +12,9 @@ sudo mkdir -p /var/irgsh/chief/logs
 sudo mkdir -p /var/irgsh/builder
 sudo mkdir -p /var/irgsh/repo
 sudo mkdir -p /var/log/irgsh
-sudo chmod -R a+rw /var/irgsh/*
+sudo chmod -R a+xrw /var/irgsh/*
+ME=$(whoami)
+sudo chown -R $ME:$ME /var/irgsh/*
 
 # Install the files
 
