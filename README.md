@@ -72,10 +72,10 @@ irgsh-repo init
 
 #### Chief
 
-Add the package maintainer GPG fingerprints,
+Add the package maintainer GPG public key(s),
 
 ```
-echo B113D905C417D9C31DAD9F0E509A356412B6E77F > /var/irgsh/chief/AUTHORIZED_KEYS
+gpg --import /path/to/pubkey.asc
 ```
 
 #### Run
