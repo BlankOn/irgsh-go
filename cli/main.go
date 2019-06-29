@@ -81,11 +81,15 @@ func main() {
 			},
 			Action: func(c *cli.Context) (err error) {
 				if len(chiefAddress) < 1 {
-					err = errors.New("Chief address should not be empty. Example: irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D9C31DAD9F0E509A356412B6E77F")
+					msg := "Chief address should not be empty. Example: "
+					msg += "irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D"
+					err = errors.New(msg)
 					return
 				}
 				if len(maintainerSigningKey) < 1 {
-					err = errors.New("Signing key should not be empty. Example: irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D9C31DAD9F0E509A356412B6E77F")
+					msg := "Signing key should not be empty. Example: "
+					msg += "irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D"
+					err = errors.New(msg)
 					return
 				}
 				_, err = url.ParseRequestURI(chiefAddress)
@@ -93,7 +97,8 @@ func main() {
 					return
 				}
 
-				cmdStr := "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + chiefAddress + "' > " + homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS"
+				cmdStr := "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + chiefAddress
+				cmdStr += "' > " + homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS"
 				cmd := exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {
@@ -101,7 +106,8 @@ func main() {
 					log.Println("error: %v\n", err)
 					return
 				}
-				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + maintainerSigningKey + "' > " + homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY"
+				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
+				cmdStr += maintainerSigningKey + "' > " + homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY"
 				cmd = exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {
@@ -159,17 +165,22 @@ func main() {
 
 				tmpID := uuid.New().String()
 				// Cloning Debian package files
-				_, err = git.PlainClone(homeDir + ".irgsh/tmp/"+tmpID+"/package", false, &git.CloneOptions{
-					URL:      packageUrl,
-					Progress: os.Stdout,
-				})
+				_, err = git.PlainClone(
+					"/home/herpiko/.irgsh/tmp/"+tmpID+"/package",
+					false,
+					&git.CloneOptions{
+						URL:      packageUrl,
+						Progress: os.Stdout,
+					},
+				)
 				if err != nil {
 					fmt.Println(err.Error())
 					return
 				}
 
 				// Signing DSC
-				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID + "/package && debuild -S -k" + maintainerSigningKey
+				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/package && debuild -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
@@ -185,7 +196,8 @@ func main() {
 				}
 
 				// Compressing
-				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID + " && tar -zcvf ../" + tmpID + ".tar.gz ."
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += " && tar -zcvf ../" + tmpID + ".tar.gz ."
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
 					return err
@@ -202,13 +214,18 @@ func main() {
 				header := make(http.Header)
 				header.Set("Accept", "application/json")
 				req.SetFlags(req.LrespBody)
-				jsonStr := "{\"sourceUrl\":\"" + sourceUrl + "\", \"packageUrl\":\"" + packageUrl + "\", \"tarball\": \"" + tarballB64Trimmed + "\"}"
+				jsonStr := "{\"sourceUrl\":\"" + sourceUrl + "\", \"packageUrl\":\""
+				jsonStr += packageUrl + "\", \"tarball\": \"" + tarballB64Trimmed + "\"}"
 				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(jsonStr))
 				if err != nil {
 					return
 				}
 
 				responseStr := fmt.Sprintf("%+v", result)
+				fmt.Println(responseStr)
+				if strings.Contains(responseStr, "401 Unauthorized") {
+					return
+				}
 				type SubmitResponse struct {
 					PipelineID string `json:"pipelineId"`
 				}
@@ -218,7 +235,8 @@ func main() {
 					return
 				}
 				fmt.Println(responseJson.PipelineID)
-				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '" + responseJson.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"
+				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
+				cmdStr += responseJson.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"
 				cmd := exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {
