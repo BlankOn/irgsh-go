@@ -6,15 +6,15 @@ sudo rm -f /tmp/irgsh-go.tar.gz && cd /tmp && wget https://github.com/BlankOn/ir
 # Create required dirs
 sudo mkdir -p /etc/irgsh
 sudo mkdir -p /usr/share/irgsh
-sudo mkdir -p /var/irgsh/chief/submissions
-sudo mkdir -p /var/irgsh/chief/artifacts
-sudo mkdir -p /var/irgsh/chief/logs
-sudo mkdir -p /var/irgsh/builder
-sudo mkdir -p /var/irgsh/repo
+sudo mkdir -p /var/lib/irgsh/chief/submissions
+sudo mkdir -p /var/lib/irgsh/chief/artifacts
+sudo mkdir -p /var/lib/irgsh/chief/logs
+sudo mkdir -p /var/lib/irgsh/builder
+sudo mkdir -p /var/lib/irgsh/repo
 sudo mkdir -p /var/log/irgsh
-sudo chmod -R a+xrw /var/irgsh/*
+sudo chmod -R a+xrw /var/lib/irgsh/*
 ME=$(whoami)
-sudo chown -R $ME:$ME /var/irgsh/*
+sudo chown -R $ME:$ME /var/lib/irgsh/*
 
 # Install the files
 

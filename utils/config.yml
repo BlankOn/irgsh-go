@@ -3,14 +3,14 @@ redis: 'redis://localhost:6379'
 
 chief:
   address: 'http://localhost:8080'
-  workdir: '/var/irgsh/chief'
+  workdir: '/var/lib/irgsh/chief'
 
 builder:
-  workdir: '/var/irgsh/builder'
+  workdir: '/var/lib/irgsh/builder'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
 
 repo:
-  workdir: '/var/irgsh/repo'
+  workdir: '/var/lib/irgsh/repo'
   dist_name: 'BlankOn'
   dist_label: 'BlankOn'
   dist_codename: 'verbeek'
