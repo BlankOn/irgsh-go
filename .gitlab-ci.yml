@@ -1,0 +1,22 @@
+stages:
+  - build-deploy
+
+build-deploy:
+  stage: build-deploy
+  before_script:
+    - mkdir -p ~/.ssh || true
+    - eval `ssh-agent -s`
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/confi
+  script:
+    - docker system prune
+    - cp utils/docker/build/Dockerfile .
+    - docker build -t irgsh-build .
+    - docker run -v $(pwd)/target:/tmp/src/target irgsh-build make release
+    #- scp -o stricthostkeychecking=no target/release.tar.gz gitlab-runner@irgsh.blankonlinux.or.id:/tmp/release.tar.gz
+    #- scp -o stricthostkeychecking=no utils/scripts/install.sh gitlab-runner@irgsh.blankonlinux.or.id:/tmp/install.sh
+    #- scp -o stricthostkeychecking=no utils/scripts/deploy.sh gitlab-runner@irgsh.blankonlinux.or.id:/tmp/deploy.sh
+    - rsync -avzhe ssh gitlab-runner@irgsh.blankonlinux.or.id:/tmp/release.tar.gz target/release.tar.gz
+    - rsync -avzhe ssh gitlab-runner@irgsh.blankonlinux.or.id:/tmp/install.sh utils/scripts/install.sh
+    - rsync -avzhe ssh gitlab-runner@irgsh.blankonlinux.or.id:/tmp/deploy.sh utils/scripts/deploy.sh
+    - ssh -o stricthostkeychecking=no gitlab-runner@irgsh.blankonlinux.or.id "(cd /tmp && chmod a+x deploy.sh && sudo ./deploy.sh)"

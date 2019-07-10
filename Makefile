@@ -21,6 +21,12 @@ release:
 	cp utils/init/* irgsh-go/etc/init.d/
 	cp -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
+	mkdir -p target
+	mv release.tar.gz target/
+	# It's possible this release command will be used inside a container
+	# Let it rewriteable for host environment
+	chmod -vR a+rw target
+	chown -vR :users target
 	# Clean up
 	rm -rf irgsh-go
 	cp tmp/chief-main.go chief/main.go
@@ -32,6 +38,10 @@ preinstall:
 	sudo killall irgsh-chief || true
 	sudo killall irgsh-builder || true
 	sudo killall irgsh-repo || true
+
+build:
+	docker build --no-cache -t irgsh-build .
+	docker run -v $(pwd)/target:/tmp/src/target irgsh-build make release
 
 build:
 	mkdir -p bin
