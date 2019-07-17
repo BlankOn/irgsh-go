@@ -39,7 +39,7 @@ preinstall:
 	sudo killall irgsh-builder || true
 	sudo killall irgsh-repo || true
 
-build:
+build-in-docker:
 	docker build --no-cache -t irgsh-build .
 	docker run -v $(pwd)/target:/tmp/src/target irgsh-build make release
 
