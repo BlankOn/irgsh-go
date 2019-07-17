@@ -34,14 +34,19 @@ release:
 	cp tmp/repo-main.go repo/main.go
 	cp tmp/cli-main.go cli/main.go
 
+release-in-docker: release
+	chmod -vR a+rw target
+	chown -vR :users target
+
 preinstall:
 	sudo killall irgsh-chief || true
 	sudo killall irgsh-builder || true
 	sudo killall irgsh-repo || true
 
 build-in-docker:
+	cp utils/docker/build/Dockerfile .
 	docker build --no-cache -t irgsh-build .
-	docker run -v $(pwd)/target:/tmp/src/target irgsh-build make release
+	docker run -v $(pwd)/target:/tmp/src/target irgsh-build make release-in-docker
 
 build:
 	mkdir -p bin
