@@ -18,7 +18,7 @@ gpg pbuilder debootstrap devscripts python-apt reprepro
 
 ## Install
 
-Before install, make sure you stopped all the running irgsh-\* instances. To install or update irgsh-go, you can use the install script using cURL:
+To install or update irgsh-go, you can use the install script using cURL:
 
 ```
 curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts/install.sh | bash
@@ -26,7 +26,7 @@ curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts
 
 ## Components
 
-Although these can be run in one machine, a minimal IRGSH ecosystem contains four instances that supposed to be live on different machines. They depend on Redis as backend (queue, pubsub).
+Although these can be run in one machine, a minimal IRGSH ecosystem contains four instances and hey depend on Redis as backend (queue, pubsub).
 
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for worker and pipeline monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
