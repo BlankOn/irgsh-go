@@ -3,10 +3,13 @@ release:
 	# Temporarily backup the original files to inject version string
 	cp chief/main.go tmp/chief-main.go
 	cp builder/main.go tmp/builder-main.go
+	cp iso/main.go tmp/iso-main.go
 	cp repo/main.go tmp/repo-main.go
 	cp cli/main.go tmp/cli-main.go
+	# Assign version
 	cat tmp/chief-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > chief/main.go
 	cat tmp/builder-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > builder/main.go
+	cat tmp/iso-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > iso/main.go
 	cat tmp/repo-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > repo/main.go
 	cat tmp/cli-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > cli/main.go
 	# Build
@@ -31,6 +34,7 @@ release:
 	rm -rf irgsh-go
 	cp tmp/chief-main.go chief/main.go
 	cp tmp/builder-main.go builder/main.go
+	cp tmp/iso-main.go iso/main.go
 	cp tmp/repo-main.go repo/main.go
 	cp tmp/cli-main.go cli/main.go
 
@@ -39,8 +43,13 @@ release-in-docker: release
 	chown -vR :users target
 
 preinstall:
+	sudo service irgsh-chief stop || true
+	sudo service irgsh-builder stop || true
+	sudo service irgsh-iso stop || true
+	sudo service irgsh-repo stop || true
 	sudo killall irgsh-chief || true
 	sudo killall irgsh-builder || true
+	sudo killall irgsh-iso || true
 	sudo killall irgsh-repo || true
 
 build-in-docker:
@@ -51,26 +60,32 @@ build-in-docker:
 build:
 	mkdir -p bin
 	cp chief/utils.go builder/utils.go
+	cp chief/utils.go iso/utils.go
 	cp chief/utils.go repo/utils.go
 	cp chief/utils.go cli/utils.go
 	go build -o ./bin/irgsh-chief ./chief
 	go build -o ./bin/irgsh-builder ./builder
+	go build -o ./bin/irgsh-iso ./iso
 	go build -o ./bin/irgsh-repo ./repo
 	go build -o ./bin/irgsh-cli ./cli
 	rm builder/utils.go
+	rm iso/utils.go
 	rm repo/utils.go
 
 build-install: preinstall build
 	sudo cp ./bin/irgsh-chief /usr/bin/irgsh-chief
 	sudo cp ./bin/irgsh-builder /usr/bin/irgsh-builder
+	sudo cp ./bin/irgsh-iso /usr/bin/irgsh-iso
 	sudo cp ./bin/irgsh-repo /usr/bin/irgsh-repo
 	sudo cp ./bin/irgsh-cli /usr/bin/irgsh-cli
 
 test:
 	mkdir -p tmp
 	cp chief/utils.go builder/utils.go
+	cp chief/utils.go iso/utils.go
 	cp chief/utils.go repo/utils.go
 	go test -race -coverprofile=coverage.txt -covermode=atomic ./builder
+	go test -race -coverprofile=coverage.txt -covermode=atomic ./iso
 	go test -race -coverprofile=coverage.txt -covermode=atomic ./repo
 
 coverage:test
@@ -84,6 +99,9 @@ irgsh-builder-init:
 
 irgsh-builder:
 	go build -o ./bin/irgsh-builder ./builder && ./bin/irgsh-builder
+
+irgsh-iso:
+	go build -o ./bin/irgsh-iso ./iso && ./bin/irgsh-iso
 
 irgsh-repo-init:
 	go build -o ./bin/irgsh-repo ./repo && ./bin/irgsh-repo init

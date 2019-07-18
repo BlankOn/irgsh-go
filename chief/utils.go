@@ -14,6 +14,7 @@ type IrgshConfig struct {
 	Redis   string        `json:"redis"`
 	Chief   ChiefConfig   `json:"chief"`
 	Builder BuilderConfig `json:"builder"`
+	ISO ISOConfig `json:"iso"`
 	Repo    RepoConfig    `json:"repo"`
 	IsTest  bool          `json:"is_test"`
 }
@@ -26,6 +27,10 @@ type ChiefConfig struct {
 type BuilderConfig struct {
 	Workdir         string `json:"workdir" validate:"required"`
 	UpstreamDistUrl string `json:"upstream_dist_url" validate:"required"` // http://kartolo.sby.datautama.net.id/debian
+}
+
+type ISOConfig struct {
+	Workdir         string `json:"workdir" validate:"required"`
 }
 
 type RepoConfig struct {

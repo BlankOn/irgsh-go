@@ -10,6 +10,7 @@ sudo mkdir -p /var/lib/irgsh/chief/submissions
 sudo mkdir -p /var/lib/irgsh/chief/artifacts
 sudo mkdir -p /var/lib/irgsh/chief/logs
 sudo mkdir -p /var/lib/irgsh/builder
+sudo mkdir -p /var/lib/irgsh/iso
 sudo mkdir -p /var/lib/irgsh/repo
 sudo mkdir -p /var/log/irgsh
 sudo chmod -R a+xrw /var/lib/irgsh/*

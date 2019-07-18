@@ -73,13 +73,6 @@ func main() {
 		log.Fatal(err.Error())
 		os.Exit(1)
 	}
-	cmd := exec.Command("bash", "-c", "mkdir -p "+irgshConfig.Chief.Workdir+"/artifacts")
-	err = cmd.Run()
-	if err != nil {
-		log.Fatal(err.Error())
-		os.Exit(1)
-	}
-
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
 	app.Usage = "irgsh-go distributed packager"
@@ -112,10 +105,11 @@ func main() {
 func serve() {
 	http.HandleFunc("/", IndexHandler)
 	http.HandleFunc("/api/v1/artifacts", ArtifactsHandler)
-	http.HandleFunc("/api/v1/submit", SubmitHandler)
+	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
 	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
+	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
 
 	artifactFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
 	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))
@@ -148,7 +142,7 @@ func ArtifactsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(jsonStr))
 }
 
-func SubmitHandler(w http.ResponseWriter, r *http.Request) {
+func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	submission := Submission{}
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&submission)
@@ -240,7 +234,7 @@ func SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
 	_, err = server.SendChain(chain)
 	if err != nil {
-		fmt.Println("Could not create server : " + err.Error())
+		fmt.Println("Could not send chain : " + err.Error())
 	}
 
 	payload := SubmitPayloadResponse{PipelineId: submission.TaskUUID}
@@ -409,4 +403,27 @@ func logUploadHandler() http.HandlerFunc {
 		// TODO should be in JSON string
 		w.WriteHeader(http.StatusOK)
 	})
+}
+
+func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("iso")
+	signature := tasks.Signature{
+		Name: "iso",
+		UUID: uuid.New().String(),
+		Args: []tasks.Arg{
+			{
+				Type:  "string",
+				Value: "iso-specific-value",
+			},
+		},
+	}
+  // TODO grab the asyncResult here
+	_, err := server.SendTask(&signature)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Println("Could not send task : " + err.Error())
+		fmt.Fprintf(w, "500")
+	}
+		// TODO should be in JSON string
+	w.WriteHeader(http.StatusOK)
 }

@@ -1,22 +1,22 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:          irgsh-builder
+# Provides:          irgsh-iso
 # Required-Start:    $local_fs $network $syslog
 # Required-Stop:     $local_fs $network $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: irgsh-builder
-# Description:       irgsh-builder
+# Short-Description: irgsh-iso
+# Description:       irgsh-iso
 ### END INIT INFO
 
-NAME="irgsh-builder"
+NAME="irgsh-iso"
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 APPDIR="/"
-APPBIN="/usr/bin/irgsh-builder"
+APPBIN="/usr/bin/irgsh-iso"
 USER="root"
 GROUP="root"
-LOGFILE="/var/log/irgsh/builder.log"
+LOGFILE="/var/log/irgsh/iso.log"
 
 # Include functions 
 set -e
