@@ -18,7 +18,7 @@ repo:
   dist_supported_architectures: 'amd64 source'
   dist_version: '12.0'
   dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
-  dist_signing_key: 'B113D905C417D9C31DAD9F0E509A356412B6E77F'
+  dist_signing_key: 'GPG_SIGN_KEY'
   upstream_name: 'merge.sid'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'

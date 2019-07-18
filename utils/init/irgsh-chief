@@ -14,7 +14,7 @@ NAME="irgsh-chief"
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 APPDIR="/"
 APPBIN="/usr/bin/irgsh-chief"
-USER="root"
+USER="irgsh"
 GROUP="root"
 LOGFILE="/var/log/irgsh/chief.log"
 

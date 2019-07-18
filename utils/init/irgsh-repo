@@ -14,7 +14,7 @@ NAME="irgsh-repo"
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 APPDIR="/"
 APPBIN="/usr/bin/irgsh-repo"
-USER="root"
+USER="irgsh"
 GROUP="root"
 LOGFILE="/var/log/irgsh/repo.log"
 

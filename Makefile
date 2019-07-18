@@ -26,10 +26,6 @@ release:
 	tar -zcvf release.tar.gz irgsh-go
 	mkdir -p target
 	mv release.tar.gz target/
-	# It's possible this release command will be used inside a container
-	# Let it rewriteable for host environment
-	chmod -vR a+rw target
-	chown -vR :users target
 	# Clean up
 	rm -rf irgsh-go
 	cp tmp/chief-main.go chief/main.go
@@ -39,6 +35,8 @@ release:
 	cp tmp/cli-main.go cli/main.go
 
 release-in-docker: release
+	# It's possible this release command will be used inside a container
+	# Let it rewriteable for host environment
 	chmod -vR a+rw target
 	chown -vR :users target
 

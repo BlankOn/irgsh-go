@@ -14,7 +14,7 @@ NAME="irgsh-builder"
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 APPDIR="/"
 APPBIN="/usr/bin/irgsh-builder"
-USER="root"
+USER="irgsh"
 GROUP="root"
 LOGFILE="/var/log/irgsh/builder.log"
 

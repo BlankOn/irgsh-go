@@ -14,7 +14,7 @@ NAME="irgsh-iso"
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 APPDIR="/"
 APPBIN="/usr/bin/irgsh-iso"
-USER="root"
+USER="irgsh"
 GROUP="root"
 LOGFILE="/var/log/irgsh/iso.log"
 
