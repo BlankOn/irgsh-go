@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/manifoldco/promptui"
 	"os"
 	"strings"
 )
@@ -74,6 +75,20 @@ func Repo(payload string) (err error) {
 }
 
 func InitRepo() (err error) {
+	prompt := promptui.Prompt{
+		Label:     "Are you sure you want to initialize new repository? Any existing distribution will be flushed.",
+		IsConfirm: true,
+	}
+	result, err := prompt.Run()
+	if err != nil {
+		return
+	}
+	if strings.ToLower(result) != "y" {
+		return
+	}
+
+	// TODO ask for matched distribution name as this command is super dangerous
+
 	fmt.Println("##### Initializing new repository for " + irgshConfig.Repo.DistCodename)
 
 	logPath := irgshConfig.Repo.Workdir + "/init.log"
