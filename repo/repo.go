@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/manifoldco/promptui"
 	"os"
 	"strings"
 )
@@ -74,7 +75,21 @@ func Repo(payload string) (err error) {
 }
 
 func InitRepo() (err error) {
-	fmt.Println("##### Initializing new repository")
+	prompt := promptui.Prompt{
+		Label:     "Are you sure you want to initialize new repository? Any existing distribution will be flushed.",
+		IsConfirm: true,
+	}
+	result, err := prompt.Run()
+	if err != nil {
+		return
+	}
+	if strings.ToLower(result) != "y" {
+		return
+	}
+
+	// TODO ask for matched distribution name as this command is super dangerous
+
+	fmt.Println("##### Initializing new repository for " + irgshConfig.Repo.DistCodename)
 
 	logPath := irgshConfig.Repo.Workdir + "/init.log"
 	go StreamLog(logPath)
@@ -180,6 +195,116 @@ func InitRepo() (err error) {
 	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
+	)
+	err = CmdExec(
+		cmdStr,
+		"Initialize the reprepro repository for the first time",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+
+	fmt.Println("##### Initializing the experimental repository for " + irgshConfig.Repo.DistCodename)
+	// With -experimental suffix
+
+	cmdStr = fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR %s %s/%s",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+"-experimental",
+		repoTemplatePath,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+"-experimental",
+	)
+	err = CmdExec(cmdStr, "Preparing reprepro template", logPath)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat updates.orig | 
+		sed 's/UPSTREAM_NAME/%s/g' | 
+		sed 's/UPSTREAM_DIST_CODENAME/%s/g' | 
+		sed 's/UPSTREAM_DIST_URL/%s/g' | 
+		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | 
+		sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+"-experimental",
+		irgshConfig.Repo.UpstreamName,
+		irgshConfig.Repo.UpstreamDistCodename+"-experimental",
+		strings.Replace(irgshConfig.Repo.UpstreamDistUrl, "/", "\\/", -1),
+		irgshConfig.Repo.DistSupportedArchitectures,
+		irgshConfig.Repo.UpstreamDistComponents,
+	)
+	err = CmdExec(
+		cmdStr,
+		"Populate the reprepro's updates config file with values from irgsh's config.yml",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat distributions.orig |
+		sed 's/DIST_NAME/%s/g' |
+		sed 's/DIST_LABEL/%s/g' |
+		sed 's/DIST_CODENAME/%s/g' |
+		sed 's/DIST_COMPONENTS/%s/g' |
+		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' |
+		sed 's/DIST_VERSION_DESC/%s/g' |
+		sed 's/DIST_VERSION/%s/g' |
+		sed 's/DIST_SIGNING_KEY/%s/g' |
+		sed 's/UPSTREAM_NAME/%s/g'> distributions && rm distributions.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+"-experimental",
+		irgshConfig.Repo.DistName,
+		irgshConfig.Repo.DistLabel,
+		irgshConfig.Repo.DistCodename+"-experimental",
+		irgshConfig.Repo.DistComponents,
+		irgshConfig.Repo.DistSupportedArchitectures,
+		irgshConfig.Repo.DistVersionDesc,
+		irgshConfig.Repo.DistVersion,
+		irgshConfig.Repo.DistSigningKey,
+		irgshConfig.Repo.UpstreamName,
+	)
+	err = CmdExec(
+		cmdStr,
+		"Populate the reprepro's distributions config file with values from irgsh's config.yml",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+
+	repositoryPath = strings.Replace(
+		irgshConfig.Repo.Workdir+"/"+irgshConfig.Repo.DistCodename+"-experimental",
+		"/",
+		"\\/",
+		-1,
+	)
+	cmdStr = fmt.Sprintf(`cd %s/%s/conf && \
+	cat options.orig | sed 's/IRGSH_REPO_WORKDIR/%s/g' > options && \
+	rm options.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+"-experimental",
+		repositoryPath,
+	)
+	err = CmdExec(
+		cmdStr,
+		"Populate the reprepro's options config file with values from irgsh's config.yml",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+
+	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+"-experimental",
 	)
 	err = CmdExec(
 		cmdStr,
