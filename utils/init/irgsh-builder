@@ -15,7 +15,7 @@ PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 APPDIR="/"
 APPBIN="/usr/bin/irgsh-builder"
 USER="irgsh"
-GROUP="root"
+GROUP="irgsh"
 LOGFILE="/var/log/irgsh/builder.log"
 
 # Include functions 

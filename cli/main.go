@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/imroc/req"
+	"github.com/manifoldco/promptui"
 	"github.com/urfave/cli"
 	"gopkg.in/src-d/go-git.v4"
 )
@@ -26,6 +27,7 @@ var (
 	maintainerSigningKey string
 	sourceUrl            string
 	packageUrl           string
+	isExperimental       bool
 	pipelineId           string
 	irgshConfig          IrgshConfig
 )
@@ -122,7 +124,7 @@ func main() {
 
 		{
 			Name:  "submit",
-			Usage: "Submit new build pipeline",
+			Usage: "Submit new build",
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:        "source",
@@ -136,8 +138,12 @@ func main() {
 					Destination: &packageUrl,
 					Usage:       "Package URL",
 				},
+				cli.BoolFlag{
+					Name:  "experimental",
+					Usage: "Enable experimental flag",
+				},
 			},
-			Action: func(c *cli.Context) (err error) {
+			Action: func(ctx *cli.Context) (err error) {
 				err = checkForInitValues()
 				if err != nil {
 					os.Exit(1)
@@ -158,6 +164,23 @@ func main() {
 				_, err = url.ParseRequestURI(packageUrl)
 				if err != nil {
 					return
+				}
+				isExperimental = true
+				if !ctx.Bool("experimental") {
+					prompt := promptui.Prompt{
+						Label:     "Experimental flag is not set. Are you sure you want to continue to build this package?",
+						IsConfirm: true,
+					}
+					result, promptErr := prompt.Run()
+					// Avoid shadowed err
+					err = promptErr
+					if err != nil {
+						return
+					}
+					if strings.ToLower(result) != "y" {
+						return
+					}
+					isExperimental = false
 				}
 
 				fmt.Println("sourceUrl: " + sourceUrl)
@@ -185,6 +208,7 @@ func main() {
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
 					log.Println("error: %v\n", err)
+					log.Println("Failed to sign the package using " + maintainerSigningKey + ". Please check your GPG key list.")
 					return
 				}
 
@@ -214,8 +238,16 @@ func main() {
 				header := make(http.Header)
 				header.Set("Accept", "application/json")
 				req.SetFlags(req.LrespBody)
-				jsonStr := "{\"sourceUrl\":\"" + sourceUrl + "\", \"packageUrl\":\""
-				jsonStr += packageUrl + "\", \"tarball\": \"" + tarballB64Trimmed + "\"}"
+				isExperimentalStr := "false"
+				if isExperimental {
+					isExperimentalStr = "true"
+				}
+				jsonStr := "{ "
+				jsonStr += "\"sourceUrl\":\"" + sourceUrl + "\", "
+				jsonStr += "\"packageUrl\":\"" + packageUrl + "\", "
+				jsonStr += "\"tarball\": \"" + tarballB64Trimmed + "\", "
+				jsonStr += "\"isExperimental\": " + isExperimentalStr + " "
+				jsonStr += "}"
 				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(jsonStr))
 				if err != nil {
 					return

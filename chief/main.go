@@ -32,11 +32,12 @@ var (
 )
 
 type Submission struct {
-	TaskUUID   string    `json:"taskUUID"`
-	Timestamp  time.Time `json:"timestamp"`
-	SourceURL  string    `json:"sourceUrl"`
-	PackageURL string    `json:"packageUrl"`
-	Tarball    string    `json:"tarball"`
+	TaskUUID       string    `json:"taskUUID"`
+	Timestamp      time.Time `json:"timestamp"`
+	SourceURL      string    `json:"sourceUrl"`
+	PackageURL     string    `json:"packageUrl"`
+	Tarball        string    `json:"tarball"`
+	IsExperimental bool      `json:"isExperimental"`
 }
 
 type ArtifactsPayloadResponse struct {
@@ -197,9 +198,11 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + " && gpg -vv --verify *.dsc"
+	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + " && "
+	// TODO This gnupg path should be configurable with config.yml
+	cmdStr += "GNUPGHOME=/var/lib/irgsh/gnupg gpg --verify *.dsc"
 	fmt.Println(cmdStr)
-	_, err = exec.Command("bash", "-c", cmdStr).Output()
+	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
 		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusUnauthorized)
@@ -417,13 +420,13 @@ func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-  // TODO grab the asyncResult here
+	// TODO grab the asyncResult here
 	_, err := server.SendTask(&signature)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Println("Could not send task : " + err.Error())
 		fmt.Fprintf(w, "500")
 	}
-		// TODO should be in JSON string
+	// TODO should be in JSON string
 	w.WriteHeader(http.StatusOK)
 }

@@ -24,6 +24,8 @@ To install or update irgsh-go, you can use the install script using cURL:
 curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts/install.sh | bash
 ```
 
+The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
+
 ## Components
 
 Although these can be run in one machine, a minimal IRGSH ecosystem contains four instances and hey depend on Redis as backend (queue, pubsub).
@@ -41,11 +43,11 @@ Although these can be run in one machine, a minimal IRGSH ecosystem contains fou
 
 <img src="utils/assets/irgsh-flow.png">
 
-### Setup
+### Initial setup
 
 Please refer to `/etc/irgsh/config.yml` for available preferences.
 
-We may need more than one `irgsh-builder`, depends on our available resources. Before going to run any of these, you need to prepare your GPG key for signing purpose and set it into `/etc/irgsh/config.yml` (see `GPG-EN.md`). Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first.
+Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first on behalf of `irgsh` user.
 
 #### Builder
 
@@ -58,7 +60,13 @@ sudo irgsh-builder init-base
 Prepare the containerized pbuilder,
 
 ```
-irgsh-builder init-base
+irgsh-builder init-builder
+```
+
+Since the builder is using Docker, you need to make sure `irgsh` user has access to Docker. To do so, run
+
+```
+sudo usermod -aG docker irgsh
 ```
 
 #### Repo

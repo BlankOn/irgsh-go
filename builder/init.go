@@ -2,12 +2,28 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/manifoldco/promptui"
 )
 
 func InitBase() (err error) {
+	// TODO base.tgz file name should be based on distribution code name
 	fmt.Println("WARNING: This subcommand need to be run under root or sudo.")
+	prompt := promptui.Prompt{
+		Label:     "irgsh-builder init-base will create (or recreate if already exists) the pbuilder base.tgz on your system and may took long time to be complete. Are you sure?",
+		IsConfirm: true,
+	}
+	result, promptErr := prompt.Run()
+	// Avoid shadowed err
+	err = promptErr
+	if err != nil {
+		return
+	}
+	if strings.ToLower(result) != "y" {
+		return
+	}
 	logPath := irgshConfig.Builder.Workdir
 	logPath += "/irgsh-builder-init-base-" + uuid.New().String() + ".log"
 	go StreamLog(logPath)

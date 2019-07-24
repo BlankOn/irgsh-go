@@ -14,7 +14,7 @@ type IrgshConfig struct {
 	Redis   string        `json:"redis"`
 	Chief   ChiefConfig   `json:"chief"`
 	Builder BuilderConfig `json:"builder"`
-	ISO ISOConfig `json:"iso"`
+	ISO     ISOConfig     `json:"iso"`
 	Repo    RepoConfig    `json:"repo"`
 	IsTest  bool          `json:"is_test"`
 }
@@ -30,7 +30,7 @@ type BuilderConfig struct {
 }
 
 type ISOConfig struct {
-	Workdir         string `json:"workdir" validate:"required"`
+	Workdir string `json:"workdir" validate:"required"`
 }
 
 type RepoConfig struct {

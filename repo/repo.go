@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/manifoldco/promptui"
 	"os"
 	"strings"
+
+	"github.com/manifoldco/promptui"
 )
 
 func uploadLog(logPath string, id string) {
@@ -29,6 +30,11 @@ func Repo(payload string) (err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
+	experimentalSuffix := "-experimental"
+	if !raw["isExperimental"].(bool) {
+		experimentalSuffix = ""
+	}
+
 	logPath := irgshConfig.Repo.Workdir + "/artifacts/"
 	logPath += raw["taskUUID"].(string) + "/repo.log"
 	go StreamLog(logPath)
@@ -51,10 +57,10 @@ func Repo(payload string) (err error) {
 	}
 
 	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
-	reprepro -v -v -v --nothingiserror includedeb %s %s/artifacts/%s/*.deb`,
+	GNUPGHOME=/var/lib/irgsh/gnupg reprepro -v -v -v --nothingiserror includedeb %s %s/artifacts/%s/*.deb`,
 		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.DistCodename,
-		irgshConfig.Repo.DistCodename,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
 		raw["taskUUID"],
 	)
