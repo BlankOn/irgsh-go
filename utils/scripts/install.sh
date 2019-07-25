@@ -2,7 +2,7 @@
 
 TEMP_PATH=/tmp
 # Download and extract
-sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && wget https://github.com/BlankOn/irgsh-go/releases/download/v0.0.16-alpha/release.tar.gz -O ./irgsh-go.tar.gz && tar -xvf irgsh-go.tar.gz 
+sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && wget https://github.com/BlankOn/irgsh-go/releases/download/v0.0.17-alpha/release.tar.gz -O ./irgsh-go.tar.gz && tar -xvf irgsh-go.tar.gz 
 
 # Stop any existing instances
 sudo systemctl daemon-reload
