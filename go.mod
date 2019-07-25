@@ -19,4 +19,5 @@ require (
 	gopkg.in/src-d/go-git.v4 v4.8.1
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.2.1
+	mvdan.cc/sh v2.6.4+incompatible // indirect
 )
