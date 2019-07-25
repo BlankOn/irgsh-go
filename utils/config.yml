@@ -48,7 +48,7 @@ iso:
   live_system: live
   live_packages: 'live-boot live-config blankon-live-config blankon-repository-setup blankon-installer gparted'
   max_size: 1000
-  templates_path: '/home/herpiko/src/pabrik-cc/templates-dvd/'
-  recipient: herpiko@gmail.com
+  templates_path: '/var/lib/irgsh/src/pabrik-cc/templates-dvd/'
+  recipient: blankon-gev@googlegroups.com
   publish_path: '/home/cdimage/images/livedvd-harian/'
   publish_url: 'http://cdimage-dev.blankonlinux.or.id/blankon/livedvd-harian/'

@@ -189,7 +189,7 @@ func main() {
 				tmpID := uuid.New().String()
 				// Cloning Debian package files
 				_, err = git.PlainClone(
-					"/home/herpiko/.irgsh/tmp/"+tmpID+"/package",
+					homeDir + "/.irgsh/tmp/"+tmpID+"/package",
 					false,
 					&git.CloneOptions{
 						URL:      packageUrl,
