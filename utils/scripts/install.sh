@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-
+IRGSH_VERSION=$1
 TEMP_PATH=/tmp
 # Download and extract
 echo "Downloading ... "
+sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && wget https://github.com/BlankOn/irgsh-go/releases/download/$IRGSH_VERSION/release.tar.gz -O ./irgsh-go.tar.gz
 echo "Downloding [OK]"
 echo ""
-sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && wget https://github.com/BlankOn/irgsh-go/releases/download/$IRGSH_VERSION/release.tar.gz -O ./irgsh-go.tar.gz
+
 echo "Extracting ... "
 sudo rm -rf irgsh-go && sudo tar -xf irgsh-go.tar.gz
 echo "Extracting [OK]"
