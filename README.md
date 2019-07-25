@@ -18,10 +18,8 @@ gpg pbuilder debootstrap devscripts python-apt reprepro
 
 ## Install
 
-To install or update irgsh-go, you can use the install script using cURL:
-
 ```
-curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/utils/scripts/install.sh | bash -s v0.0.17-alpha
+curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.18-alpha
 ```
 
 The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.

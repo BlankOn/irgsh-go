@@ -27,12 +27,14 @@ echo "Stopping existing instance(s) [OK]"
 echo ""
 
 # Workdir
-if [ -d "/var/lib/irgsh" ]; then
-	read -r -p "/var/lib/irgsh work dir is already exist. Do you want to clean up this directory? [y/N] " response
-	if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
-		sudo rm -rf /var/lib/irgsh
-	fi
-fi
+# TODO Should be interactive and works on curl | bash
+sudo rm -rf /var/lib/irgsh
+#if [ -d "/var/lib/irgsh" ]; then
+#	read -r -p "/var/lib/irgsh work dir is already exist. Do you want to clean up this directory? [y/N] " response
+#	if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+#		sudo rm -rf /var/lib/irgsh
+#	fi
+#fi
 
 # Create required dirs
 sudo mkdir -p /etc/irgsh
@@ -46,15 +48,17 @@ sudo mkdir -p /var/lib/irgsh/repo
 sudo mkdir -p /var/log/irgsh
 
 # Configuration
-if [ ! -f "/etc/irgsh/config.yml" ]; then
-	sudo cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
-else
-	read -r -p "/etc/irgsh/config.yml is already exist. Do you want to overwrite this configuration file? [y/N] " response
-	if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
-		echo ""
-		sudo cp $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
-	fi
-fi
+# TODO Should be interactive and works on curl | bash
+sudo cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
+#if [ ! -f "/etc/irgsh/config.yml" ]; then
+#	sudo cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
+#else
+#	read -r -p "/etc/irgsh/config.yml is already exist. Do you want to overwrite this configuration file? [y/N] " response
+#	if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+#		echo ""
+#		sudo cp $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
+#	fi
+#fi
 
 # Install the files
 echo "Installing files ... "
@@ -71,11 +75,14 @@ sudo chmod -R u+rw /var/lib/irgsh
 
 # GPG key
 if [ ! -d "/var/lib/irgsh/gnupg" ]; then
-	echo "Please enter your information for generating GPG key"
-	echo "----------------------------------------------------"
-	read -p 'Real name     : ' GPG_KEY_NAME
-	read -p 'Email address : ' GPG_KEY_EMAIL
-	echo ""
+	# TODO Should be interactive and works on curl | bash
+	#	echo "Please enter your information for generating GPG key"
+	#	echo "----------------------------------------------------"
+	#	read -p 'Real name     : ' GPG_KEY_NAME
+	#	read -p 'Email address : ' GPG_KEY_EMAIL
+	#	echo ""
+	GPG_KEY_NAME="BlankOn Project"
+	GPG_KEY_EMAIL="blankon-dev@googlegroups.com"
 	echo "Generating GPG key ..."
 	sudo su -c "mkdir -p /var/lib/irgsh/gnupg/private-keys-v1.d" -s /bin/bash irgsh
 	sudo su -c "echo 'export GNUPGHOME=/var/lib/irgsh/gnupg' > ~/.bashrc" -s /bin/bash irgsh
