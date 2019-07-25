@@ -41,10 +41,10 @@ release-in-docker: release
 	chown -vR :users target
 
 preinstall:
-	sudo service irgsh-chief stop || true
-	sudo service irgsh-builder stop || true
-	sudo service irgsh-iso stop || true
-	sudo service irgsh-repo stop || true
+	sudo /etc/init.d/irgsh-chief stop || true
+	sudo /etc/init.d/irgsh-builder stop || true
+	sudo /etc/init.d/irgsh-iso stop || true
+	sudo /etc/init.d/irgsh-repo stop || true
 	sudo killall irgsh-chief || true
 	sudo killall irgsh-builder || true
 	sudo killall irgsh-iso || true
@@ -77,10 +77,10 @@ build-install: preinstall build
 	sudo cp -rf ./bin/irgsh-repo /usr/bin/irgsh-repo
 	sudo cp -rf ./bin/irgsh-cli /usr/bin/irgsh-cli
 	sudo cp -rf ./bin/irgsh-cli /usr/bin/irgsh-cli
-	sudo service irgsh-chief start
-	sudo service irgsh-builder start
-	sudo service irgsh-iso start
-	sudo service irgsh-repo start
+	sudo /etc/init.d/irgsh-chief start
+	sudo /etc/init.d/irgsh-builder start
+	sudo /etc/init.d/irgsh-iso start
+	sudo /etc/init.d/irgsh-repo start
 
 test:
 	mkdir -p tmp
