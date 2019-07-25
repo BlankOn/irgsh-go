@@ -19,7 +19,7 @@ gpg pbuilder debootstrap devscripts python-apt reprepro
 ## Install
 
 ```
-curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.19-alpha
+curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.20-alpha
 ```
 
 The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.

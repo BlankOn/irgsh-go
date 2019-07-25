@@ -192,18 +192,6 @@ func BuildPackage(payload string) (next string, err error) {
 		return
 	}
 
-	cmdStr = "cp /var/cache/pbuilder/result/* " + irgshConfig.Builder.Workdir
-	cmdStr += "/" + raw["taskUUID"].(string)
-	err = CmdExec(
-		cmdStr,
-		"",
-		"",
-	)
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return
-	}
-
 	next = payload
 	return
 }
