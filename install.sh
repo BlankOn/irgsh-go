@@ -5,7 +5,7 @@ TEMP_PATH=/tmp
 DOWNLOAD_URL=https://github.com/BlankOn/irgsh-go/releases/download/$IRGSH_VERSION/release.tar.gz
 echo "Downloading ... "
 echo "$DOWNLOAD_URL"
-sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && curl -f -o ./irgsh-go.tar.gz $DOWNLOAD_URL
+sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && curl -L -f -o ./irgsh-go.tar.gz $DOWNLOAD_URL
 if test $? -gt 0; then
   echo "Downloding [FAILED]"
   exit 1
