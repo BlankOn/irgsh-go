@@ -19,7 +19,7 @@ gpg pbuilder debootstrap devscripts python-apt reprepro
 ## Install
 
 ```
-curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.20-alpha
+curl -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.21-alpha
 ```
 
 The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
@@ -98,10 +98,10 @@ After these three instances are up and running, you may continue to work with `i
 
 ## CLI
 
-`irgsh-cli` need to be initialized first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
+`irgsh-cli` need to be configured first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
 
 ```
-irgsh-cli init --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
+irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
 ```
 
 Then you can submit a package,

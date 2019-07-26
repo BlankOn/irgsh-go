@@ -86,6 +86,7 @@ if [ ! -d "/var/lib/irgsh/gnupg" ]; then
 	echo "Generating GPG key ..."
 	sudo su -c "mkdir -p /var/lib/irgsh/gnupg/private-keys-v1.d" -s /bin/bash irgsh
 	sudo su -c "echo 'export GNUPGHOME=/var/lib/irgsh/gnupg' > ~/.bashrc" -s /bin/bash irgsh
+	sudo su -c "echo 'cd ~/' > ~/.bashrc" -s /bin/bash irgsh
 	sudo su -c "echo '%no-protection' > ~/gen-key-script" -s /bin/bash irgsh
 	sudo su -c "echo 'Key-Type: 1' >> ~//gen-key-script" -s /bin/bash irgsh
 	sudo su -c "echo 'Key-Length: 4096' >> ~//gen-key-script" -s /bin/bash irgsh

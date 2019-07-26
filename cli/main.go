@@ -38,8 +38,8 @@ func checkForInitValues() (err error) {
 	dat1, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_MAINTAINER_SIGNING_KEY")
 	maintainerSigningKey = string(dat1)
 	if len(chiefAddress) < 1 || len(maintainerSigningKey) < 1 {
-		errMsg := "irgsh-cli need to be initialized first. Run: "
-		errMsg += "irgsh-cli --chief yourirgshchiefaddress init --key yourgpgkeyfingerprint"
+		errMsg := "irgsh-cli need to be configured first. Run: "
+		errMsg += "irgsh-cli config --chief yourirgshchiefaddress --key yourgpgkeyfingerprint"
 		err = errors.New(errMsg)
 		fmt.Println(err.Error())
 	}
@@ -65,8 +65,8 @@ func main() {
 	app.Commands = []cli.Command{
 
 		{
-			Name:  "init",
-			Usage: "Initialize irgsh-cli",
+			Name:  "config",
+			Usage: "Configure irgsh-cli",
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:        "chief",
@@ -84,13 +84,13 @@ func main() {
 			Action: func(c *cli.Context) (err error) {
 				if len(chiefAddress) < 1 {
 					msg := "Chief address should not be empty. Example: "
-					msg += "irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D"
+					msg += "irgsh-cli config --chief https://irgsh.blankonlinux.or.id --key B113D905C417D"
 					err = errors.New(msg)
 					return
 				}
 				if len(maintainerSigningKey) < 1 {
 					msg := "Signing key should not be empty. Example: "
-					msg += "irgsh-cli init --chief https://irgsh.blankonlinux.or.id --key B113D905C417D"
+					msg += "irgsh-cli config --chief https://irgsh.blankonlinux.or.id --key B113D905C417D"
 					err = errors.New(msg)
 					return
 				}
@@ -117,7 +117,8 @@ func main() {
 					log.Println("error: %v\n", err)
 					return
 				}
-				fmt.Println("irgsh-cli is successfully initialized. Happy hacking!")
+				// TODO test a connection against the chief
+				fmt.Println("irgsh-cli is successfully configured. Happy hacking!")
 				return err
 			},
 		},
