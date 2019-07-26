@@ -56,6 +56,29 @@ func Repo(payload string) (err error) {
 		return
 	}
 
+	if raw["isExperimental"].(bool) {
+		// Ignore version conflict
+		cmdStr = fmt.Sprintf(`cd %s/%s/ && \
+		GNUPGHOME=/var/lib/irgsh/gnupg reprepro -v -v -v --nothingiserror remove %s \
+		$(cat %s/artifacts/%s/*.dsc | grep 'Source:' | cut -d ' ' -f 2)`,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			irgshConfig.Repo.Workdir,
+			raw["taskUUID"],
+		)
+		err = CmdExec(
+			cmdStr,
+			"This is experimental package, remove any existing package.",
+			logPath,
+		)
+		if err != nil {
+			fmt.Printf("error: %v\n", err)
+			uploadLog(logPath, raw["taskUUID"].(string))
+			return
+		}
+	}
+
 	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
 	GNUPGHOME=/var/lib/irgsh/gnupg reprepro -v -v -v --nothingiserror includedeb %s %s/artifacts/%s/*.deb`,
 		irgshConfig.Repo.Workdir,
