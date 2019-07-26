@@ -123,7 +123,7 @@ func serve() {
 }
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "irgsh-go "+app.Version)
+	fmt.Fprintf(w, "irgsh-chief "+app.Version)
 }
 
 func ArtifactsHandler(w http.ResponseWriter, r *http.Request) {

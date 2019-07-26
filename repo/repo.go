@@ -73,7 +73,7 @@ func Repo(payload string) (err error) {
 			logPath,
 		)
 		if err != nil {
-      // Ignore err
+			// Ignore err
 			fmt.Printf("error: %v\n", err)
 		}
 	}

@@ -94,7 +94,7 @@ func main() {
 		}
 
 		server.RegisterTask("repo", Repo)
-
+		// One worker for synchronous
 		worker := server.NewWorker("repo", 1)
 		err = worker.Launch()
 		if err != nil {
@@ -106,9 +106,26 @@ func main() {
 	app.Run(os.Args)
 }
 
+func IndexHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "irgsh-repo "+app.Version)
+}
+
 func serve() {
-	fs := http.FileServer(http.Dir(irgshConfig.Repo.Workdir + "/" + irgshConfig.Repo.DistCodename + "/www"))
-	http.Handle("/", fs)
-	log.Println("irgsh-go chief now live on port 8082")
+	http.HandleFunc("/", IndexHandler)
+	http.Handle("/dev/",
+		http.StripPrefix("/dev/",
+			http.FileServer(
+				http.Dir(irgshConfig.Repo.Workdir+"/"+irgshConfig.Repo.DistCodename+"/www"),
+			),
+		),
+	)
+	http.Handle("/experimental/",
+		http.StripPrefix("/experimental/",
+			http.FileServer(
+				http.Dir(irgshConfig.Repo.Workdir+"/"+irgshConfig.Repo.DistCodename+"-experimental/www"),
+			),
+		),
+	)
+	log.Println("irgsh-go repo is now live on port 8082")
 	log.Fatal(http.ListenAndServe(":8082", nil))
 }

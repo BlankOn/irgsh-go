@@ -2,8 +2,14 @@
 IRGSH_VERSION=$1
 TEMP_PATH=/tmp
 # Download and extract
+DOWNLOAD_URL=https://github.com/BlankOn/irgsh-go/releases/download/$IRGSH_VERSION/release.tar.gz
 echo "Downloading ... "
-sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && wget https://github.com/BlankOn/irgsh-go/releases/download/$IRGSH_VERSION/release.tar.gz -O ./irgsh-go.tar.gz
+echo "$DOWNLOAD_URL"
+sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && curl -f -o ./irgsh-go.tar.gz $DOWNLOAD_URL
+if test $? -gt 0; then
+  echo "Downloding [FAILED]"
+  exit 1
+fi
 echo "Downloding [OK]"
 echo ""
 
