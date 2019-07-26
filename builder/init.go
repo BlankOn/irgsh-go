@@ -136,7 +136,7 @@ func InitBuilder() (err error) {
     echo 'RUN echo "MIRRORSITE=` + irgshConfig.Builder.UpstreamDistUrl + `" > /root/.pbuilderrc' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN echo "USENETWORK=yes"' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'COPY base.tgz /var/cache/pbuilder/' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
-    echo 'RUN echo "pbuilder --build /tmp/build/*.dsc" > /build.sh && chmod a+x /build.sh' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile`
+    echo 'RUN echo "pbuilder --build /tmp/build/*.dsc && cp -vR /var/cache/pbuilder/result/* /tmp/build/" > /build.sh && chmod a+x /build.sh' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile`
 	err = CmdExec(
 		cmdStr,
 		"Preparing Dockerfile",
