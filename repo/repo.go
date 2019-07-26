@@ -73,9 +73,8 @@ func Repo(payload string) (err error) {
 			logPath,
 		)
 		if err != nil {
+      // Ignore err
 			fmt.Printf("error: %v\n", err)
-			uploadLog(logPath, raw["taskUUID"].(string))
-			return
 		}
 	}
 
