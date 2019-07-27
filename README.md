@@ -30,7 +30,7 @@ sudo usermod -aG docker irgsh
 
 ## Components
 
-A minimal IRGSH ecosystem contains four instances and a CLI tool.
+A minimal IRGSH ecosystem contains three instances and a CLI tool.
 
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for workers and pipelines monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
