@@ -6,9 +6,10 @@ IRGSH (https://groups.google.com/d/msg/blankon-dev/yvceclWjSw8/HZUL_m6-BS4J, pro
 
 This is still under heavy development, therefore you should not rely on this for production since it still subject to breaking API changes.
 
-Patches, suggestions and comments are welcome.
+Patches, suggestions and comments are welcome!
 
-## Requirements
+## Install
+
 
 You need Docker, Redis and these packages,
 
@@ -16,7 +17,7 @@ You need Docker, Redis and these packages,
 gpg pbuilder debootstrap devscripts python-apt reprepro
 ```
 
-## Install
+Then install IRGSH with this command bellow,
 
 ```
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.22-alpha
@@ -30,7 +31,7 @@ sudo usermod -aG docker irgsh
 
 ## Components
 
-A minimal IRGSH ecosystem contains three instances and a CLI tool.
+A minimal IRGSH ecosystem contains three services and a CLI tool.
 
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for workers and pipelines monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
@@ -45,9 +46,9 @@ A minimal IRGSH ecosystem contains three instances and a CLI tool.
 
 GPG signature is used as authentication bearer on any submission attemp. Hence, you will need to register maintainer's public key to `irgsh`'s GPG keystore (read Initial setup).
 
-### Initial setup
+## Initial setup
 
-Please refer to `/etc/irgsh/config.yml` for available preferences.
+Please refer to `/etc/irgsh/config.yml` for available preferences. Change it as you need.
 
 #### Builder
 
@@ -87,9 +88,9 @@ This CLI tool intended to be used on maintainer's local system. It need to be co
 irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
 ```
 
-### Run
+## Run
 
-#### Starting the services
+#### The Services
 
 You can start them with,
 
@@ -98,11 +99,9 @@ You can start them with,
 /etc/init.d/irgsh-builder start
 /etc/init.d/irgsh-repo start
 ```
-Their logs are available at `/var/log/irgsh/`.
+Their logs are available at `/var/log/irgsh/`. After these three services are up and running, you may continue to work with `irgsh-cli`
 
-After these three instances are up and running, you may continue to work with `irgsh-cli`
-
-#### Using irgsh-cli
+#### CLI
 
 Submit a package,
 
@@ -123,6 +122,26 @@ irgsh-cli log  2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 ```
 
 Running `irgsh-cli status` and `irgsh-cli log` without argument will referenced to the latest submitted pipeline ID.
+
+## FAQ
+
+### Why rewrite it?
+
+IRGSH was written in Python 2.6.x and it depends on some old and deprecated libraries. Even one of them (in a specific version, respectively) is no longer exists on the internet. A real dependency hell. It’s hard to deploy IRGSH in a modern operating system and it keeps alynne.blankonlinux.or.id from an important system upgrade. The IRGSH was also very modular but combining them into a working distributed cluster takes time and quite steep learning curve. We still need to prepare a lot of things manually before doing that. Pbuilder needs to be configured and setup. Which also true for the reprepro repository. No easy way.
+
+Although, there is no doubt that the old IRGSH does its work well.
+
+### Why Go?
+
+For its portable compiled binary.
+
+### Can I run the workers on different machines?
+
+You can. Just make sure these workers pointed out to the same Redis server (see `/etc/irgsh/config.yml`). Also please consider this, https://redis.io/topics/security.
+
+### Why is Docker required?
+
+To build a package using `pbuilder`, `sudo` or root privilege is required but it's not okay to rely on root privilege for repetitive tasks. To get rid of this, we containerized the build process.
 
 ## Todos
 
