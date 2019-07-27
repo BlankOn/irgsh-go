@@ -70,13 +70,8 @@ build:
 	rm iso/utils.go
 	rm repo/utils.go
 
-build-install: preinstall build
-	sudo cp -rf ./bin/irgsh-chief /usr/bin/irgsh-chief
-	sudo cp -rf ./bin/irgsh-builder /usr/bin/irgsh-builder
-	sudo cp -rf ./bin/irgsh-iso /usr/bin/irgsh-iso
-	sudo cp -rf ./bin/irgsh-repo /usr/bin/irgsh-repo
-	sudo cp -rf ./bin/irgsh-cli /usr/bin/irgsh-cli
-	sudo cp -rf ./bin/irgsh-cli /usr/bin/irgsh-cli
+build-install: release
+	IRGSH_CLEAN_INSTALL=1 ./install.sh
 	sudo /etc/init.d/irgsh-chief start
 	sudo /etc/init.d/irgsh-builder start
 	sudo /etc/init.d/irgsh-iso start

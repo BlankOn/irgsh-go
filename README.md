@@ -20,7 +20,7 @@ gpg pbuilder debootstrap devscripts python-apt reprepro
 Then install IRGSH with this command bellow,
 
 ```
-curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.22-alpha
+curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash
 ```
 
 The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system. Make sure `irgsh` user has access to Docker. To do so, run

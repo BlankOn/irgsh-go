@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
-IRGSH_VERSION=$1
 TEMP_PATH=/tmp
-# Download and extract
-DOWNLOAD_URL=https://github.com/BlankOn/irgsh-go/releases/download/$IRGSH_VERSION/release.tar.gz
-echo "Downloading ... "
-echo "$DOWNLOAD_URL"
-sudo rm -f $TEMP_PATH/irgsh-go.tar.gz && cd $TEMP_PATH && curl -L -f -o ./irgsh-go.tar.gz $DOWNLOAD_URL
-if test $? -gt 0; then
-  echo "Downloding [FAILED]"
-  exit 1
+
+sudo apt-get install -y gpg pbuilder debootstrap devscripts python-apt reprepro jq
+
+if [ $IRGSH_CLEAN_INSTALL -eq 1 ]; then
+	TEMP_PATH=$(pwd)/target
+else
+	# Download and extract
+	DOWNLOAD_URL=$(curl -ksL "https://api.github.com/repos/x64dbg/x64dbg/releases/latest" | jq -r ".assets[0].browser_download_url")
+	echo "Downloading ... "
+	echo "$DOWNLOAD_URL"
+	sudo rm -f $TEMP_PATH/release.tar.gz && cd $TEMP_PATH && curl -L -f -o ./release.tar.gz $DOWNLOAD_URL
+	if test $? -gt 0; then
+	  echo "Downloding [FAILED]"
+	  exit 1
+	fi
+	echo "Downloding [OK]"
+	echo ""
 fi
-echo "Downloding [OK]"
-echo ""
+
+pushd $TEMP_PATH
 
 echo "Extracting ... "
-sudo rm -rf irgsh-go && sudo tar -xf irgsh-go.tar.gz
+sudo rm -rf irgsh-go && sudo tar -xf release.tar.gz
 echo "Extracting [OK]"
 echo ""
 
@@ -32,15 +40,15 @@ sudo killall irgsh-repo || true
 echo "Stopping existing instance(s) [OK]"
 echo ""
 
-# Workdir
-# TODO Should be interactive and works on curl | bash
-sudo rm -rf /var/lib/irgsh
-#if [ -d "/var/lib/irgsh" ]; then
-#	read -r -p "/var/lib/irgsh work dir is already exist. Do you want to clean up this directory? [y/N] " response
-#	if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
-#		sudo rm -rf /var/lib/irgsh
-#	fi
-#fi
+if [ $IRGSH_CLEAN_INSTALL -eq 1 ]; then
+	# Clean up
+	sudo rm -rf/etc/irgsh/config.yml
+  sudo rm -rf /var/lib/irgsh/chief
+  sudo rm -rf /var/lib/irgsh/repo
+  sudo rm -rf /var/lib/irgsh/gnupg
+	# Do not overwrite /var/lib/irgsh/builder
+  #sudo rm -rf /var/lib/irgsh/builder
+fi
 
 # Create required dirs
 sudo mkdir -p /etc/irgsh
@@ -53,24 +61,15 @@ sudo mkdir -p /var/lib/irgsh/iso
 sudo mkdir -p /var/lib/irgsh/repo
 sudo mkdir -p /var/log/irgsh
 
-# Configuration
-# TODO Should be interactive and works on curl | bash
-sudo cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
-#if [ ! -f "/etc/irgsh/config.yml" ]; then
-#	sudo cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
-#else
-#	read -r -p "/etc/irgsh/config.yml is already exist. Do you want to overwrite this configuration file? [y/N] " response
-#	if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
-#		echo ""
-#		sudo cp $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
-#	fi
-#fi
-
 # Install the files
 echo "Installing files ... "
 sudo cp $TEMP_PATH/irgsh-go/usr/bin/* /usr/bin/
 sudo cp $TEMP_PATH/irgsh-go/etc/init.d/* /etc/init.d/
 sudo cp -R $TEMP_PATH/irgsh-go/usr/share/irgsh/* /usr/share/irgsh/
+# Configuration file
+if [ ! -f "/etc/irgsh/config.yml" ]; then
+	sudo cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
+fi
 echo "Installing files [OK]"
 echo ""
 
@@ -80,13 +79,7 @@ sudo chown -R $ME:$ME /var/lib/irgsh
 sudo chmod -R u+rw /var/lib/irgsh
 
 # GPG key
-if [ ! -d "/var/lib/irgsh/gnupg" ]; then
-	# TODO Should be interactive and works on curl | bash
-	#	echo "Please enter your information for generating GPG key"
-	#	echo "----------------------------------------------------"
-	#	read -p 'Real name     : ' GPG_KEY_NAME
-	#	read -p 'Email address : ' GPG_KEY_EMAIL
-	#	echo ""
+if [ $IRGSH_CLEAN_INSTALL -eq 1 ]; then
 	GPG_KEY_NAME="BlankOn Project"
 	GPG_KEY_EMAIL="blankon-dev@googlegroups.com"
 	echo "Generating GPG key ..."
@@ -101,13 +94,17 @@ if [ ! -d "/var/lib/irgsh/gnupg" ]; then
 	sudo su -c "echo 'Name-Real: $GPG_KEY_NAME' >> ~//gen-key-script" -s /bin/bash irgsh
 	sudo su -c "echo 'Name-Email: $GPG_KEY_EMAIL' >> ~//gen-key-script" -s /bin/bash irgsh
 	sudo su -c "echo 'Expire-Date: 5y' >> ~//gen-key-script" -s /bin/bash irgsh
-	sudo su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -k > dev/null" -s /bin/bash irgsh
+	sudo su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -k > /dev/null" -s /bin/bash irgsh
 	sudo su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg --batch --gen-key ~/gen-key-script > /dev/null" -s /bin/bash irgsh
 	GPG_SIGN_KEY=$(sudo su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -K | grep uid -B 1 | head -n 1 | xargs" -s /bin/bash irgsh)
 	sudo sed -i "s/GPG_SIGN_KEY/$GPG_SIGN_KEY/g" /etc/irgsh/config.yml
 	sudo su -c "chmod -R 700 /var/lib/irgsh/gnupg" -s /bin/bash irgsh
 	echo "Generating GPG key [OK]"
+	gpg --armor --export > /tmp/pubkey
+	sudo su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg --import < /tmp/pubkey" -s /bin/bash irgsh
 fi
+
+popd
 
 echo ""
 echo "Happy hacking!"
