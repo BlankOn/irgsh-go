@@ -69,7 +69,6 @@ On behalf of `irgsh` user, initialize the `irgsh-repo` to create and prepare rep
 
 ```
 irgsh-repo init
-
 ```
 
 #### Chief
@@ -80,9 +79,9 @@ On behalf of `irgsh` user, add the package maintainer GPG public key(s),
 gpg --import /path/to/maintainer-pubkey.asc
 ```
 
-## CLI
+#### CLI
 
-`irgsh-cli` need to be configured first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
+This CLI tool intended to be used on maintainer's local system. It need to be configured first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
 
 ```
 irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
