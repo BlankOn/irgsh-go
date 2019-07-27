@@ -22,54 +22,51 @@ gpg pbuilder debootstrap devscripts python-apt reprepro
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash -s v0.0.22-alpha
 ```
 
-The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
-
-## Components
-
-Although these can be run in one machine, a minimal IRGSH ecosystem contains four instances and hey depend on Redis as backend (queue, pubsub).
-
-- `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for worker and pipeline monitoring.
-- `irgsh-builder` is the builder worker of IRGSH.
-- `irgsh-repo` will serves as repository so it may need huge volume of storage.
-- `irgsh-iso` works as ISO builder and serves the ISO image files immediately. [WIP]
-
-### Architecture
-
-<img src="utils/assets/irgsh-distributed-architecture.png">
-
-### Workflow
-
-<img src="utils/assets/irgsh-flow.png">
-
-### Initial setup
-
-Please refer to `/etc/irgsh/config.yml` for available preferences.
-
-Running the chief is quite simple as starting the service with `/etc/init.d/irgsh-chief start`, as well for `irgsh-builder` and `irgsh-repo`. For `irgsh-builder` and `irgsh-repo`, we need to initialize them first on behalf of `irgsh` user.
-
-#### Builder
-
-Initialize and prepare the pbuilder (this one need root user or sudo),
-
-```
-sudo irgsh-builder init-base
-```
-
-Prepare the containerized pbuilder,
-
-```
-irgsh-builder init-builder
-```
-
-Since the builder is using Docker, you need to make sure `irgsh` user has access to Docker. To do so, run
+The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system. Make sure `irgsh` user has access to Docker. To do so, run
 
 ```
 sudo usermod -aG docker irgsh
 ```
 
+## Components
+
+A minimal IRGSH ecosystem contains four instances and a CLI tool.
+
+- `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for workers and pipelines monitoring.
+- `irgsh-builder` is the builder worker of IRGSH.
+- `irgsh-repo` will serves as repository so it may need huge volume of storage.
+- `irgsh-iso` works as ISO builder and serves the ISO image files immediately. [WIP]
+- `irgsh-cli
+
+### Architecture
+
+<img src="utils/assets/irgsh-distributed-architecture.png">
+
+<img src="utils/assets/irgsh-flow.png">
+
+GPG signature is used as authentication bearer on any submission attemp. Hence, you will need to register maintainer's public key to `irgsh`'s GPG keystore (read Initial setup).
+
+### Initial setup
+
+Please refer to `/etc/irgsh/config.yml` for available preferences.
+
+#### Builder
+
+Initialize and prepare the `base.tgz` (this one need root user or sudo),
+
+```
+sudo irgsh-builder init-base
+```
+
+Then, on behalf of `irgsh` user, prepare the containerized pbuilder,
+
+```
+irgsh-builder init-builder
+```
+
 #### Repo
 
-Initialize the repo to create and prepare reprepro repository,
+On behalf of `irgsh` user, initialize the `irgsh-repo` to create and prepare reprepro repository,
 
 ```
 irgsh-repo init
@@ -78,23 +75,11 @@ irgsh-repo init
 
 #### Chief
 
-Add the package maintainer GPG public key(s),
+On behalf of `irgsh` user, add the package maintainer GPG public key(s),
 
 ```
-gpg --import /path/to/pubkey.asc
+gpg --import /path/to/maintainer-pubkey.asc
 ```
-
-#### Run
-
-You can start them from `service`,
-
-```
-service irgsh-chief start
-service irgsh-builder start
-service irgsh-repo start
-```
-
-After these three instances are up and running, you may continue to work with `irgsh-cli` from anywhere.
 
 ## CLI
 
@@ -104,7 +89,18 @@ After these three instances are up and running, you may continue to work with `i
 irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
 ```
 
-Then you can submit a package,
+#### Run
+
+You can start them with,
+
+```
+/etc/init.d/irgsh-chief start
+/etc/init.d/irgsh-builder start
+/etc/init.d/irgsh-repo start
+```
+Their logs is available in `/var/log/irgsh/`. After these three instances are up and running, you may continue to work with `irgsh-cli` from anywhere.
+
+You can submit a package using `irgsh-cli`
 
 ```
 irgsh-cli submit --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
