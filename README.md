@@ -35,7 +35,6 @@ A minimal IRGSH ecosystem contains three instances and a CLI tool.
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for workers and pipelines monitoring.
 - `irgsh-builder` is the builder worker of IRGSH.
 - `irgsh-repo` will serves as repository so it may need huge volume of storage.
-- `irgsh-iso` works as ISO builder and serves the ISO image files immediately. [WIP]
 - `irgsh-cli` is a client-side tool to maintain packages.
 
 ### Architecture
@@ -89,7 +88,9 @@ gpg --import /path/to/maintainer-pubkey.asc
 irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
 ```
 
-#### Run
+### Run
+
+#### Starting the services
 
 You can start them with,
 
@@ -98,20 +99,31 @@ You can start them with,
 /etc/init.d/irgsh-builder start
 /etc/init.d/irgsh-repo start
 ```
-Their logs is available in `/var/log/irgsh/`. After these three instances are up and running, you may continue to work with `irgsh-cli` from anywhere.
+Their logs are available at `/var/log/irgsh/`.
 
-You can submit a package using `irgsh-cli`
+After these three instances are up and running, you may continue to work with `irgsh-cli`
+
+#### Using irgsh-cli
+
+Submit a package,
 
 ```
 irgsh-cli submit --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
 ```
 
-And checking the status of a pipeline,
+Check the status of a pipeline,
 
 ```
 irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 ```
 
+Inspect the log of a pipeline,
+
+```
+irgsh-cli log  2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
+```
+
+Running `irgsh-cli status` and `irgsh-cli log` without argument will referenced to the latest submitted pipeline ID.
 
 ## Todos
 
