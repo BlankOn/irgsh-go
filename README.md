@@ -36,7 +36,7 @@ A minimal IRGSH ecosystem contains three instances and a CLI tool.
 - `irgsh-builder` is the builder worker of IRGSH.
 - `irgsh-repo` will serves as repository so it may need huge volume of storage.
 - `irgsh-iso` works as ISO builder and serves the ISO image files immediately. [WIP]
-- `irgsh-cli
+- `irgsh-cli` is a client-side tool to maintain packages.
 
 ### Architecture
 
