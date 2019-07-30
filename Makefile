@@ -21,7 +21,9 @@ release:
 	mkdir -p irgsh-go/usr/share/irgsh
 	cp -rf bin/* irgsh-go/usr/bin/
 	cp -rf utils/config.yml irgsh-go/etc/irgsh/
+	cp -rf utils/config.yml irgsh-go/usr/share/irgsh/config.yml
 	cp -rf utils/init/* irgsh-go/etc/init.d/
+	cp -rf utils/scripts/init.sh irgsh-go/usr/share/irgsh/init.sh
 	cp -rf -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
 	mkdir -p target
@@ -71,7 +73,7 @@ build:
 	rm repo/utils.go
 
 build-install: release
-	IRGSH_CLEAN_INSTALL=1 ./install.sh
+	./install.sh
 	sudo /etc/init.d/irgsh-chief start
 	sudo /etc/init.d/irgsh-builder start
 	sudo /etc/init.d/irgsh-iso start
