@@ -48,39 +48,15 @@ GPG signature is used as authentication bearer on any submission attemp. Hence, 
 
 ## Initial setup
 
+#### IRGSH
+
 Please refer to `/etc/irgsh/config.yml` for available preferences. Change it as you need.
 
-#### Builder
-
-Initialize and prepare the `base.tgz` (this one need root user or sudo),
-
 ```
-sudo irgsh-builder init-base
+irgsh-init
 ```
 
-Then, on behalf of `irgsh` user, prepare the containerized pbuilder,
-
-```
-irgsh-builder init-builder
-```
-
-#### Repo
-
-On behalf of `irgsh` user, initialize the `irgsh-repo` to create and prepare reprepro repository,
-
-```
-irgsh-repo init
-```
-
-#### Chief
-
-On behalf of `irgsh` user, add the package maintainer GPG public key(s),
-
-```
-gpg --import /path/to/maintainer-pubkey.asc
-```
-
-#### CLI
+#### CLI tool
 
 This CLI tool intended to be used on maintainer's local system. It need to be configured first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
 
