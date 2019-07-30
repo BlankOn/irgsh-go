@@ -40,7 +40,7 @@ A minimal IRGSH ecosystem contains three services and a CLI tool.
 
 <img src="utils/assets/irgsh-flow.png">
 
-GPG signature is used as authentication bearer on any submission attemp. Hence, you will need to register maintainer's public key to `irgsh`'s GPG keystore (read Initial setup).
+GPG signature is used as authentication bearer on any submission attempt. Hence, you will need to register maintainer's public key to `irgsh`'s GPG keystore (read Initial setup).
 
 ## Initial setup
 
@@ -58,6 +58,28 @@ This CLI tool intended to be used on maintainer's local system. It need to be co
 
 ```
 irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
+```
+
+#### Registering a maintainer
+
+A maintaner should have a GPG keypair on his machine. His/her public key need to be registered to `irgsh`'s GPG key store.
+
+Export maintainer's GPG public key
+
+```
+gpg --armor --export 0D7D9A42E03ACFA2933227F7A13769F4DB99B6CD > /path/to/maintainer-public.key
+```
+
+The `public.key` file need to be transfered into where `irgsh-chief` live. Then import the maintainer's public key (on behalf of `irgsh`),
+
+```
+gpg --import < /path/to/maintainer-public.key
+```
+
+You can check the list of registered maintainer (on behalf of `irgsh`),
+
+```
+gpg -k
 ```
 
 ## Run
