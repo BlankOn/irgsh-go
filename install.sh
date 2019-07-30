@@ -9,7 +9,7 @@ fi
 TEMP_PATH=/tmp
 DEV_INSTALL=0
 
-apt-get install -y gpg pbuilder debootstrap devscripts python-apt reprepro jq
+apt-get install -y gnupg pbuilder debootstrap devscripts python-apt reprepro jq
 
 if [ -f ./target/release.tar.gz ]; then
 	# For development/testing purpose
