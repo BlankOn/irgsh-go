@@ -1,0 +1,13 @@
+[Unit]
+Description=irgsh-chief
+
+[Service]
+User=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-chief
+ExecStop=/bin/kill -9 $MAINPID
+StandardOutput=file:/var/log/irgsh/chief.log
+StandardError=file:/var/log/irgsh/chief.log
+
+[Install]
+WantedBy=multi-user.target

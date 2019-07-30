@@ -1,0 +1,13 @@
+[Unit]
+Description=irgsh-iso
+
+[Service]
+User=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-iso
+ExecStop=/bin/kill -9 $MAINPID
+StandardOutput=file:/var/log/irgsh/iso.log
+StandardError=file:/var/log/irgsh/iso.log
+
+[Install]
+WantedBy=multi-user.target

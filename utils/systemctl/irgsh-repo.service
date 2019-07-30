@@ -1,0 +1,13 @@
+[Unit]
+Description=irgsh-repo
+
+[Service]
+User=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-repo
+ExecStop=/bin/kill -9 $MAINPID
+StandardOutput=file:/var/log/irgsh/repo.log
+StandardError=file:/var/log/irgsh/repo.log
+
+[Install]
+WantedBy=multi-user.target

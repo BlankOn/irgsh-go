@@ -1,0 +1,13 @@
+[Unit]
+Description=irgsh-builder
+
+[Service]
+User=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-builder
+ExecStop=/bin/kill -9 $MAINPID
+StandardOutput=file:/var/log/irgsh/builder.log
+StandardError=file:/var/log/irgsh/builder.log
+
+[Install]
+WantedBy=multi-user.target
