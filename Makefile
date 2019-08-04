@@ -18,11 +18,13 @@ release:
 	mkdir -p irgsh-go/usr/bin
 	mkdir -p irgsh-go/etc/irgsh
 	mkdir -p irgsh-go/etc/init.d
+	mkdir -p irgsh-go/lib/systemd/system
 	mkdir -p irgsh-go/usr/share/irgsh
 	cp -rf bin/* irgsh-go/usr/bin/
 	cp -rf utils/config.yml irgsh-go/etc/irgsh/
 	cp -rf utils/config.yml irgsh-go/usr/share/irgsh/config.yml
 	cp -rf utils/init/* irgsh-go/etc/init.d/
+	cp -rf utils/systemctl/* irgsh-go/lib/systemd/system
 	cp -rf utils/scripts/init.sh irgsh-go/usr/share/irgsh/init.sh
 	cp -rf -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
@@ -74,10 +76,13 @@ build:
 
 build-install: release
 	./install.sh
-	sudo /etc/init.d/irgsh-chief start
-	sudo /etc/init.d/irgsh-builder start
-	sudo /etc/init.d/irgsh-iso start
-	sudo /etc/init.d/irgsh-repo start
+	sudo systemctl daemon-reload
+	sudo /lib/systemd/systemd-sysv-install enable irgsh-chief
+	sudo /lib/systemd/systemd-sysv-install enable irgsh-builder
+	sudo /lib/systemd/systemd-sysv-install enable irgsh-repo
+	sudo systemctl start irgsh-chief
+	sudo systemctl start irgsh-builder
+	sudo systemctl start irgsh-repo
 
 test:
 	mkdir -p tmp

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+DIST=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
+
 # Require sudo or root privilege
 if [ $EUID != 0 ]; then
 	sudo "$0" "$@"
@@ -9,7 +11,8 @@ fi
 TEMP_PATH=/tmp
 DEV_INSTALL=0
 
-apt-get install -y gnupg pbuilder debootstrap devscripts python-apt reprepro jq
+apt update
+apt install -y gnupg pbuilder debootstrap devscripts python-apt reprepro jq
 
 if [ -f ./target/release.tar.gz ]; then
 	# For development/testing purpose
@@ -41,11 +44,12 @@ echo "Stopping existing instance(s) ... "
 systemctl daemon-reload
 /etc/init.d/irgsh-chief stop || true
 /etc/init.d/irgsh-builder stop || true
-/etc/init.d/irgsh-iso stop || true
 /etc/init.d/irgsh-repo stop || true
+systemctl stop irgsh-chief
+systemctl stop irgsh-builder
+systemctl stop irgsh-repo
 killall irgsh-chief || true
 killall irgsh-builder || true
-killall irgsh-iso || true
 killall irgsh-repo || true
 echo "Stopping existing instance(s) [OK]"
 echo
@@ -53,7 +57,7 @@ echo
 if [ $DEV_INSTALL = 1 ]; then
 	# For development/testing purpose
 	# Clean up
-	rm -rf/etc/irgsh/config.yml
+	rm -rf /etc/irgsh/config.yml
 	rm -rf /var/lib/irgsh/chief
 	rm -rf /var/lib/irgsh/repo
 	rm -rf /var/lib/irgsh/gnupg
@@ -68,7 +72,6 @@ mkdir -p /var/lib/irgsh/chief/submissions
 mkdir -p /var/lib/irgsh/chief/artifacts
 mkdir -p /var/lib/irgsh/chief/logs
 mkdir -p /var/lib/irgsh/builder
-mkdir -p /var/lib/irgsh/iso
 mkdir -p /var/lib/irgsh/repo
 mkdir -p /var/log/irgsh
 
@@ -128,5 +131,10 @@ if [ $DEV_INSTALL = 1 ]; then
 fi
 
 popd >/dev/null
+
+# Enable the services
+/lib/systemd/systemd-sysv-install enable irgsh-chief
+/lib/systemd/systemd-sysv-install enable irgsh-builder
+/lib/systemd/systemd-sysv-install enable irgsh-repo
 
 echo "Happy hacking!"

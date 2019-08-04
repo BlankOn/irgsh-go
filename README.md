@@ -89,9 +89,9 @@ gpg -k
 You can start them with,
 
 ```
-/etc/init.d/irgsh-chief start
-/etc/init.d/irgsh-builder start
-/etc/init.d/irgsh-repo start
+sudo systemctl start irgsh-chief
+sudo systemctl start irgsh-builder
+sudo systemctl start irgsh-repo
 ```
 Their logs are available at `/var/log/irgsh/`. After these three services are up and running, you may continue to work with `irgsh-cli`
 
