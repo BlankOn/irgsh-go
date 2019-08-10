@@ -190,7 +190,7 @@ func main() {
 				tmpID := uuid.New().String()
 				// Cloning Debian package files
 				_, err = git.PlainClone(
-					homeDir + "/.irgsh/tmp/"+tmpID+"/package",
+					homeDir+"/.irgsh/tmp/"+tmpID+"/package",
 					false,
 					&git.CloneOptions{
 						URL:      packageUrl,
@@ -206,7 +206,12 @@ func main() {
 				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/package && debuild -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
-				err = exec.Command("bash", "-c", cmdStr).Run()
+				cmd := exec.Command("bash", "-c", cmdStr)
+				// Make it interactive
+				cmd.Stdout = os.Stdout
+				cmd.Stdin = os.Stdin
+				cmd.Stderr = os.Stderr
+				cmd.Run()
 				if err != nil {
 					log.Println("error: %v\n", err)
 					log.Println("Failed to sign the package using " + maintainerSigningKey + ". Please check your GPG key list.")
@@ -255,8 +260,11 @@ func main() {
 				}
 
 				responseStr := fmt.Sprintf("%+v", result)
-				fmt.Println(responseStr)
-				if strings.Contains(responseStr, "401 Unauthorized") {
+				if strings.Contains(responseStr, "401") ||
+					strings.Contains(responseStr, "403") ||
+					strings.Contains(responseStr, "500") {
+					fmt.Println("Submission failed.")
+					fmt.Println(responseStr)
 					return
 				}
 				type SubmitResponse struct {
@@ -270,7 +278,7 @@ func main() {
 				fmt.Println(responseJson.PipelineID)
 				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
 				cmdStr += responseJson.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"
-				cmd := exec.Command("bash", "-c", cmdStr)
+				cmd = exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {
 					return
