@@ -130,8 +130,8 @@ Identitas kunci anak ini (string `0B352C08D746A9A6`) yang akan dipakai di konfig
 Tujuan penggunaan subkey dan pemisahan kunci master adalah supaya bila kunci tanda tangan terkena kompromi, kunci penanda tangan baru masih bisa diterbitkan dan paket lama masih bisa diverifikasi.
 
 ```
-$ gpg --export-secret-key 05657D94F29BDACB99F6CE7D0B352C08D746A9A6 > private.key
-$ gpg --export 05657D94F29BDACB99F6CE7D0B352C08D746A9A6 >> private.key
+$ gpg --armor --export-secret-key 05657D94F29BDACB99F6CE7D0B352C08D746A9A6 > private.key
+$ gpg --armor --export 05657D94F29BDACB99F6CE7D0B352C08D746A9A6 >> private.key
 ```
 
 Simpan berkas `private.key` ini ke tempat yang aman.
@@ -139,8 +139,8 @@ Simpan berkas `private.key` ini ke tempat yang aman.
 Pisahkan kunci publik master dan kunci privat anak.
 
 ```
-$ gpg --export 05657D94F29BDACB99F6CE7D0B352C08D746A9A6 > public.key
-$ gpg --export-secret-subkeys 0B352C08D746A9A6 > signing.key
+$ gpg --armor --export 05657D94F29BDACB99F6CE7D0B352C08D746A9A6 > public.key
+$ gpg --armor --export-secret-subkeys 0B352C08D746A9A6 > signing.key
 ```
 Hapus kunci privat master dari `gnupg`.
 
