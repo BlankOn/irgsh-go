@@ -11,4 +11,4 @@ jobs:
     - uses: actions/checkout@v1
     - name: Run a multi-line script
       run: |
-        apt update && apt install -y gpg pbuilder debootstrap devscripts python-apt reprepro
+        sudo apt update && sudo apt install -y gpg pbuilder debootstrap devscripts python-apt reprepro
