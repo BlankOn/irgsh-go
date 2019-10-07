@@ -16,4 +16,14 @@ jobs:
         tar -xvf go1.11.2.linux-amd64.tar.gz
         sudo mv go /usr/local
         make build
-        
+        mkdir -p x64-release/bin
+        cp ./bin/irgsh-builder x64-release/bin/
+        cp ./bin/irgsh-iso x64-release/bin/
+        cp ./bin/irgsh-cli x64-release/bin/
+        cp ./bin/irgsh-chief x64-release/bin/
+        cp ./bin/irgsh-repo x64-release/bin/
+
+    - uses: actions/upload-artifact@master
+      with:
+        name: irgsh-go
+        path: x64-release/bin
