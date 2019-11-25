@@ -49,12 +49,12 @@ func main() {
 
 	irgshConfig, err := loadConfig()
 	if err != nil {
-		// log.Fatalln(err)
+		log.Fatalln(err)
 	}
 
 	artifactHttpEndpoint = artifactEndpoint.NewArtifactHTTPEndpoint(
 		artifactService.NewArtifactService(
-			artifactRepo.NewFileRepo("./")))
+			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
