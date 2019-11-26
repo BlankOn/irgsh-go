@@ -11,19 +11,20 @@ import (
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
 
+	"github.com/blankon/irgsh-go/internal/config"
+
 	artifactEndpoint "github.com/blankon/irgsh-go/internal/artifact/endpoint"
 	artifactRepo "github.com/blankon/irgsh-go/internal/artifact/repo"
 	artifactService "github.com/blankon/irgsh-go/internal/artifact/service"
 )
 
 var (
-	app        *cli.App
-	configPath string
-	server     *machinery.Server
+	app    *cli.App
+	server *machinery.Server
 
-	irgshConfig IrgshConfig
+	irgshConfig config.IrgshConfig
 
-	artifactHttpEndpoint *artifactEndpoint.ArtifactHTTPEndpoint
+	artifactHTTPEndpoint *artifactEndpoint.ArtifactHTTPEndpoint
 )
 
 type Submission struct {
@@ -47,12 +48,12 @@ type SubmitPayloadResponse struct {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	irgshConfig, err := loadConfig()
+	irgshConfig, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	artifactHttpEndpoint = artifactEndpoint.NewArtifactHTTPEndpoint(
+	artifactHTTPEndpoint = artifactEndpoint.NewArtifactHTTPEndpoint(
 		artifactService.NewArtifactService(
 			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
 
@@ -85,7 +86,7 @@ func main() {
 
 func serve() {
 	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/api/v1/artifacts", artifactHttpEndpoint.GetArtifactListHandler)
+	http.HandleFunc("/api/v1/artifacts", artifactHTTPEndpoint.GetArtifactListHandler)
 	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
 	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())

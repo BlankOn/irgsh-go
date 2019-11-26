@@ -1,16 +1,10 @@
-package main
+package config
 
 import (
-	"errors"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/hpcloud/tail"
 	validator "gopkg.in/go-playground/validator.v9"
 )
 
@@ -53,53 +47,10 @@ type RepoConfig struct {
 	UpstreamDistComponents     string `json:"upstream_dist_components" validate:"required"`     // main non-free>restricted contrib>extras
 }
 
-func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
-	if len(cmdStr) == 0 {
-		return errors.New("No command string provided.")
-	}
-
-	if len(logPath) > 0 {
-
-		logPathArr := strings.Split(logPath, "/")
-		logPathArr = logPathArr[:len(logPathArr)-1]
-		logDir := "/" + strings.Join(logPathArr, "/")
-		os.MkdirAll(logDir, os.ModePerm)
-		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		_, _ = f.WriteString("\n")
-		if len(cmdDesc) > 0 {
-			cmdDescSplitted := strings.Split(cmdDesc, "\n")
-			for _, desc := range cmdDescSplitted {
-				_, _ = f.WriteString("##### " + desc + "\n")
-			}
-		}
-		_, _ = f.WriteString("##### RUN " + cmdStr + "\n")
-		f.Close()
-		cmdStr += " 2>&1 | tee -a " + logPath
-	}
-	// `set -o pipefail` will forces to return the original exit code
-	cmd := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr)
-	err = cmd.Run()
-
-	return
-}
-
-func StreamLog(path string) {
-	t, err := tail.TailFile(path, tail.Config{Follow: true})
-	if err != nil {
-		log.Printf("error: %v\n", err)
-	}
-	for line := range t.Lines {
-		fmt.Println(line.Text)
-	}
-}
-
-func loadConfig() (config IrgshConfig, err error) {
+// LoadConfig load irgsh config from file
+func LoadConfig() (config IrgshConfig, err error) {
 	// Load config
-	configPath = os.Getenv("IRGSH_CONFIG_PATH")
+	configPath := os.Getenv("IRGSH_CONFIG_PATH")
 	if len(configPath) == 0 {
 		configPath = "/etc/irgsh/config.yml"
 	}
