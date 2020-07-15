@@ -1,4 +1,4 @@
-module irgsh-go
+module github.com/blankon/irgsh-go
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
@@ -10,6 +10,7 @@ require (
 	github.com/hpcloud/tail v1.0.0
 	github.com/imroc/req v0.2.3
 	github.com/jinzhu/configor v1.0.0
+	github.com/julienschmidt/httprouter v1.3.0
 	github.com/leodido/go-urn v1.1.0 // indirect
 	github.com/manifoldco/promptui v0.3.2
 	github.com/stretchr/testify v1.2.2
@@ -21,3 +22,5 @@ require (
 	gopkg.in/yaml.v2 v2.2.1
 	mvdan.cc/sh v2.6.4+incompatible // indirect
 )
+
+go 1.13
