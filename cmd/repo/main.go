@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -10,9 +9,7 @@ import (
 
 	machinery "github.com/RichardKnop/machinery/v1"
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
-	"github.com/ghodss/yaml"
 	"github.com/urfave/cli"
-	validator "gopkg.in/go-playground/validator.v9"
 
 	"github.com/blankon/irgsh-go/internal/config"
 )
@@ -22,34 +19,17 @@ var (
 	configPath string
 	server     *machinery.Server
 
-	irgshConfig config.IrgshConfig
+	irgshConfig = config.IrgshConfig{}
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// Load config
-	configPath = os.Getenv("IRGSH_CONFIG_PATH")
-	if len(configPath) == 0 {
-		configPath = "/etc/irgsh/config.yml"
-	}
-	irgshConfig = config.IrgshConfig{}
-	yamlFile, err := ioutil.ReadFile(configPath)
+	irgshConfig, err := config.LoadConfig()
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatalln("couldn't load config : ", err)
 	}
-	err = yaml.Unmarshal(yamlFile, &irgshConfig)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-	validate := validator.New()
-	err = validate.Struct(irgshConfig.Repo)
-	if err != nil {
-		log.Fatal(err.Error())
-		os.Exit(1)
-	}
+
 	_ = exec.Command("bash", "-c", "mkdir -p "+irgshConfig.Repo.Workdir)
 
 	app = cli.NewApp()
