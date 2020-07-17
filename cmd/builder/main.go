@@ -18,6 +18,7 @@ var (
 	app        *cli.App
 	configPath string
 	server     *machinery.Server
+	version    string
 
 	irgshConfig = config.IrgshConfig{}
 )
@@ -37,7 +38,7 @@ func main() {
 	app.Usage = "irgsh-go distributed packager"
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
-	app.Version = "IRGSH_GO_VERSION"
+	app.Version = version
 
 	app.Commands = []cli.Command{
 		{

@@ -1,17 +1,6 @@
+LDFLAGS := "-X main.version=$$(cat ./VERSION)"
+
 release:
-	mkdir -p tmp
-	# Temporarily backup the original files to inject version string
-	cp -rf chief/main.go tmp/chief-main.go
-	cp -rf builder/main.go tmp/builder-main.go
-	cp -rf iso/main.go tmp/iso-main.go
-	cp -rf repo/main.go tmp/repo-main.go
-	cp -rf cli/main.go tmp/cli-main.go
-	# Assign version
-	cat tmp/chief-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > chief/main.go
-	cat tmp/builder-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > builder/main.go
-	cat tmp/iso-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > iso/main.go
-	cat tmp/repo-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > repo/main.go
-	cat tmp/cli-main.go | sed "s/IRGSH_GO_VERSION/$$(cat VERSION)/g" > cli/main.go
 	# Build
 	make build
 	# Bundling
@@ -30,13 +19,6 @@ release:
 	tar -zcvf release.tar.gz irgsh-go
 	mkdir -p target
 	mv release.tar.gz target/
-	# Clean up
-	rm -rf irgsh-go
-	cp -rf tmp/chief-main.go chief/main.go
-	cp -rf tmp/builder-main.go builder/main.go
-	cp -rf tmp/iso-main.go iso/main.go
-	cp -rf tmp/repo-main.go repo/main.go
-	cp -rf tmp/cli-main.go cli/main.go
 
 release-in-docker: release
 	# It's possible this release command will be used inside a container
@@ -61,18 +43,11 @@ build-in-docker:
 
 build:
 	mkdir -p bin
-	cp -rf chief/utils.go builder/utils.go
-	cp -rf chief/utils.go iso/utils.go
-	cp -rf chief/utils.go repo/utils.go
-	cp -rf chief/utils.go cli/utils.go
-	go build -o ./bin/irgsh-chief ./chief
-	go build -o ./bin/irgsh-builder ./builder
-	go build -o ./bin/irgsh-iso ./iso
-	go build -o ./bin/irgsh-repo ./repo
-	go build -o ./bin/irgsh-cli ./cli
-	rm builder/utils.go
-	rm iso/utils.go
-	rm repo/utils.go
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-iso ./cmd/iso
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-cli ./cmd/cli
 
 build-install: release
 	./install.sh
@@ -86,33 +61,30 @@ build-install: release
 
 test:
 	mkdir -p tmp
-	cp -rf chief/utils.go builder/utils.go
-	cp -rf chief/utils.go iso/utils.go
-	cp -rf chief/utils.go repo/utils.go
-	go test -race -coverprofile=coverage.txt -covermode=atomic ./builder
-	go test -race -coverprofile=coverage.txt -covermode=atomic ./iso
-	go test -race -coverprofile=coverage.txt -covermode=atomic ./repo
+	go test -race -coverprofile=coverage.txt -covermode=atomic ./cmd/builder
+	go test -race -coverprofile=coverage.txt -covermode=atomic ./cmd/iso
+	go test -race -coverprofile=coverage.txt -covermode=atomic ./cmd/repo
 
 coverage:test
 	go tool cover -html=coverage.txt
 
 irgsh-chief:
-	go build -o ./bin/irgsh-chief ./chief && ./bin/irgsh-chief
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && ./bin/irgsh-chief
 
 irgsh-builder-init:
-	go build -o ./bin/irgsh-builder ./builder && ./bin/irgsh-builder init
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder init
 
 irgsh-builder:
-	go build -o ./bin/irgsh-builder ./builder && ./bin/irgsh-builder
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder
 
 irgsh-iso:
-	go build -o ./bin/irgsh-iso ./iso && ./bin/irgsh-iso
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-iso ./cmd/iso && ./bin/irgsh-iso
 
 irgsh-repo-init:
-	go build -o ./bin/irgsh-repo ./repo && ./bin/irgsh-repo init
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && ./bin/irgsh-repo init
 
 irgsh-repo:
-	go build -o ./bin/irgsh-repo ./repo && ./bin/irgsh-repo
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && ./bin/irgsh-repo
 
 redis:
 	docker run -d --network host redis

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -10,34 +9,18 @@ import (
 	"time"
 
 	"github.com/blankon/irgsh-go/internal/config"
-	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	validator "gopkg.in/go-playground/validator.v9"
 )
 
-func TestBuilderPreparation(t *testing.T) {
+func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	configPath = "../utils/config.yml"
-	irgshConfig = config.IrgshConfig{}
-	yamlFile, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		log.Println(err.Error())
-		assert.Equal(t, true, false, "Should not reach here")
-	}
-	err = yaml.Unmarshal(yamlFile, &irgshConfig)
-	if err != nil {
-		log.Println(err.Error())
-		assert.Equal(t, true, false, "Should not reach here")
-	}
-	validate := validator.New()
-	err = validate.Struct(irgshConfig.Builder)
-	if err != nil {
-		log.Println(err.Error())
-		assert.Equal(t, true, false, "Should not reach here")
-	}
+
+	irgshConfig, _ = config.LoadConfig()
 	dir, _ := os.Getwd()
 	irgshConfig.Builder.Workdir = dir + "/../tmp"
+
+	m.Run()
 }
 
 func TestBuilderClone(t *testing.T) {
