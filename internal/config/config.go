@@ -2,6 +2,7 @@ package config
 
 import (
 	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/ghodss/yaml"
@@ -49,24 +50,33 @@ type RepoConfig struct {
 
 // LoadConfig load irgsh config from file
 func LoadConfig() (config IrgshConfig, err error) {
-	// Load config
-	configPath := os.Getenv("IRGSH_CONFIG_PATH")
-	if len(configPath) == 0 {
-		configPath = "/etc/irgsh/config.yml"
+	configPaths := []string{
+		"/etc/irgsh/config.yml",
+		"../../utils/config.yml",
+		"./utils/config.yml",
 	}
+
+	configPath := os.Getenv("IRGSH_CONFIG_PATH")
 	yamlFile, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		return
+		// load from predefined configPaths when no IRGSH_CONFIG_PATH set
+		for _, config := range configPaths {
+			yamlFile, err = ioutil.ReadFile(config)
+			if err == nil {
+				log.Println("load config from : ", config)
+				break
+			}
+		}
+		if err != nil {
+			return
+		}
 	}
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
 		return
 	}
 	validate := validator.New()
-	err = validate.Struct(config.Chief)
-	if err != nil {
-		return
-	}
+	err = validate.Struct(config)
 
 	return
 }
