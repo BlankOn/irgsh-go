@@ -19,8 +19,9 @@ import (
 )
 
 var (
-	app    *cli.App
-	server *machinery.Server
+	app     *cli.App
+	server  *machinery.Server
+	version string
 
 	irgshConfig config.IrgshConfig
 
@@ -62,7 +63,7 @@ func main() {
 	app.Usage = "irgsh-go distributed packager"
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
-	app.Version = "IRGSH_GO_VERSION"
+	app.Version = version
 
 	app.Action = func(c *cli.Context) error {
 		server, err = machinery.NewServer(
