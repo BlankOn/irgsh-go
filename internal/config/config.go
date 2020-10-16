@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/ghodss/yaml"
 	validator "gopkg.in/go-playground/validator.v9"
@@ -55,15 +56,18 @@ func LoadConfig() (config IrgshConfig, err error) {
 		"../../utils/config.yml",
 		"./utils/config.yml",
 	}
-
 	configPath := os.Getenv("IRGSH_CONFIG_PATH")
 	yamlFile, err := ioutil.ReadFile(configPath)
+	isDev := false
 	if err != nil {
 		// load from predefined configPaths when no IRGSH_CONFIG_PATH set
-		for _, config := range configPaths {
+		for i, config := range configPaths {
 			yamlFile, err = ioutil.ReadFile(config)
 			if err == nil {
 				log.Println("load config from : ", config)
+				if i > 1 {
+					isDev = true
+				}
 				break
 			}
 		}
@@ -71,10 +75,21 @@ func LoadConfig() (config IrgshConfig, err error) {
 			return
 		}
 	}
+
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
 		return
 	}
+	if isDev {
+		// Since it's in dev env, let's move some path to ./tmp
+		cwd, _ := os.Getwd()
+		tmpDir := cwd + "/tmp/"
+		if _, err := os.Stat(tmpDir); os.IsNotExist(err) {
+			os.Mkdir(tmpDir, os.ModeDir)
+		}
+		config.Builder.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
+	}
+
 	validate := validator.New()
 	err = validate.Struct(config)
 

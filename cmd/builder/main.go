@@ -25,8 +25,8 @@ var (
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	irgshConfig, err := config.LoadConfig()
+	var err error
+	irgshConfig, err = config.LoadConfig()
 	if err != nil {
 		log.Fatalln("couldn't load config : ", err)
 	}
