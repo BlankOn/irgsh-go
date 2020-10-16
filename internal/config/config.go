@@ -17,6 +17,7 @@ type IrgshConfig struct {
 	ISO     ISOConfig     `json:"iso"`
 	Repo    RepoConfig    `json:"repo"`
 	IsTest  bool          `json:"is_test"`
+	IsDev   bool          `json:"is_dev"`
 }
 
 type ChiefConfig struct {
@@ -89,6 +90,8 @@ func LoadConfig() (config IrgshConfig, err error) {
 		}
 		config.Builder.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
 	}
+
+	config.IsDev = isDev
 
 	validate := validator.New()
 	err = validate.Struct(config)
