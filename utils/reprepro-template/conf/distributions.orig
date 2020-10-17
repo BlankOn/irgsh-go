@@ -12,9 +12,9 @@ Version: DIST_VERSION
 Description: DIST_VERSION_DESC
 Update: UPSTREAM_NAME
 SignWith: DIST_SIGNING_KEY
-DebIndices: Packages Release . .gz .bz2 tiffany.py
+DebIndices: Packages Release . .gz .bz2 /usr/bin/rredtool
 UDebIndices: Packages . .gz .bz2 
-DscIndices: Sources Release . .gz .bz2 tiffany.py
+DscIndices: Sources Release . .gz .bz2 /usr/bin/rredtool
 #Pull: pull.verbeek
 Contents: udebs nodebs . .gz
 ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
@@ -34,9 +34,9 @@ Version: DIST_VERSION
 Description: DIST_VERSION_DESC Security
 Update: 
 SignWith: DIST_SIGNING_KEY
-DebIndices: Packages Release . .gz .bz2 tiffany.py
+DebIndices: Packages Release . .gz .bz2 /usr/bin/rredtool
 UDebIndices: Packages . .gz .bz2
-DscIndices: Sources Release . .gz .bz2 tiffany.py
+DscIndices: Sources Release . .gz .bz2 /usr/bin/rredtool
 Contents: udebs nodebs . .gz 
 ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
 ContentsComponents: DIST_COMPONENTS
@@ -55,9 +55,9 @@ Version: DIST_VERSION
 Description: DIST_VERSION_DESC Updates
 Update:
 SignWith: DIST_SIGNING_KEY
-DebIndices: Packages Release . .gz .bz2 tiffany.py
+DebIndices: Packages Release . .gz .bz2 /usr/bin/rredtool
 UDebIndices: Packages . .gz .bz2
-DscIndices: Sources Release . .gz .bz2 tiffany.py
+DscIndices: Sources Release . .gz .bz2 /usr/bin/rredtool
 Contents: udebs nodebs . .gz
 ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
 ContentsComponents: DIST_COMPONENTS
