@@ -88,7 +88,9 @@ func LoadConfig() (config IrgshConfig, err error) {
 		if _, err := os.Stat(tmpDir); os.IsNotExist(err) {
 			os.Mkdir(tmpDir, os.ModeDir)
 		}
+		config.Chief.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
 		config.Builder.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
+		config.Repo.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
 	}
 
 	config.IsDev = isDev
