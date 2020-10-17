@@ -68,6 +68,9 @@ test:
 coverage:test
 	go tool cover -html=coverage.txt
 
+irgsh-cli:
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-cli ./cmd/cli && ./bin/irgsh-cli
+
 irgsh-chief:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && ./bin/irgsh-chief
 

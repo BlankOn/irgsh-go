@@ -68,6 +68,9 @@ func Repo(payload string) (err error) {
 			irgshConfig.Repo.Workdir,
 			raw["taskUUID"],
 		)
+		if irgshConfig.IsDev {
+			cmdStr = strings.ReplaceAll(cmdStr, "GNUPGHOME=/var/lib/irgsh/gnupg ", "")
+		}
 		err = systemutil.CmdExec(
 			cmdStr,
 			"This is experimental package, remove any existing package.",
@@ -87,6 +90,9 @@ func Repo(payload string) (err error) {
 		irgshConfig.Repo.Workdir,
 		raw["taskUUID"],
 	)
+	if irgshConfig.IsDev {
+		cmdStr = strings.ReplaceAll(cmdStr, "GNUPGHOME=/var/lib/irgsh/gnupg ", "")
+	}
 	err = systemutil.CmdExec(
 		cmdStr,
 		"Injecting the deb files from artifact to the repository",
@@ -124,7 +130,10 @@ func InitRepo() (err error) {
 	go systemutil.StreamLog(logPath)
 
 	repoTemplatePath := "/usr/share/irgsh/reprepro-template"
-	if irgshConfig.IsTest {
+	if irgshConfig.IsDev {
+		cwd, _ := os.Getwd()
+		repoTemplatePath = cwd + "/utils/reprepro-template"
+	} else if irgshConfig.IsTest {
 		dir, _ := os.Getwd()
 		repoTemplatePath = dir + "/../utils/reprepro-template"
 	}
