@@ -49,7 +49,8 @@ type SubmitPayloadResponse struct {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	irgshConfig, err := config.LoadConfig()
+	var err error
+	irgshConfig, err = config.LoadConfig()
 	if err != nil {
 		log.Fatalln(err)
 	}

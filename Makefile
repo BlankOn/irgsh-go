@@ -72,7 +72,8 @@ irgsh-chief:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && ./bin/irgsh-chief
 
 irgsh-builder-init:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder init
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && sudo ./bin/irgsh-builder init-base
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder init-builder
 
 irgsh-builder:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder

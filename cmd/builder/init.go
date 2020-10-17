@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/blankon/irgsh-go/pkg/systemutil"
@@ -78,12 +79,27 @@ func InitBase() (err error) {
 	cmdStr = "chmod a+rw /var/cache/pbuilder/base*"
 	err = systemutil.CmdExec(
 		cmdStr,
-		"Updating base.tgz",
+		"Fixing permission for /var/cache/pbuilder/base*",
 		logPath,
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
+	}
+
+	if irgshConfig.IsDev {
+		cwd, _ := os.Getwd()
+		tmpDir := cwd + "/tmp/"
+		cmdStr = "chmod -vR 777 " + tmpDir
+		err = systemutil.CmdExec(
+			cmdStr,
+			"Fixing permission for "+tmpDir,
+			logPath,
+		)
+		if err != nil {
+			fmt.Printf("error: %v\n", err)
+			return
+		}
 	}
 
 	fmt.Println("Done.")
