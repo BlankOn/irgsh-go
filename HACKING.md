@@ -3,8 +3,9 @@
 ## Requirements
 
 Ensure that you have:
+- Golang
 - Docker
-- These packages installed: `gpg pbuilder debootstrap devscripts python-apt reprepro`
+- These packages installed: `gpg pbuilder debootstrap devscripts curl reprepro`
 
 ## Cloning
 
@@ -14,7 +15,7 @@ Ensure that you have:
 
 ### GPG Key
 
-You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it. Check it by running `gpg --list-key`
+You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it with `gpg --generate-key`. Check it by running `gpg --list-key`
 
 ```
 $ gpg --list-key
