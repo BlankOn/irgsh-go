@@ -16,7 +16,7 @@ func InitBase() (err error) {
 	go systemutil.StreamLog(logPath)
 
 	cmdStr := "lsb_release -a | grep Distributor | cut -d ':' -f 2 | awk '{print $1=$1;1}'"
-	_, _ = systemutil.CmdExec(
+	distribution, _ := systemutil.CmdExec(
 		cmdStr,
 		"",
 		logPath,
@@ -63,7 +63,7 @@ func InitBase() (err error) {
 		return
 	}
 	cmdStr = "pbuilder create --debootstrapopts --variant=buildd"
-	if strings.Contains(irgshConfig.Repo.UpstreamDistUrl, "debian") {
+	if strings.Contains(irgshConfig.Repo.UpstreamDistUrl, "debian") && strings.Contains(distribution, "Ubuntu") {
 		_, err = systemutil.CmdExec(
 			"apt-get update && apt-get -y install debian-archive-keyring",
 			"Creating pbuilder base.tgz",
