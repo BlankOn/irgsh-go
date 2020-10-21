@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -123,6 +124,11 @@ func InitRepo() (err error) {
 	}
 
 	// TODO ask for matched distribution name as this command is super dangerous
+	// Prepare workdir
+	err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	fmt.Println("##### Initializing new repository for " + irgshConfig.Repo.DistCodename)
 
