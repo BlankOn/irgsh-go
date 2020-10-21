@@ -156,10 +156,17 @@ func BuildPackage(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	logPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/build.log"
+	buildPath := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	err = os.MkdirAll(buildPath, 0755)
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		return
+	}
+
+	logPath := buildPath + "/build.log"
 
 	// Copy the source files
-	cmdStr := "cp -vR " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr := "cp -vR " + buildPath
 	cmdStr += "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += "/package/"
 	_, err = systemutil.CmdExec(
