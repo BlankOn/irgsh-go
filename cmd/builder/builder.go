@@ -17,7 +17,7 @@ func uploadLog(logPath string, id string) {
 	// Upload the log to chief
 	cmdStr := "curl -v -F 'uploadFile=@" + logPath + "' '"
 	cmdStr += irgshConfig.Chief.Address + "/api/v1/log-upload?id=" + id + "&type=build'"
-	err := systemutil.CmdExec(
+	_, err := systemutil.CmdExec(
 		cmdStr,
 		"Uploading log file to chief",
 		"",
@@ -137,7 +137,7 @@ func BuildPreparation(payload string) (next string, err error) {
 	// Extract signed DSC
 	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += " && tar -xvf debuild.tar.gz && rm -f debuild.tar.gz"
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"",
 		"",
@@ -162,7 +162,7 @@ func BuildPackage(payload string) (next string, err error) {
 	cmdStr := "cp -vR " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += "/package/"
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"",
 		logPath,
@@ -173,7 +173,7 @@ func BuildPackage(payload string) (next string, err error) {
 	}
 
 	// Cleanup pbuilder cache result
-	_ = systemutil.CmdExec(
+	_, _ = systemutil.CmdExec(
 		"rm -rf /var/cache/pbuilder/result/*",
 		"",
 		"",
@@ -183,7 +183,7 @@ func BuildPackage(payload string) (next string, err error) {
 	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += ":/tmp/build --privileged=true -i pbocker bash -c /build.sh"
 	fmt.Println(cmdStr)
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Building the package",
 		logPath,
@@ -210,7 +210,7 @@ func StorePackage(payload string) (next string, err error) {
 	cmdStr += "/" + raw["taskUUID"].(string) + ".tar.gz' "
 	cmdStr += irgshConfig.Chief.Address + "/api/v1/artifact-upload?id="
 	cmdStr += raw["taskUUID"].(string)
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"",
 		logPath,

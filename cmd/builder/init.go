@@ -11,6 +11,17 @@ import (
 )
 
 func InitBase() (err error) {
+	logPath := irgshConfig.Builder.Workdir
+	logPath += "/irgsh-builder-init-base-" + uuid.New().String() + ".log"
+	go systemutil.StreamLog(logPath)
+
+	cmdStr := "lsb_release -a | grep Distributor | cut -d ':' -f 2 | awk '{print $1=$1;1}'"
+	distribution, _ := systemutil.CmdExec(
+		cmdStr,
+		"",
+		logPath,
+	)
+
 	// TODO base.tgz file name should be based on distribution code name
 	fmt.Println("WARNING: This subcommand need to be run under root or sudo.")
 	prompt := promptui.Prompt{
@@ -26,14 +37,11 @@ func InitBase() (err error) {
 	if strings.ToLower(result) != "y" {
 		return
 	}
-	logPath := irgshConfig.Builder.Workdir
-	logPath += "/irgsh-builder-init-base-" + uuid.New().String() + ".log"
-	go systemutil.StreamLog(logPath)
 
 	fmt.Println("Installing and preparing pbuilder and friends...")
 
-	cmdStr := "apt-get update && apt-get install -y pbuilder debootstrap devscripts equivs"
-	err = systemutil.CmdExec(
+	cmdStr = "apt-get update && apt-get install -y pbuilder debootstrap devscripts equivs"
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Preparing pbuilder and it's dependencies",
 		logPath,
@@ -44,7 +52,7 @@ func InitBase() (err error) {
 	}
 
 	cmdStr = "rm /var/cache/pbuilder/base*"
-	_ = systemutil.CmdExec(
+	_, _ = systemutil.CmdExec(
 		cmdStr,
 		"",
 		logPath,
@@ -55,7 +63,19 @@ func InitBase() (err error) {
 		return
 	}
 	cmdStr = "pbuilder create --debootstrapopts --variant=buildd"
-	err = systemutil.CmdExec(
+	if strings.Contains(irgshConfig.Repo.UpstreamDistUrl, "debian") && strings.Contains(distribution, "Ubuntu") {
+		_, err = systemutil.CmdExec(
+			"apt-get update && apt-get -y install debian-archive-keyring",
+			"Creating pbuilder base.tgz",
+			logPath,
+		)
+		if err != nil {
+			fmt.Printf("error: %v\n", err)
+			return
+		}
+		cmdStr = "pbuilder create --distribution " + irgshConfig.Repo.UpstreamDistCodename + " --mirror " + irgshConfig.Repo.UpstreamDistUrl + " --debootstrapopts \"--keyring=/usr/share/keyrings/debian-archive-keyring.gpg\""
+	}
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Creating pbuilder base.tgz",
 		logPath,
@@ -66,7 +86,7 @@ func InitBase() (err error) {
 	}
 
 	cmdStr = "pbuilder update"
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Updating base.tgz",
 		logPath,
@@ -77,7 +97,7 @@ func InitBase() (err error) {
 	}
 
 	cmdStr = "chmod a+rw /var/cache/pbuilder/base*"
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Fixing permission for /var/cache/pbuilder/base*",
 		logPath,
@@ -91,7 +111,7 @@ func InitBase() (err error) {
 		cwd, _ := os.Getwd()
 		tmpDir := cwd + "/tmp/"
 		cmdStr = "chmod -vR 777 " + tmpDir
-		err = systemutil.CmdExec(
+		_, err = systemutil.CmdExec(
 			cmdStr,
 			"Fixing permission for "+tmpDir,
 			logPath,
@@ -114,7 +134,7 @@ func UpdateBase() (err error) {
 
 	fmt.Println("Updating base.tgz...")
 	cmdStr := "sudo pbuilder update"
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Updating base.tgz",
 		logPath,
@@ -138,7 +158,7 @@ func InitBuilder() (err error) {
 
 	cmdStr := `mkdir -p ` + irgshConfig.Builder.Workdir + `/pbocker && \
     cp /var/cache/pbuilder/base.tgz ` + irgshConfig.Builder.Workdir + `/pbocker/base.tgz`
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Copying base.tgz",
 		logPath,
@@ -154,7 +174,7 @@ func InitBuilder() (err error) {
     echo 'RUN echo "USENETWORK=yes"' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'COPY base.tgz /var/cache/pbuilder/' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN echo "pbuilder --build /tmp/build/*.dsc && cp -vR /var/cache/pbuilder/result/* /tmp/build/" > /build.sh && chmod a+x /build.sh' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile`
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Preparing Dockerfile",
 		logPath,
@@ -166,7 +186,7 @@ func InitBuilder() (err error) {
 
 	cmdStr = `cd ` + irgshConfig.Builder.Workdir +
 		`/pbocker && docker build --no-cache -t pbocker .`
-	err = systemutil.CmdExec(
+	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Building pbocker docker image",
 		logPath,

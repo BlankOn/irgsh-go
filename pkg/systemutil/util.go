@@ -12,9 +12,9 @@ import (
 )
 
 // CmdExec run os command
-func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
+func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err error) {
 	if len(cmdStr) == 0 {
-		return errors.New("No command string provided.")
+		return "", errors.New("No command string provided.")
 	}
 
 	if len(logPath) > 0 {
@@ -25,7 +25,7 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
 		os.MkdirAll(logDir, os.ModePerm)
 		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			return err
+			return "", err
 		}
 		defer f.Close()
 		_, _ = f.WriteString("\n")
@@ -40,8 +40,8 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (err error) {
 		cmdStr += " 2>&1 | tee -a " + logPath
 	}
 	// `set -o pipefail` will forces to return the original exit code
-	cmd := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr)
-	err = cmd.Run()
+	output, err := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr).Output()
+	out = string(output)
 
 	return
 }
