@@ -55,6 +55,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	// Prepare workdir
+	err = os.MkdirAll(irgshConfig.Chief.Workdir, 0755)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Println(irgshConfig.Chief.Workdir)
+
 	artifactHTTPEndpoint = artifactEndpoint.NewArtifactHTTPEndpoint(
 		artifactService.NewArtifactService(
 			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
@@ -101,8 +108,12 @@ func serve() {
 	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
 	http.Handle("/logs/", http.StripPrefix("/logs/", logFs))
 
-	log.Println("irgsh-go chief now live on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	port := os.Getenv("PORT")
+	if len(port) < 1 {
+		port = "8080"
+	}
+	log.Println("irgsh-go chief now live on port " + port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
