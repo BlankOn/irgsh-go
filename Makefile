@@ -68,27 +68,27 @@ test:
 coverage:test
 	go tool cover -html=coverage.txt
 
-cli:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-cli ./cmd/cli && ./bin/irgsh-cli
+client:
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-cli ./cmd/cli
 
 chief:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && ./bin/irgsh-chief
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && DEV=1 ./bin/irgsh-chief
 
 builder-init:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && sudo ./bin/irgsh-builder init-base
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder init-builder
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && sudo DEV=1 ./bin/irgsh-builder init-base
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder init-builder
 
 builder:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && ./bin/irgsh-builder
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder
 
 iso:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-iso ./cmd/iso && ./bin/irgsh-iso
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-iso ./cmd/iso && DEV=1 ./bin/irgsh-iso
 
 repo-init:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && ./bin/irgsh-repo init
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && DEV=1 ./bin/irgsh-repo init
 
 repo:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && ./bin/irgsh-repo
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && DEV=1 ./bin/irgsh-repo
 
 redis:
 	docker run -d --network host redis
