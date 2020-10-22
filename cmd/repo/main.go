@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 
 	machinery "github.com/RichardKnop/machinery/v1"
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
@@ -31,8 +30,16 @@ func main() {
 	if err != nil {
 		log.Fatalln("couldn't load config : ", err)
 	}
+	// Prepare workdir
+	err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-	_ = exec.Command("bash", "-c", "mkdir -p "+irgshConfig.Repo.Workdir)
+	err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -110,6 +117,10 @@ func serve() {
 			),
 		),
 	)
-	log.Println("irgsh-go repo is now live on port 8082")
-	log.Fatal(http.ListenAndServe(":8082", nil))
+	port := os.Getenv("PORT")
+	if len(port) < 1 {
+		port = "8082"
+	}
+	log.Println("irgsh-go repo is now live on port " + port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

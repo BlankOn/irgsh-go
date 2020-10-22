@@ -58,20 +58,23 @@ func LoadConfig() (config IrgshConfig, err error) {
 		"./utils/config.yml",
 	}
 	configPath := os.Getenv("IRGSH_CONFIG_PATH")
+	isDev := os.Getenv("DEV") == "1"
 	yamlFile, err := ioutil.ReadFile(configPath)
-	isDev := false
 	if err != nil {
 		// load from predefined configPaths when no IRGSH_CONFIG_PATH set
-		for i, config := range configPaths {
+		for _, config := range configPaths {
 			yamlFile, err = ioutil.ReadFile(config)
 			if err == nil {
 				log.Println("load config from : ", config)
-				if i > 1 {
-					isDev = true
-				}
 				break
 			}
 		}
+		if err != nil {
+			return
+		}
+	}
+	if isDev {
+		yamlFile, err = ioutil.ReadFile("./utils/config.yml")
 		if err != nil {
 			return
 		}
@@ -81,20 +84,19 @@ func LoadConfig() (config IrgshConfig, err error) {
 	if err != nil {
 		return
 	}
+
 	if isDev {
 		// Since it's in dev env, let's move some path to ./tmp
 		cwd, _ := os.Getwd()
 		tmpDir := cwd + "/tmp/"
 		if _, err := os.Stat(tmpDir); os.IsNotExist(err) {
-			os.Mkdir(tmpDir, os.ModeDir)
+			os.Mkdir(tmpDir, 0755)
 		}
 		config.Chief.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
-		config.Builder.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
-		config.Repo.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
+		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
+		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
 	}
-
 	config.IsDev = isDev
-
 	validate := validator.New()
 	err = validate.Struct(config)
 

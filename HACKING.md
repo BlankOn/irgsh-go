@@ -32,7 +32,12 @@ In dev environment, this single key will acts as both repository signing key and
 
 ### Initialization
 
-IRGSH need builder (pbuilder) and repository (reprepro) to get it works done.
+#### Client
+
+You need to build then initialize the CLI client to point out to the chief and your signing key (see `GPG Key` section).
+
+- `make client`
+- `irgsh-cli config --chief http://localhost:8080 --key 41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F`
 
 #### Builder
 

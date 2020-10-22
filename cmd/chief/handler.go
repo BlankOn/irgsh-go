@@ -37,6 +37,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 
 	buff, err := base64.StdEncoding.DecodeString(tarballB64)
 	if err != nil {
+		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "500")
 		return
@@ -47,6 +48,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.Command("bash", "-c", cmdStr)
 	err = cmd.Run()
 	if err != nil {
+		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "500")
 		return
@@ -56,7 +58,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(path)
 	err = ioutil.WriteFile(path, buff, 07440)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "500")
 		return
@@ -67,7 +69,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(cmdStr)
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "500")
 		return
@@ -82,7 +84,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(cmdStr)
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err)
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprintf(w, "401 Unauthorized")
 		return
@@ -154,6 +156,7 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 func artifactUploadHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
 
 		keys, ok := r.URL.Query()["id"]
 
@@ -166,6 +169,12 @@ func artifactUploadHandler() http.HandlerFunc {
 		id := keys[0]
 
 		targetPath := irgshConfig.Chief.Workdir + "/artifacts"
+		err = os.MkdirAll(targetPath, 0755)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		// parse and validate file and post parameters
 		file, _, err := r.FormFile("uploadFile")
@@ -216,6 +225,7 @@ func artifactUploadHandler() http.HandlerFunc {
 
 func logUploadHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
 
 		keys, ok := r.URL.Query()["id"]
 
@@ -238,6 +248,12 @@ func logUploadHandler() http.HandlerFunc {
 		logType := keys[0]
 
 		targetPath := irgshConfig.Chief.Workdir + "/logs"
+		err = os.MkdirAll(targetPath, 0755)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		// parse and validate file and post parameters
 		file, _, err := r.FormFile("uploadFile")
