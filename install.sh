@@ -87,6 +87,7 @@ if [ ! -f "/etc/irgsh/config.yml" ]; then
 	cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
 fi
 # irgsh user
+groupadd irgsh || true
 if getent passwd irgsh >/dev/null 2>&1; then
 	echo "irgsh user is already exists"
 else
@@ -96,6 +97,7 @@ else
 	usermod -aG docker irgsh
 	echo "irgsh user added to system"
 fi
+usermod -aG irgsh irgsh
 echo "Installing files [OK]"
 echo
 
