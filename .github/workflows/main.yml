@@ -15,15 +15,9 @@ jobs:
         curl -O https://storage.googleapis.com/golang/go1.13.14.linux-amd64.tar.gz
         tar -xf go1.13.14.linux-amd64.tar.gz
         sudo mv go /usr/local
-        make build
-        mkdir -p x64-release/bin
-        cp ./bin/irgsh-builder x64-release/bin/
-        cp ./bin/irgsh-iso x64-release/bin/
-        cp ./bin/irgsh-cli x64-release/bin/
-        cp ./bin/irgsh-chief x64-release/bin/
-        cp ./bin/irgsh-repo x64-release/bin/
+        make release
 
     - uses: actions/upload-artifact@master
       with:
-        name: irgsh-go
-        path: x64-release/bin
+        name: release
+        path: target/release.tar.gz
