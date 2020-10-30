@@ -4,6 +4,7 @@ redis: 'redis://localhost:6379'
 chief:
   address: 'http://localhost:8080'
   workdir: '/var/lib/irgsh/chief'
+  gnupg_dir: '/var/lib/irgsh/gnupg'
 
 builder:
   workdir: '/var/lib/irgsh/builder'
@@ -18,11 +19,12 @@ repo:
   dist_supported_architectures: 'amd64 source'
   dist_version: '12.0'
   dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
-  dist_signing_key: 'GPG_SIGN_KEY'
+  dist_signing_key: '41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F'
   upstream_name: 'merge.sid'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
   upstream_dist_components: 'main non-free>restricted contrib>extras'
+  gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:
   workdir: '/var/lib/irgsh/iso'

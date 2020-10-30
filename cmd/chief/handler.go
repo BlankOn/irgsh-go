@@ -75,13 +75,14 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
+	if irgshConfig.IsDev {
+		gnupgDir = ""
+	}
+
 	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + " && "
 	// TODO This gnupg path should be configurable with config.yml
-	cmdStr += "GNUPGHOME=/var/lib/irgsh/gnupg gpg --verify *.dsc"
-	if irgshConfig.IsDev {
-		cmdStr = strings.ReplaceAll(cmdStr, "GNUPGHOME=/var/lib/irgsh/gnupg ", "")
-	}
-	fmt.Println(cmdStr)
+	cmdStr += gnupgDir + " gpg --verify *.dsc"
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
 		log.Println(err)
