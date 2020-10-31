@@ -4,6 +4,7 @@ redis: 'redis://localhost:6379'
 chief:
   address: 'http://localhost:8080'
   workdir: '/var/lib/irgsh/chief'
+  gnupg_dir: '/var/lib/irgsh/gnupg'
 
 builder:
   workdir: '/var/lib/irgsh/builder'
@@ -23,6 +24,7 @@ repo:
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
   upstream_dist_components: 'main non-free>restricted contrib>extras'
+  gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:
   workdir: '/var/lib/irgsh/iso'
