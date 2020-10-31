@@ -40,7 +40,7 @@ jobs:
         KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
         USER: ${{secrets.RANI_DEPLOYMENT_USER}}
       run: |
-        ssh $USER@HOST -T << EOF
+        ssh $USER@$HOST -T << EOF
         set -xe
         sudo systemctl stop irgsh-chief
         sudo systemctl stop irgsh-builder
