@@ -39,10 +39,11 @@ jobs:
         HOST: ${{secrets.RANI_HOSTNAME}}
         KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
         USER: ${{secrets.RANI_DEPLOYMENT_USER}}
+        SSH_ARGS: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
       run: |
         eval $(ssh-agent -s)
         ssh-add <(echo "$KEY")
-        ssh $USER@$HOST -T << EOF
+        ssh $SSH_ARGS $USER@$HOST -T << EOF
         set -xe
         sudo systemctl stop irgsh-chief
         sudo systemctl stop irgsh-builder
