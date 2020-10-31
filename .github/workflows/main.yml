@@ -63,5 +63,7 @@ jobs:
         EOF
 
     - name: Send notification to Telegram
+      env:
+        JIN_BOTOL_KEY: ${{secrets.JIN_BOTOL_KEY}}
       run: |
         curl -X POST -H 'Content-Type: application/json' -d '{"chat_id": "-214965156", "text": "Perkakas IRGSH yang baru telah berhasil dideploy ke rani.boi.", "disable_notification": true}' https://api.telegram.org/bot$JIN_BOTOL_KEY/sendMessage
