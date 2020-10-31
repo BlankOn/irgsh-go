@@ -40,6 +40,8 @@ jobs:
         KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
         USER: ${{secrets.RANI_DEPLOYMENT_USER}}
       run: |
+        eval $(ssh-agent -s)
+        ssh-add <(echo "$KEY")
         ssh $USER@$HOST -T << EOF
         set -xe
         sudo systemctl stop irgsh-chief
