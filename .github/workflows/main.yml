@@ -29,8 +29,7 @@ jobs:
         USER: ${{secrets.RANI_DEPLOYMENT_USER}}
         ARGS: -azvHP --exclude=/.git/
         SSH_ARGS: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
-        SOURCE: .
       run: |
         eval $(ssh-agent -s)
-        ssh-add <(echo $KEY)
-        rsync $ARGS -e $SSH_ARGS target/release.tar.gz $USER@$HOST:/home/deployment/release.tar.gz
+        ssh-add <(echo "$KEY")
+        rsync $ARGS -e $SSH_ARGS target/release.tar.gz $USER@$HOST:/home/$USER/release.tar.gz
