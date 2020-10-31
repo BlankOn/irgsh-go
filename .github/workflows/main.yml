@@ -6,7 +6,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v1
     - name: Run a multi-line script
@@ -21,3 +21,49 @@ jobs:
       with:
         name: release
         path: target/release.tar.gz
+
+    - name: Deploy to rani
+      env:
+        HOST: ${{secrets.RANI_HOSTNAME}}
+        KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
+        USER: ${{secrets.RANI_DEPLOYMENT_USER}}
+        ARGS: -azvHP --exclude=/.git/
+        SSH_ARGS: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
+      run: |
+        eval $(ssh-agent -s)
+        ssh-add <(echo "$KEY")
+        rsync $ARGS -e "ssh $SSH_ARGS" target/release.tar.gz $USER@$HOST:/home/$USER/irgsh/release.tar.gz
+
+    - name: Update binary irgsh in rani
+      env:
+        HOST: ${{secrets.RANI_HOSTNAME}}
+        KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
+        USER: ${{secrets.RANI_DEPLOYMENT_USER}}
+        SSH_ARGS: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
+      run: |
+        eval $(ssh-agent -s)
+        ssh-add <(echo "$KEY")
+        ssh $SSH_ARGS $USER@$HOST -T << EOF
+        set -xe
+        sudo systemctl stop irgsh-chief
+        sudo systemctl stop irgsh-builder
+        sudo systemctl stop irgsh-repo
+
+        pushd /home/deployment/irgsh/
+        tar -xvzf release.tar.gz
+        sudo cp -v irgsh-go/usr/bin/irgsh-* /usr/bin/
+        rm -rf release.tar.gz
+        rm -rf irgsh-go/
+        echo `date +%Y-%m-%d_%H:%M:%S` > latest-deployment.txt
+        popd
+
+        sudo systemctl start irgsh-chief
+        sudo systemctl start irgsh-builder
+        sudo systemctl start irgsh-repo
+        EOF
+
+    - name: Send notification to Telegram
+      env:
+        JIN_BOTOL_KEY: ${{secrets.JIN_BOTOL_KEY}}
+      run: |
+        curl -X POST -H 'Content-Type: application/json' -d '{"chat_id": "-214965156", "text": "Perkakas IRGSH yang baru telah berhasil dideploy ke rani.boi.", "disable_notification": true}' https://api.telegram.org/bot$JIN_BOTOL_KEY/sendMessage
