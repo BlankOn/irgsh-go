@@ -1,8 +1,9 @@
 name: master
 
-on: 
-  branches:
-    - "artifact-release"
+on:
+  push:
+    branches:
+      - "artifact-release"
 
 jobs:
   build:
