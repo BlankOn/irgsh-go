@@ -22,8 +22,3 @@ jobs:
         tar -xf go1.13.14.linux-amd64.tar.gz
         sudo mv go /usr/local
         make release
-
-    - uses: actions/upload-artifact@master
-      with:
-        name: release
-        path: target/release.tar.gz
