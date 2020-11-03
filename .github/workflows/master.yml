@@ -1,0 +1,59 @@
+name: master
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Run a multi-line script
+      run: |
+        sudo apt update && sudo apt install -y gpg pbuilder debootstrap devscripts python-apt reprepro make
+        curl -O https://storage.googleapis.com/golang/go1.13.14.linux-amd64.tar.gz
+        tar -xf go1.13.14.linux-amd64.tar.gz
+        sudo mv go /usr/local
+        make release
+        cp irgsh-go/usr/bin/irgsh-cli target/irgsh-cli
+
+    - uses: actions/upload-artifact@master
+      with:
+        name: release.tar.gz
+        path: target/
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+      with:
+        tag_name: ${{ github.branch }}-${{ github.hash }}-nightly
+        release_name: Release ${{ github.branch }}-${{ github.hash }}-nightly
+        body: |
+          Nightly release
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        asset_path: ./target/release.tar.gz
+        asset_name: release.tar.gz
+        asset_content_type: application/tar+gzip
+
+    - name: Deploy to rani
+      env:
+        HOST: ${{secrets.RANI_HOSTNAME}}
+        KEY: ${{secrets.JIN_IPRIT}}
+      run: |
+        curl --header "Content-Type: application/json" --request POST --data '{"name":"irgsh","token": "$KEY"}' https://$HOST
