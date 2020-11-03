@@ -21,8 +21,9 @@ type IrgshConfig struct {
 }
 
 type ChiefConfig struct {
-	Address string `json:"address" validate:"required"`
-	Workdir string `json:"workdir" validate:"required"`
+	Address  string `json:"address" validate:"required"`
+	Workdir  string `json:"workdir" validate:"required"`
+	GnupgDir string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
 }
 
 type BuilderConfig struct {
@@ -48,6 +49,7 @@ type RepoConfig struct {
 	UpstreamDistCodename       string `json:"upstream_dist_codename" validate:"required"`       // sid
 	UpstreamDistUrl            string `json:"upstream_dist_url" validate:"required"`            // http://kartolo.sby.datautama.net.id/debian
 	UpstreamDistComponents     string `json:"upstream_dist_components" validate:"required"`     // main non-free>restricted contrib>extras
+	GnupgDir                   string `json:"gnupg_dir" validate:"required"`                    // GNUPG dir path
 }
 
 // LoadConfig load irgsh config from file

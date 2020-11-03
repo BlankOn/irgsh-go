@@ -58,20 +58,22 @@ func Repo(payload string) (err error) {
 		return
 	}
 
+	gnupgDir := "GNUPGHOME=" + irgshConfig.Repo.GnupgDir
+	if irgshConfig.IsDev {
+		gnupgDir = ""
+	}
 	if raw["isExperimental"].(bool) {
 		// Ignore version conflict
 		cmdStr = fmt.Sprintf(`cd %s/%s/ && \
-		GNUPGHOME=/var/lib/irgsh/gnupg reprepro -v -v -v --nothingiserror remove %s \
+		%s reprepro -v -v -v --nothingiserror remove %s \
 		$(cat %s/artifacts/%s/*.dsc | grep 'Source:' | cut -d ' ' -f 2)`,
 			irgshConfig.Repo.Workdir,
 			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			gnupgDir,
 			irgshConfig.Repo.DistCodename+experimentalSuffix,
 			irgshConfig.Repo.Workdir,
 			raw["taskUUID"],
 		)
-		if irgshConfig.IsDev {
-			cmdStr = strings.ReplaceAll(cmdStr, "GNUPGHOME=/var/lib/irgsh/gnupg ", "")
-		}
 		_, err := systemutil.CmdExec(
 			cmdStr,
 			"This is experimental package, remove any existing package.",
@@ -84,16 +86,15 @@ func Repo(payload string) (err error) {
 	}
 
 	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
-	GNUPGHOME=/var/lib/irgsh/gnupg reprepro -v -v -v --nothingiserror includedeb %s %s/artifacts/%s/*.deb`,
+	%s reprepro -v -v -v --nothingiserror includedeb %s %s/artifacts/%s/*.deb`,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		gnupgDir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
 		raw["taskUUID"],
 	)
-	if irgshConfig.IsDev {
-		cmdStr = strings.ReplaceAll(cmdStr, "GNUPGHOME=/var/lib/irgsh/gnupg ", "")
-	}
+
 	_, err = systemutil.CmdExec(
 		cmdStr,
 		"Injecting the deb files from artifact to the repository",
@@ -102,6 +103,20 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		uploadLog(logPath, raw["taskUUID"].(string))
+		return
+	}
+
+	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+	)
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"Initialize the reprepro repository for the first time",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
 		return
 	}
 
@@ -378,6 +393,20 @@ func UpdateRepo() (err error) {
 		logPath,
 	)
 	_, err = systemutil.CmdExec(cmdStr, "Sync the repository against upstream repository", logPath)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+
+	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+	)
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"Initialize the reprepro repository for the first time",
+		logPath,
+	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		return
