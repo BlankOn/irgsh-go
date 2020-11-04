@@ -59,4 +59,4 @@ jobs:
         HOST: ${{secrets.RANI_HOSTNAME}}
         KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
       run: |
-        curl --header "Content-Type: application/json" --request POST --data '{"name":"irgsh","token": "$KEY"}' https://$HOST
+        curl --header "Content-Type: application/json" --request POST --data "{\"name\":\"irgsh\",\"token\": \""$KEY"\"}" https://$HOST
