@@ -1,0 +1,4 @@
+github:
+  prebuilds:
+    addBadge: true
+    addComment: true
