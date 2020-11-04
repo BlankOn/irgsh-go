@@ -8,7 +8,7 @@ This is still under heavy development, therefore you should not rely on this for
 
 Patches, suggestions and comments are welcome!
 
-## Install
+## Complete installation
 
 
 You need Docker, Redis and these packages,
@@ -21,6 +21,12 @@ Install all deps + released IRGSH with this command bellow,
 
 ```
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash
+```
+
+## Package maintainer installation
+
+```
+curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install-cli.sh | bash
 ```
 
 The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
