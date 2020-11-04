@@ -9,6 +9,9 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
     steps:
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
     - uses: actions/checkout@v1
     - name: Run a multi-line script
       run: |
@@ -16,6 +19,7 @@ jobs:
         curl -O https://storage.googleapis.com/golang/go1.13.14.linux-amd64.tar.gz
         tar -xf go1.13.14.linux-amd64.tar.gz
         sudo mv go /usr/local
+        echo ${{ steps.date.outputs.date }}-nightly-build > VERSION
         make release
         cp irgsh-go/usr/bin/irgsh-cli target/irgsh-cli
 
@@ -23,9 +27,6 @@ jobs:
       with:
         name: release.tar.gz
         path: target/
-    - name: Get current date
-      id: date
-      run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
