@@ -57,6 +57,6 @@ jobs:
     - name: Deployment
       env:
         HOST: ${{secrets.RANI_HOSTNAME}}
-        KEY: ${{secrets.JIN_IPRIT}}
+        KEY: ${{secrets.RANI_DEPLOYMENT_KEY}}
       run: |
         curl --header "Content-Type: application/json" --request POST --data '{"name":"irgsh","token": "$KEY"}' https://$HOST
