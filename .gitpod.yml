@@ -1,4 +1,5 @@
 github:
   prebuilds:
-    addBadge: true
     addComment: true
+image:
+  file: .gitpod.Dockerfile
