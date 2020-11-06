@@ -3,3 +3,8 @@ github:
     addComment: true
 image:
   file: .gitpod.Dockerfile
+ports:
+  - port: 8080
+    onOpen: open-preview
+  - port: 8081
+  - port: 8082
