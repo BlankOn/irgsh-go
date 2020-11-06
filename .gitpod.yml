@@ -1,6 +1,9 @@
 github:
   prebuilds:
     addComment: true
+tasks:
+  - command: |
+      export PATH="${PATH}:/usr/local/go/bin"
 image:
   file: .gitpod.Dockerfile
 ports:
