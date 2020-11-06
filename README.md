@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/BlankOn/irgsh-go.svg?branch=master)](https://travis-ci.org/BlankOn/irgsh-go) [![Go Report Card](https://goreportcard.com/badge/github.com/BlankOn/irgsh-go)](https://goreportcard.com/report/github.com/BlankOn/irgsh-go) [![codecov](https://codecov.io/gh/BlankOn/irgsh-go/branch/master/graph/badge.svg)](https://codecov.io/gh/BlankOn/irgsh-go)
 
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/BlankOn/irgsh-go)
+
 IRGSH (https://groups.google.com/d/msg/blankon-dev/yvceclWjSw8/HZUL_m6-BS4J, pronunciation: *irgis*) is an all-in-one tool to create and maintain Debian-derived GNU/Linux distribution: from packaging to repository, from ISO build to release management. This codebase is a complete rewrite of the old IRGSH components (https://github.com/BlankOn?q=irgsh).
 
 This is still under heavy development, therefore you should not rely on this for production since it still subject to breaking API changes.
