@@ -1,0 +1,13 @@
+github:
+  prebuilds:
+    addComment: true
+tasks:
+  - command: |
+      export PATH="${PATH}:/usr/local/go/bin"
+image:
+  file: .gitpod.Dockerfile
+ports:
+  - port: 8080
+    onOpen: open-preview
+  - port: 8081
+  - port: 8082
