@@ -4,6 +4,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	model "github.com/blankon/irgsh-go/internal/artifact/model"
 )
 
 func TestMain(m *testing.M) {
@@ -15,7 +17,6 @@ func TestMain(m *testing.M) {
 	file002.Close()
 
 	exitVal := m.Run()
-	// time.Sleep(2 * time.Second)
 
 	// clean up test directory
 	os.RemoveAll("./artifacts")
@@ -81,9 +82,9 @@ func TestFileRepo_GetArtifactList(t *testing.T) {
 			},
 			wantArtifactsList: ArtifactList{
 				TotalData: 2,
-				Artifacts: []ArtifactModel{
-					ArtifactModel{Name: "file001"},
-					ArtifactModel{Name: "file002"},
+				Artifacts: []model.Artifact{
+					{Name: "file001"},
+					{Name: "file002"},
 				},
 			},
 		},
@@ -100,6 +101,42 @@ func TestFileRepo_GetArtifactList(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotArtifactsList, tt.wantArtifactsList) {
 				t.Errorf("FileRepo.GetArtifactList() = %v, want %v", gotArtifactsList, tt.wantArtifactsList)
+			}
+		})
+	}
+}
+
+func TestFileRepo_generateSubmissionPath(t *testing.T) {
+	type fields struct {
+		Workdir string
+	}
+	type args struct {
+		taskUUID string
+	}
+	tests := []struct {
+		name     string
+		fields   fields
+		args     args
+		wantPath string
+	}{
+		{
+			name:     "empty",
+			wantPath: "/submissions/",
+		},
+		{
+			name:     "complete",
+			fields:   fields{Workdir: "/home/workingdir"},
+			args:     args{taskUUID: "randomnumberhere"},
+			wantPath: "/home/workingdir/submissions/randomnumberhere",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			A := &FileRepo{
+				Workdir: tt.fields.Workdir,
+			}
+			if gotPath := A.generateSubmissionPath(tt.args.taskUUID); gotPath != tt.wantPath {
+				t.Errorf("FileRepo.generateSubmissionPath() = %v, want %v", gotPath, tt.wantPath)
 			}
 		})
 	}

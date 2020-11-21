@@ -7,10 +7,6 @@ import (
 	"sync"
 )
 
-var (
-	lockRepoMockGetArtifactList sync.RWMutex
-)
-
 // Ensure, that RepoMock does implement Repo.
 // If this is not the case, regenerate this file with moq.
 var _ Repo = &RepoMock{}
@@ -21,8 +17,17 @@ var _ Repo = &RepoMock{}
 //
 //         // make and configure a mocked Repo
 //         mockedRepo := &RepoMock{
+//             ExtractSubmittedTarballFunc: func(taskUUID string, deleteTarball bool) error {
+// 	               panic("mock out the ExtractSubmittedTarball method")
+//             },
 //             GetArtifactListFunc: func(pageNum int64, rows int64) (ArtifactList, error) {
 // 	               panic("mock out the GetArtifactList method")
+//             },
+//             PutTarballToFileFunc: func(tarball *string, taskUUID string) error {
+// 	               panic("mock out the PutTarballToFile method")
+//             },
+//             VerifyArtifactFunc: func(taskUUID string) (bool, error) {
+// 	               panic("mock out the VerifyArtifact method")
 //             },
 //         }
 //
@@ -31,11 +36,27 @@ var _ Repo = &RepoMock{}
 //
 //     }
 type RepoMock struct {
+	// ExtractSubmittedTarballFunc mocks the ExtractSubmittedTarball method.
+	ExtractSubmittedTarballFunc func(taskUUID string, deleteTarball bool) error
+
 	// GetArtifactListFunc mocks the GetArtifactList method.
 	GetArtifactListFunc func(pageNum int64, rows int64) (ArtifactList, error)
 
+	// PutTarballToFileFunc mocks the PutTarballToFile method.
+	PutTarballToFileFunc func(tarball *string, taskUUID string) error
+
+	// VerifyArtifactFunc mocks the VerifyArtifact method.
+	VerifyArtifactFunc func(taskUUID string) (bool, error)
+
 	// calls tracks calls to the methods.
 	calls struct {
+		// ExtractSubmittedTarball holds details about calls to the ExtractSubmittedTarball method.
+		ExtractSubmittedTarball []struct {
+			// TaskUUID is the taskUUID argument value.
+			TaskUUID string
+			// DeleteTarball is the deleteTarball argument value.
+			DeleteTarball bool
+		}
 		// GetArtifactList holds details about calls to the GetArtifactList method.
 		GetArtifactList []struct {
 			// PageNum is the pageNum argument value.
@@ -43,7 +64,58 @@ type RepoMock struct {
 			// Rows is the rows argument value.
 			Rows int64
 		}
+		// PutTarballToFile holds details about calls to the PutTarballToFile method.
+		PutTarballToFile []struct {
+			// Tarball is the tarball argument value.
+			Tarball *string
+			// TaskUUID is the taskUUID argument value.
+			TaskUUID string
+		}
+		// VerifyArtifact holds details about calls to the VerifyArtifact method.
+		VerifyArtifact []struct {
+			// TaskUUID is the taskUUID argument value.
+			TaskUUID string
+		}
 	}
+	lockExtractSubmittedTarball sync.RWMutex
+	lockGetArtifactList         sync.RWMutex
+	lockPutTarballToFile        sync.RWMutex
+	lockVerifyArtifact          sync.RWMutex
+}
+
+// ExtractSubmittedTarball calls ExtractSubmittedTarballFunc.
+func (mock *RepoMock) ExtractSubmittedTarball(taskUUID string, deleteTarball bool) error {
+	if mock.ExtractSubmittedTarballFunc == nil {
+		panic("RepoMock.ExtractSubmittedTarballFunc: method is nil but Repo.ExtractSubmittedTarball was just called")
+	}
+	callInfo := struct {
+		TaskUUID      string
+		DeleteTarball bool
+	}{
+		TaskUUID:      taskUUID,
+		DeleteTarball: deleteTarball,
+	}
+	mock.lockExtractSubmittedTarball.Lock()
+	mock.calls.ExtractSubmittedTarball = append(mock.calls.ExtractSubmittedTarball, callInfo)
+	mock.lockExtractSubmittedTarball.Unlock()
+	return mock.ExtractSubmittedTarballFunc(taskUUID, deleteTarball)
+}
+
+// ExtractSubmittedTarballCalls gets all the calls that were made to ExtractSubmittedTarball.
+// Check the length with:
+//     len(mockedRepo.ExtractSubmittedTarballCalls())
+func (mock *RepoMock) ExtractSubmittedTarballCalls() []struct {
+	TaskUUID      string
+	DeleteTarball bool
+} {
+	var calls []struct {
+		TaskUUID      string
+		DeleteTarball bool
+	}
+	mock.lockExtractSubmittedTarball.RLock()
+	calls = mock.calls.ExtractSubmittedTarball
+	mock.lockExtractSubmittedTarball.RUnlock()
+	return calls
 }
 
 // GetArtifactList calls GetArtifactListFunc.
@@ -58,9 +130,9 @@ func (mock *RepoMock) GetArtifactList(pageNum int64, rows int64) (ArtifactList, 
 		PageNum: pageNum,
 		Rows:    rows,
 	}
-	lockRepoMockGetArtifactList.Lock()
+	mock.lockGetArtifactList.Lock()
 	mock.calls.GetArtifactList = append(mock.calls.GetArtifactList, callInfo)
-	lockRepoMockGetArtifactList.Unlock()
+	mock.lockGetArtifactList.Unlock()
 	return mock.GetArtifactListFunc(pageNum, rows)
 }
 
@@ -75,8 +147,74 @@ func (mock *RepoMock) GetArtifactListCalls() []struct {
 		PageNum int64
 		Rows    int64
 	}
-	lockRepoMockGetArtifactList.RLock()
+	mock.lockGetArtifactList.RLock()
 	calls = mock.calls.GetArtifactList
-	lockRepoMockGetArtifactList.RUnlock()
+	mock.lockGetArtifactList.RUnlock()
+	return calls
+}
+
+// PutTarballToFile calls PutTarballToFileFunc.
+func (mock *RepoMock) PutTarballToFile(tarball *string, taskUUID string) error {
+	if mock.PutTarballToFileFunc == nil {
+		panic("RepoMock.PutTarballToFileFunc: method is nil but Repo.PutTarballToFile was just called")
+	}
+	callInfo := struct {
+		Tarball  *string
+		TaskUUID string
+	}{
+		Tarball:  tarball,
+		TaskUUID: taskUUID,
+	}
+	mock.lockPutTarballToFile.Lock()
+	mock.calls.PutTarballToFile = append(mock.calls.PutTarballToFile, callInfo)
+	mock.lockPutTarballToFile.Unlock()
+	return mock.PutTarballToFileFunc(tarball, taskUUID)
+}
+
+// PutTarballToFileCalls gets all the calls that were made to PutTarballToFile.
+// Check the length with:
+//     len(mockedRepo.PutTarballToFileCalls())
+func (mock *RepoMock) PutTarballToFileCalls() []struct {
+	Tarball  *string
+	TaskUUID string
+} {
+	var calls []struct {
+		Tarball  *string
+		TaskUUID string
+	}
+	mock.lockPutTarballToFile.RLock()
+	calls = mock.calls.PutTarballToFile
+	mock.lockPutTarballToFile.RUnlock()
+	return calls
+}
+
+// VerifyArtifact calls VerifyArtifactFunc.
+func (mock *RepoMock) VerifyArtifact(taskUUID string) (bool, error) {
+	if mock.VerifyArtifactFunc == nil {
+		panic("RepoMock.VerifyArtifactFunc: method is nil but Repo.VerifyArtifact was just called")
+	}
+	callInfo := struct {
+		TaskUUID string
+	}{
+		TaskUUID: taskUUID,
+	}
+	mock.lockVerifyArtifact.Lock()
+	mock.calls.VerifyArtifact = append(mock.calls.VerifyArtifact, callInfo)
+	mock.lockVerifyArtifact.Unlock()
+	return mock.VerifyArtifactFunc(taskUUID)
+}
+
+// VerifyArtifactCalls gets all the calls that were made to VerifyArtifact.
+// Check the length with:
+//     len(mockedRepo.VerifyArtifactCalls())
+func (mock *RepoMock) VerifyArtifactCalls() []struct {
+	TaskUUID string
+} {
+	var calls []struct {
+		TaskUUID string
+	}
+	mock.lockVerifyArtifact.RLock()
+	calls = mock.calls.VerifyArtifact
+	mock.lockVerifyArtifact.RUnlock()
 	return calls
 }
