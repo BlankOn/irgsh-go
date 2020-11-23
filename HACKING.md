@@ -37,7 +37,7 @@ In dev environment, this single key will acts as both repository signing key and
 You need to build then initialize the CLI client to point out to the chief and your signing key (see `GPG Key` section).
 
 - `make client`
-- `irgsh-cli config --chief http://localhost:8080 --key 41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F`
+- `./bin/irgsh-cli config --chief http://localhost:8080 --key 41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F`
 
 #### Builder
 
@@ -74,20 +74,6 @@ You may be asked for your GPG key passphrase. You'll see the package preprared i
 
 If all is well, you can see the result by opening `http://localhost:8082/experimental/` on your web browser. At this point, you may start to hack.
 
-
-## Endpoints
-
-The `chief` will be live on port 8080.
-
-- `/api/v1/submit` - POST
-- `/api/v1/status` - GET
-
-
-Submit new build pipeline,
-
-```
-curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"https://github.com/BlankOn/bromo-theme.git","packageUrl":"https://github.com/blankon-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
-```
 
 Check the status of a pipeline
 
