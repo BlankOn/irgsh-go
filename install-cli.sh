@@ -12,7 +12,7 @@ TEMP_PATH=/tmp
 DEV_INSTALL=0
 
 apt update
-apt install -y gnupg jq
+apt install -y gnupg build-essential devscripts debhelper jq 
 
 if [ -f ./target/release.tar.gz ]; then
 	# For development/testing purpose

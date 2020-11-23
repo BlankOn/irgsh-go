@@ -78,17 +78,19 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning source files
 	sourceURL := raw["sourceUrl"].(string)
-	_, err = git.PlainClone(
-		irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/source",
-		false,
-		&git.CloneOptions{
-			URL:      sourceURL,
-			Progress: os.Stdout,
-		},
-	)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
+	if len(sourceURL) > 0 {
+		_, err = git.PlainClone(
+			irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/source",
+			false,
+			&git.CloneOptions{
+				URL:      sourceURL,
+				Progress: os.Stdout,
+			},
+		)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
 	}
 
 	// Cloning Debian package files
@@ -166,17 +168,20 @@ func BuildPackage(payload string) (next string, err error) {
 	logPath := buildPath + "/build.log"
 
 	// Copy the source files
-	cmdStr := "cp -vR " + buildPath
-	cmdStr += "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
-	cmdStr += "/package/"
-	_, err = systemutil.CmdExec(
-		cmdStr,
-		"",
-		logPath,
-	)
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return
+	sourceURL := raw["sourceUrl"].(string)
+	if len(sourceURL) > 0 {
+		cmdStr := "cp -vR " + buildPath
+		cmdStr += "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+		cmdStr += "/package/"
+		_, err = systemutil.CmdExec(
+			cmdStr,
+			"",
+			logPath,
+		)
+		if err != nil {
+			log.Printf("error: %v\n", err)
+			return
+		}
 	}
 
 	// Cleanup pbuilder cache result
@@ -187,7 +192,7 @@ func BuildPackage(payload string) (next string, err error) {
 	)
 
 	// Building the package
-	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr := "docker run -v " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += ":/tmp/build --privileged=true -i pbocker bash -c /build.sh"
 	fmt.Println(cmdStr)
 	_, err = systemutil.CmdExec(
