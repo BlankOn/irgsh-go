@@ -63,7 +63,8 @@ func InitBase() (err error) {
 		return
 	}
 	cmdStr = "pbuilder create --debootstrapopts --variant=buildd"
-	if strings.Contains(irgshConfig.Repo.UpstreamDistUrl, "debian") && strings.Contains(distribution, "Ubuntu") {
+	if strings.Contains(irgshConfig.Repo.UpstreamDistUrl, "debian") && (strings.Contains(distribution, "Ubuntu") ||
+		strings.Contains(distribution, "Pop")) {
 		_, err = systemutil.CmdExec(
 			"apt-get update && apt-get -y install debian-archive-keyring",
 			"Creating pbuilder base.tgz",

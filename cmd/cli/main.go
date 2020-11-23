@@ -149,13 +149,11 @@ func main() {
 				if err != nil {
 					os.Exit(1)
 				}
-				if len(sourceUrl) < 1 {
-					err = errors.New("--source should not be empty")
-					return
-				}
-				_, err = url.ParseRequestURI(sourceUrl)
-				if err != nil {
-					return
+				if len(sourceUrl) > 0 {
+					_, err = url.ParseRequestURI(sourceUrl)
+					if err != nil {
+						return
+					}
 				}
 
 				if len(packageUrl) < 1 {
@@ -249,8 +247,10 @@ func main() {
 					isExperimentalStr = "true"
 				}
 				jsonStr := "{ "
-				jsonStr += "\"sourceUrl\":\"" + sourceUrl + "\", "
 				jsonStr += "\"packageUrl\":\"" + packageUrl + "\", "
+				if len(sourceUrl) > 0 { // source URL is optional
+					jsonStr += "\"sourceUrl\":\"" + sourceUrl + "\", "
+				}
 				jsonStr += "\"tarball\": \"" + tarballB64Trimmed + "\", "
 				jsonStr += "\"isExperimental\": " + isExperimentalStr + " "
 				jsonStr += "}"
