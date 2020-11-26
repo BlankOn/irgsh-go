@@ -170,7 +170,7 @@ func BuildPackage(payload string) (next string, err error) {
 	// Copy the source files
 	sourceURL := raw["sourceUrl"].(string)
 	if len(sourceURL) > 0 {
-		cmdStr := "cp -vR " + buildPath
+		cmdStr := "cp -R " + buildPath
 		cmdStr += "/source/* " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 		cmdStr += "/package/"
 		_, err = systemutil.CmdExec(

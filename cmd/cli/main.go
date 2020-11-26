@@ -200,8 +200,22 @@ func main() {
 					return
 				}
 
-				// Signing DSC
+				// Getting package name
+				packageName := ""
 				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/package && cat debian/control | grep 'Source:' | head -n 1 | cut -d ' ' -f 2"
+				fmt.Println(cmdStr)
+				output, err := exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package name.")
+					return
+				}
+
+				packageName = strings.TrimSuffix(string(output), "\n")
+
+				// Signing DSC
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/package && debuild -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
 				cmd := exec.Command("bash", "-c", cmdStr)
@@ -251,6 +265,8 @@ func main() {
 				if len(sourceUrl) > 0 { // source URL is optional
 					jsonStr += "\"sourceUrl\":\"" + sourceUrl + "\", "
 				}
+				jsonStr += "\"maintainer\": \"" + maintainerSigningKey + "\", "
+				jsonStr += "\"packageName\": \"" + packageName + "\", "
 				jsonStr += "\"tarball\": \"" + tarballB64Trimmed + "\", "
 				jsonStr += "\"isExperimental\": " + isExperimentalStr + " "
 				jsonStr += "}"

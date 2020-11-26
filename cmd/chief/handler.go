@@ -29,7 +29,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	submission.Timestamp = time.Now()
-	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String()
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + submission.Maintainer + "_" + submission.PackageName
 
 	// Verifying the signature against current gpg keyring
 	// TODO generic wrapper for auth check
