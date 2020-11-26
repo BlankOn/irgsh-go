@@ -181,8 +181,9 @@ func main() {
 					}
 					isExperimental = false
 				}
-
-				fmt.Println("sourceUrl: " + sourceUrl)
+				if len(sourceUrl) > 0 {
+					fmt.Println("sourceUrl: " + sourceUrl)
+				}
 				fmt.Println("packageUrl: " + packageUrl)
 
 				tmpID := uuid.New().String()
