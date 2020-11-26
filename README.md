@@ -143,7 +143,27 @@ You can. Just make sure these workers pointed out to the same Redis server (see 
 
 To build a package using `pbuilder`, `sudo` or root privilege is required but it's not okay to rely on root privilege for repetitive tasks. To get rid of this, we containerized the build process.
 
+## Troubleshooting notes
+
+###
+
 ## Todos
+
+### No secret key
+
+The error message may be like this,
+```
+gpg: skipped "41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F": No secret key
+gpg: /tmp/debsign.QNCSozgK/blankon-keyring_2016.09.04-4.2.dsc: clear-sign failed: No secret key
+debsign: gpg error occurred!  Aborting....
+debuild: fatal error at line 1112:
+running debsign failed
+```
+
+It may caused either by:
+
+- Your defined key for signing is not available on your GPG keystore. Please redefine it with `rgsh-cli config --chief https://irgsh.blankonlinux.or.id --key YOURKEYIDENTITY`
+- The latest maintainer information that written in the debian/changelog does not matched with the one on your GPG keystore. Please adjust the changelog file.
 
 ### CLI
 
