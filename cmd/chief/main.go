@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -35,6 +36,8 @@ type Submission struct {
 	PackageURL     string    `json:"packageUrl"`
 	Tarball        string    `json:"tarball"`
 	IsExperimental bool      `json:"isExperimental"`
+	Maintainer     string    `json:"maintainer"`
+	PackageName    string    `json:"packageName"`
 }
 
 type ArtifactsPayloadResponse struct {
@@ -108,6 +111,8 @@ func serve() {
 	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
 	http.Handle("/logs/", http.StripPrefix("/logs/", logFs))
 
+	http.HandleFunc("/maintainers", MaintainersHandler)
+
 	port := os.Getenv("PORT")
 	if len(port) < 1 {
 		port = "8080"
@@ -117,5 +122,39 @@ func serve() {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "irgsh-chief "+app.Version)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	resp := "<div style=\"font-family:monospace !important\">"
+	resp += "&nbsp;_&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_<br/>"
+	resp += "(_)_ __ __ _ ___| |_<br/>"
+	resp += "| | '__/ _` / __| '_ \\<br/>"
+	resp += "| | |&nbsp;| (_| \\__ \\ | | |<br/>"
+	resp += "|_|_|&nbsp;&nbsp;\\__, |___/_| |_|<br/>"
+	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|___/<br/>"
+	resp += "irgsh-chief " + app.Version
+	resp += "<br/>"
+	resp += "<br/><a href=\"/maintainers\">maintainers</a>&nbsp;|&nbsp;"
+	resp += "<a href=\"/logs\">logs</a>&nbsp;|&nbsp;"
+	resp += "<a href=\"/artifacts\">artifacts</a>&nbsp;|&nbsp;"
+	resp += "<a target=\"_blank\" href=\"https://github.com/blankon/irgsh-go\">about</a>"
+	resp += "</div>"
+	fmt.Fprintf(w, resp)
+}
+
+func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
+	gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
+	if irgshConfig.IsDev {
+		gnupgDir = ""
+	}
+
+	cmdStr := gnupgDir + " gpg --list-key | tail -n +2"
+
+	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
+	fmt.Fprintf(w, string(output))
 }

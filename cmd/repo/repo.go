@@ -158,7 +158,7 @@ func InitRepo() (err error) {
 		dir, _ := os.Getwd()
 		repoTemplatePath = dir + "/../utils/reprepro-template"
 	}
-	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR %s %s/%s",
+	cmdStr := fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -R %s %s/%s",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
@@ -268,7 +268,7 @@ func InitRepo() (err error) {
 	fmt.Println("##### Initializing the experimental repository for " + irgshConfig.Repo.DistCodename)
 	// With -experimental suffix
 
-	cmdStr = fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -vR %s %s/%s",
+	cmdStr = fmt.Sprintf("mkdir -p %s && rm -rf %s/%s; cp -R %s %s/%s",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+"-experimental",
