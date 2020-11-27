@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -118,26 +116,22 @@ func BuildPreparation(payload string) (next string, err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	tarballB64 := raw["tarball"].(string)
-
-	buff, err := base64.StdEncoding.DecodeString(tarballB64)
-	if err != nil {
-		log.Printf("error: %v\n", err)
-		return
-	}
-
-	err = ioutil.WriteFile(
-		irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/debuild.tar.gz",
-		buff,
-		07440,
+	target := irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string) + "/debuild.tar.gz"
+	// Downloading tarball from chief
+	cmdStr := "curl -v -o " + target + " "
+	cmdStr += irgshConfig.Chief.Address + "/submissions/" + raw["taskUUID"].(string) + ".tar.gz"
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"",
+		"",
 	)
 	if err != nil {
 		log.Printf("error: %v\n", err)
 		return
 	}
 
-	// Extract signed DSC
-	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	// Extract the signed dsc
+	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
 	cmdStr += " && tar -xvf debuild.tar.gz && rm -f debuild.tar.gz"
 	_, err = systemutil.CmdExec(
 		cmdStr,

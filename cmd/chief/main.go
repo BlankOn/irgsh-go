@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -30,14 +30,16 @@ var (
 )
 
 type Submission struct {
-	TaskUUID       string    `json:"taskUUID"`
-	Timestamp      time.Time `json:"timestamp"`
-	SourceURL      string    `json:"sourceUrl"`
-	PackageURL     string    `json:"packageUrl"`
-	Tarball        string    `json:"tarball"`
-	IsExperimental bool      `json:"isExperimental"`
-	Maintainer     string    `json:"maintainer"`
-	PackageName    string    `json:"packageName"`
+	TaskUUID              string    `json:"taskUUID"`
+	Timestamp             time.Time `json:"timestamp"`
+	PackageName           string    `json:"packageName"`
+	PackageURL            string    `json:"packageUrl"`
+	SourceURL             string    `json:"sourceUrl"`
+	Maintainer            string    `json:"maintainer"`
+	MaintainerFingerprint string    `json:"maintainerFingerprint"`
+	Component             string    `json:"component"`
+	IsExperimental        bool      `json:"isExperimental"`
+	Tarball               string    `json:"tarball"`
 }
 
 type ArtifactsPayloadResponse struct {
@@ -98,20 +100,26 @@ func main() {
 
 func serve() {
 	http.HandleFunc("/", indexHandler)
+
+	// APIs
 	http.HandleFunc("/api/v1/artifacts", artifactHTTPEndpoint.GetArtifactListHandler)
 	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
 	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
+	http.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())
 	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
+	http.HandleFunc("/api/v1/version", VersionHandler)
 
+	// Pages
+	http.HandleFunc("/maintainers", MaintainersHandler)
+	// Static file routes
 	artifactFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
 	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))
-
 	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
 	http.Handle("/logs/", http.StripPrefix("/logs/", logFs))
-
-	http.HandleFunc("/maintainers", MaintainersHandler)
+	submissionFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/submissions"))
+	http.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
 	port := os.Getenv("PORT")
 	if len(port) < 1 {
@@ -121,40 +129,23 @@ func serve() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	resp := "<div style=\"font-family:monospace !important\">"
-	resp += "&nbsp;_&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_<br/>"
-	resp += "(_)_ __ __ _ ___| |_<br/>"
-	resp += "| | '__/ _` / __| '_ \\<br/>"
-	resp += "| | |&nbsp;| (_| \\__ \\ | | |<br/>"
-	resp += "|_|_|&nbsp;&nbsp;\\__, |___/_| |_|<br/>"
-	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|___/<br/>"
-	resp += "irgsh-chief " + app.Version
-	resp += "<br/>"
-	resp += "<br/><a href=\"/maintainers\">maintainers</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/logs\">logs</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/artifacts\">artifacts</a>&nbsp;|&nbsp;"
-	resp += "<a target=\"_blank\" href=\"https://github.com/blankon/irgsh-go\">about</a>"
-	resp += "</div>"
-	fmt.Fprintf(w, resp)
-}
-
-func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
-	gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
-	if irgshConfig.IsDev {
-		gnupgDir = ""
-	}
-
-	cmdStr := gnupgDir + " gpg --list-key | tail -n +2"
-
-	output, err := exec.Command("bash", "-c", cmdStr).Output()
+func Move(src, dst string) error {
+	in, err := os.Open(src)
 	if err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
-		return
+		return err
 	}
-	fmt.Fprintf(w, string(output))
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	in.Close()
+	out.Close()
+
+	return os.Remove(src)
 }
