@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -31,15 +30,16 @@ var (
 )
 
 type Submission struct {
-	TaskUUID       string    `json:"taskUUID"`
-	Timestamp      time.Time `json:"timestamp"`
-	PackageName    string    `json:"packageName"`
-	PackageURL     string    `json:"packageUrl"`
-	SourceURL      string    `json:"sourceUrl"`
-	Maintainer     string    `json:"maintainer"`
-	Component      string    `json:"component"`
-	IsExperimental bool      `json:"isExperimental"`
-	Tarball        string    `json:"tarball"`
+	TaskUUID              string    `json:"taskUUID"`
+	Timestamp             time.Time `json:"timestamp"`
+	PackageName           string    `json:"packageName"`
+	PackageURL            string    `json:"packageUrl"`
+	SourceURL             string    `json:"sourceUrl"`
+	Maintainer            string    `json:"maintainer"`
+	MaintainerFingerprint string    `json:"maintainerFingerprint"`
+	Component             string    `json:"component"`
+	IsExperimental        bool      `json:"isExperimental"`
+	Tarball               string    `json:"tarball"`
 }
 
 type ArtifactsPayloadResponse struct {
@@ -129,64 +129,23 @@ func serve() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	resp := "<div style=\"font-family:monospace !important\">"
-	resp += "&nbsp;_&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_<br/>"
-	resp += "(_)_ __ __ _ ___| |_<br/>"
-	resp += "| | '__/ _` / __| '_ \\<br/>"
-	resp += "| | |&nbsp;| (_| \\__ \\ | | |<br/>"
-	resp += "|_|_|&nbsp;&nbsp;\\__, |___/_| |_|<br/>"
-	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|___/<br/>"
-	resp += "irgsh-chief " + app.Version
-	resp += "<br/>"
-	resp += "<br/><a href=\"/maintainers\">maintainers</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/logs\">logs</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/artifacts\">artifacts</a>&nbsp;|&nbsp;"
-	resp += "<a target=\"_blank\" href=\"https://github.com/blankon/irgsh-go\">about</a>"
-	resp += "</div>"
-	fmt.Fprintf(w, resp)
-}
-
-func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
-	gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
-	if irgshConfig.IsDev {
-		gnupgDir = ""
-	}
-
-	cmdStr := gnupgDir + " gpg --list-key | tail -n +2"
-
-	output, err := exec.Command("bash", "-c", cmdStr).Output()
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
-		return
-	}
-	fmt.Fprintf(w, string(output))
-}
-
-func VersionHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "{\"version\":\""+app.Version+"\"}")
-}
-
-func Copy(src, dst string) error {
+func Move(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	_, err = io.Copy(out, in)
 	if err != nil {
 		return err
 	}
-	return out.Close()
+	in.Close()
+	out.Close()
+
+	return os.Remove(src)
 }

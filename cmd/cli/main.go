@@ -21,13 +21,14 @@ import (
 )
 
 type Submission struct {
-	PackageName    string `json:"packageName"`
-	PackageURL     string `json:"packageUrl"`
-	SourceURL      string `json:"sourceUrl"`
-	Maintainer     string `json:"maintainer"`
-	Component      string `json:"component"`
-	IsExperimental bool   `json:"isExperimental"`
-	Tarball        string `json:"tarball"`
+	PackageName           string `json:"packageName"`
+	PackageURL            string `json:"packageUrl"`
+	SourceURL             string `json:"sourceUrl"`
+	Maintainer            string `json:"maintainer"`
+	MaintainerFingerprint string `json:"maintainerFingerprint"`
+	Component             string `json:"component"`
+	IsExperimental        bool   `json:"isExperimental"`
+	Tarball               string `json:"tarball"`
 }
 
 var (
@@ -259,8 +260,19 @@ func main() {
 					log.Println("Failed to get package name.")
 					return
 				}
-
 				packageName = strings.TrimSuffix(string(output), "\n")
+
+				// Getting maintainer identity
+				maintainerIdentity := ""
+				cmdStr = "gpg -K | grep ultimate | cut -d ']' -f 2"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get maintainer identity.")
+					return
+				}
+				maintainerIdentity = strings.TrimSuffix(string(output), "\n")
 
 				// Signing DSC
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
@@ -294,12 +306,13 @@ func main() {
 				}
 
 				submission := Submission{
-					PackageName:    packageName,
-					PackageURL:     packageUrl,
-					SourceURL:      sourceUrl,
-					Maintainer:     maintainerSigningKey,
-					Component:      component,
-					IsExperimental: isExperimental,
+					PackageName:           packageName,
+					PackageURL:            packageUrl,
+					SourceURL:             sourceUrl,
+					Maintainer:            maintainerIdentity,
+					MaintainerFingerprint: maintainerSigningKey,
+					Component:             component,
+					IsExperimental:        isExperimental,
 				}
 				jsonByte, _ := json.Marshal(submission)
 

@@ -17,6 +17,27 @@ import (
 	"github.com/google/uuid"
 )
 
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	resp := "<div style=\"font-family:monospace !important\">"
+	resp += "&nbsp;_&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_<br/>"
+	resp += "(_)_ __ __ _ ___| |_<br/>"
+	resp += "| | '__/ _` / __| '_ \\<br/>"
+	resp += "| | |&nbsp;| (_| \\__ \\ | | |<br/>"
+	resp += "|_|_|&nbsp;&nbsp;\\__, |___/_| |_|<br/>"
+	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|___/<br/>"
+	resp += "irgsh-chief " + app.Version
+	resp += "<br/>"
+	resp += "<br/><a href=\"/maintainers\">maintainers</a>&nbsp;|&nbsp;"
+	resp += "<a href=\"/submissions\">submissions</a>&nbsp;|&nbsp;"
+	resp += "<a href=\"/logs\">logs</a>&nbsp;|&nbsp;"
+	resp += "<a href=\"/artifacts\">artifacts</a>&nbsp;|&nbsp;"
+	resp += "<a target=\"_blank\" href=\"https://github.com/blankon/irgsh-go\">about</a>"
+	resp += "</div>"
+	fmt.Fprintf(w, resp)
+}
+
 func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	submission := Submission{}
 	decoder := json.NewDecoder(r.Body)
@@ -28,22 +49,9 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	submission.Timestamp = time.Now()
-	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + submission.Maintainer + "_" + submission.PackageName
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + submission.MaintainerFingerprint + "_" + submission.PackageName
 
 	// Verifying the signature against current gpg keyring
-	/*
-		// TODO generic wrapper for auth check
-		tarballB64 := submission.Tarball
-
-		buff, err := base64.StdEncoding.DecodeString(tarballB64)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "500")
-			return
-		}
-	*/
-
 	cmdStr := "mkdir -p " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID
 	fmt.Println(cmdStr)
 	cmd := exec.Command("bash", "-c", cmdStr)
@@ -56,8 +64,8 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := irgshConfig.Chief.Workdir + "/submissions/" + submission.Tarball + ".tar.gz"
-	path := irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + "/" + submission.TaskUUID + ".tar.gz"
-	err = Copy(src, path)
+	path := irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + ".tar.gz"
+	err = Move(src, path)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -65,10 +73,20 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID
-	cmdStr += " && tar -xvf " + submission.TaskUUID + ".tar.gz && rm -f " + submission.TaskUUID + ".tar.gz"
+	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/ "
+	cmdStr += " && tar -xvf " + submission.TaskUUID + ".tar.gz -C " + submission.TaskUUID
 	fmt.Println(cmdStr)
 	err = exec.Command("bash", "-c", cmdStr).Run()
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
+
+	src = irgshConfig.Chief.Workdir + "/submissions/" + submission.Tarball + ".token"
+	path = irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + ".sig.txt"
+	err = Move(src, path)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -425,4 +443,26 @@ func submissionUploadHandler() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "{\"id\":\""+id+"\"}")
 	})
+}
+
+func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
+	gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
+	if irgshConfig.IsDev {
+		gnupgDir = ""
+	}
+
+	cmdStr := gnupgDir + " gpg --list-key | tail -n +2"
+
+	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
+	fmt.Fprintf(w, string(output))
+}
+
+func VersionHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "{\"version\":\""+app.Version+"\"}")
 }
