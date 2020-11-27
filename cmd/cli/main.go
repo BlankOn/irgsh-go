@@ -293,14 +293,6 @@ func main() {
 					return err
 				}
 
-				// Encoding
-				cmdStr = "cd " + homeDir + "/.irgsh/tmp && base64 -w0 " + tmpID + ".tar.gz"
-				tarballB64, err := exec.Command("bash", "-c", cmdStr).Output()
-				if err != nil {
-					return
-				}
-				tarballB64Trimmed := strings.TrimSuffix(string(tarballB64), "\n")
-
 				submission := Submission{
 					PackageName:    packageName,
 					PackageURL:     packageUrl,
@@ -308,9 +300,47 @@ func main() {
 					Maintainer:     maintainerSigningKey,
 					Component:      component,
 					IsExperimental: isExperimental,
-					Tarball:        tarballB64Trimmed,
 				}
 				jsonByte, _ := json.Marshal(submission)
+
+				// Signing a token
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/ && echo '" + string(jsonByte) + "' > token && gpg --clearsign --output token.sig --sign token"
+				fmt.Println(cmdStr)
+				cmd = exec.Command("bash", "-c", cmdStr)
+				// Make it interactive
+				cmd.Stdout = os.Stdout
+				cmd.Stdin = os.Stdin
+				cmd.Stderr = os.Stderr
+				cmd.Run()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to sign the auth token using " + maintainerSigningKey + ". Please check your GPG key list.")
+					return
+				}
+
+				// Upload
+				cmdStr = "curl -v -F 'blob=@" + homeDir + "/.irgsh/tmp/" + tmpID + ".tar.gz" + "' "
+				cmdStr += " -F 'token=@" + homeDir + "/.irgsh/tmp/" + tmpID + "/token.sig" + "'"
+				cmdStr += " '" + chiefAddress + "/api/v1/submission-upload'"
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println(output)
+					return err
+				}
+				blobStr := strings.TrimSuffix(string(output), "\n")
+				type Blob struct {
+					ID string `json:"id"`
+				}
+				blob := Blob{}
+				err = json.Unmarshal([]byte(blobStr), &blob)
+				if err != nil {
+					return err
+				}
+
+				submission.Tarball = blob.ID
+				jsonByte, _ = json.Marshal(submission)
+
 				result, err = req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(string(jsonByte)))
 				if err != nil {
 					return

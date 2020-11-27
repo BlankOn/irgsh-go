@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -32,16 +31,18 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + submission.Maintainer + "_" + submission.PackageName
 
 	// Verifying the signature against current gpg keyring
-	// TODO generic wrapper for auth check
-	tarballB64 := submission.Tarball
+	/*
+		// TODO generic wrapper for auth check
+		tarballB64 := submission.Tarball
 
-	buff, err := base64.StdEncoding.DecodeString(tarballB64)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
-		return
-	}
+		buff, err := base64.StdEncoding.DecodeString(tarballB64)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500")
+			return
+		}
+	*/
 
 	cmdStr := "mkdir -p " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID
 	fmt.Println(cmdStr)
@@ -54,9 +55,9 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	src := irgshConfig.Chief.Workdir + "/submissions/" + submission.Tarball + ".tar.gz"
 	path := irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + "/" + submission.TaskUUID + ".tar.gz"
-	fmt.Println(path)
-	err = ioutil.WriteFile(path, buff, 07440)
+	err = Copy(src, path)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -81,7 +82,6 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + " && "
-	// TODO This gnupg path should be configurable with config.yml
 	cmdStr += gnupgDir + " gpg --verify *.dsc"
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
@@ -324,4 +324,105 @@ func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO should be in JSON string
 	w.WriteHeader(http.StatusOK)
+}
+
+func submissionUploadHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		targetPath := irgshConfig.Chief.Workdir + "/submissions"
+		err = os.MkdirAll(targetPath, 0755)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Check for auth token first
+		file, _, err := r.FormFile("token")
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+		fileBytes, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		// write file
+		id := uuid.New().String()
+		fileName := id + ".token"
+		newPath := filepath.Join(targetPath, fileName)
+		newFile, err := os.Create(newPath)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer newFile.Close()
+		if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
+		if irgshConfig.IsDev {
+			gnupgDir = ""
+		}
+
+		cmdStr := "cd " + targetPath + " && "
+		cmdStr += gnupgDir + " gpg --verify " + newPath
+		err = exec.Command("bash", "-c", cmdStr).Run()
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, "401 Unauthorized")
+			return
+		}
+
+		// parse and validate file and post parameters
+		file, _, err = r.FormFile("blob")
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+		fileBytes, err = ioutil.ReadAll(file)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// check file type, detectcontenttype only needs the first 512 bytes
+		filetype := strings.Split(http.DetectContentType(fileBytes), ";")[0]
+		if !strings.Contains(filetype, "tar") {
+			log.Println("File upload rejected: should be a tar.gz file.")
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		fileName = id + ".tar.gz"
+		newPath = filepath.Join(targetPath, fileName)
+
+		// write file
+		newFile, err = os.Create(newPath)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer newFile.Close()
+		if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "{\"id\":\""+id+"\"}")
+	})
 }

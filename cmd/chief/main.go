@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -106,6 +107,7 @@ func serve() {
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
 	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
+	http.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())
 	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
 	http.HandleFunc("/api/v1/version", VersionHandler)
 
@@ -116,6 +118,8 @@ func serve() {
 	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))
 	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
 	http.Handle("/logs/", http.StripPrefix("/logs/", logFs))
+	submissionFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/submissions"))
+	http.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
 	port := os.Getenv("PORT")
 	if len(port) < 1 {
@@ -165,4 +169,24 @@ func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
 
 func VersionHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "{\"version\":\""+app.Version+"\"}")
+}
+
+func Copy(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
 }
