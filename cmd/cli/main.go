@@ -167,6 +167,30 @@ func main() {
 					os.Exit(1)
 				}
 
+				// Check version first
+				header := make(http.Header)
+				header.Set("Accept", "application/json")
+				req.SetFlags(req.LrespBody)
+
+				type VersionResponse struct {
+					Version string `json:"version"`
+				}
+				result, err := req.Get(chiefAddress+"/api/v1/version", nil)
+				if err != nil {
+					return err
+				}
+				responseStr := fmt.Sprintf("%+v", result)
+				versionResponse := VersionResponse{}
+				err = json.Unmarshal([]byte(responseStr), &versionResponse)
+				if err != nil {
+					return
+				}
+
+				if versionResponse.Version != app.Version {
+					err = errors.New("Client version mismatch. Please update your irgsh-cli.")
+					return
+				}
+
 				// Default component is main
 				if len(component) < 1 {
 					component = "main"
@@ -277,10 +301,6 @@ func main() {
 				}
 				tarballB64Trimmed := strings.TrimSuffix(string(tarballB64), "\n")
 
-				header := make(http.Header)
-				header.Set("Accept", "application/json")
-				req.SetFlags(req.LrespBody)
-
 				submission := Submission{
 					PackageName:    packageName,
 					PackageURL:     packageUrl,
@@ -291,12 +311,12 @@ func main() {
 					Tarball:        tarballB64Trimmed,
 				}
 				jsonByte, _ := json.Marshal(submission)
-				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(string(jsonByte)))
+				result, err = req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(string(jsonByte)))
 				if err != nil {
 					return
 				}
 
-				responseStr := fmt.Sprintf("%+v", result)
+				responseStr = fmt.Sprintf("%+v", result)
 				if !strings.Contains(responseStr, "pipelineId") {
 					log.Println(responseStr)
 					fmt.Println("Submission failed.")
@@ -305,15 +325,15 @@ func main() {
 				type SubmitResponse struct {
 					PipelineID string `json:"pipelineId"`
 				}
-				responseJson := SubmitResponse{}
-				err = json.Unmarshal([]byte(responseStr), &responseJson)
+				submissionResponse := SubmitResponse{}
+				err = json.Unmarshal([]byte(responseStr), &submissionResponse)
 				if err != nil {
 					return
 				}
 				fmt.Println("Submission succeeded. Pipeline ID:")
-				fmt.Println(responseJson.PipelineID)
+				fmt.Println(submissionResponse.PipelineID)
 				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
-				cmdStr += responseJson.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"
+				cmdStr += submissionResponse.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"
 				cmd = exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {

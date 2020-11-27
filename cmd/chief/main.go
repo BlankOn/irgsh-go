@@ -99,20 +99,23 @@ func main() {
 
 func serve() {
 	http.HandleFunc("/", indexHandler)
+
+	// APIs
 	http.HandleFunc("/api/v1/artifacts", artifactHTTPEndpoint.GetArtifactListHandler)
 	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
 	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
 	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
+	http.HandleFunc("/api/v1/version", VersionHandler)
 
+	// Pages
+	http.HandleFunc("/maintainers", MaintainersHandler)
+	// Static file routes
 	artifactFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
 	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))
-
 	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
 	http.Handle("/logs/", http.StripPrefix("/logs/", logFs))
-
-	http.HandleFunc("/maintainers", MaintainersHandler)
 
 	port := os.Getenv("PORT")
 	if len(port) < 1 {
@@ -158,4 +161,8 @@ func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, string(output))
+}
+
+func VersionHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "{\"version\":\""+app.Version+"\"}")
 }
