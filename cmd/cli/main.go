@@ -20,12 +20,23 @@ import (
 	"gopkg.in/src-d/go-git.v4"
 )
 
+type Submission struct {
+	PackageName    string `json:"packageName"`
+	PackageURL     string `json:"packageUrl"`
+	SourceURL      string `json:"sourceUrl"`
+	Maintainer     string `json:"maintainer"`
+	Component      string `json:"component"`
+	IsExperimental bool   `json:"isExperimental"`
+	Tarball        string `json:"tarball"`
+}
+
 var (
 	app                  *cli.App
 	homeDir              string
 	chiefAddress         string
 	maintainerSigningKey string
 	sourceUrl            string
+	component            string
 	packageUrl           string
 	version              string
 	isExperimental       bool
@@ -139,6 +150,12 @@ func main() {
 					Destination: &packageUrl,
 					Usage:       "Package URL",
 				},
+				cli.StringFlag{
+					Name:        "component",
+					Value:       "",
+					Destination: &component,
+					Usage:       "Repository component",
+				},
 				cli.BoolFlag{
 					Name:  "experimental",
 					Usage: "Enable experimental flag",
@@ -149,6 +166,12 @@ func main() {
 				if err != nil {
 					os.Exit(1)
 				}
+
+				// Default component is main
+				if len(component) < 1 {
+					component = "main"
+				}
+
 				if len(sourceUrl) > 0 {
 					_, err = url.ParseRequestURI(sourceUrl)
 					if err != nil {
@@ -167,7 +190,7 @@ func main() {
 				isExperimental = true
 				if !ctx.Bool("experimental") {
 					prompt := promptui.Prompt{
-						Label:     "Experimental flag is not set. Are you sure you want to continue to build this package?",
+						Label:     "Experimental flag is not set which means the package will be injected to official dev repository. Are you sure you want to continue to submit and build this package?",
 						IsConfirm: true,
 					}
 					result, promptErr := prompt.Run()
@@ -257,31 +280,26 @@ func main() {
 				header := make(http.Header)
 				header.Set("Accept", "application/json")
 				req.SetFlags(req.LrespBody)
-				isExperimentalStr := "false"
-				if isExperimental {
-					isExperimentalStr = "true"
+
+				submission := Submission{
+					PackageName:    packageName,
+					PackageURL:     packageUrl,
+					SourceURL:      sourceUrl,
+					Maintainer:     maintainerSigningKey,
+					Component:      component,
+					IsExperimental: isExperimental,
+					Tarball:        tarballB64Trimmed,
 				}
-				jsonStr := "{ "
-				jsonStr += "\"packageUrl\":\"" + packageUrl + "\", "
-				if len(sourceUrl) > 0 { // source URL is optional
-					jsonStr += "\"sourceUrl\":\"" + sourceUrl + "\", "
-				}
-				jsonStr += "\"maintainer\": \"" + maintainerSigningKey + "\", "
-				jsonStr += "\"packageName\": \"" + packageName + "\", "
-				jsonStr += "\"tarball\": \"" + tarballB64Trimmed + "\", "
-				jsonStr += "\"isExperimental\": " + isExperimentalStr + " "
-				jsonStr += "}"
-				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(jsonStr))
+				jsonByte, _ := json.Marshal(submission)
+				result, err := req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(string(jsonByte)))
 				if err != nil {
 					return
 				}
 
 				responseStr := fmt.Sprintf("%+v", result)
-				if strings.Contains(responseStr, "401") ||
-					strings.Contains(responseStr, "403") ||
-					strings.Contains(responseStr, "500") {
+				if !strings.Contains(responseStr, "pipelineId") {
+					log.Println(responseStr)
 					fmt.Println("Submission failed.")
-					fmt.Println(responseStr)
 					return
 				}
 				type SubmitResponse struct {
@@ -292,6 +310,7 @@ func main() {
 				if err != nil {
 					return
 				}
+				fmt.Println("Submission succeeded. Pipeline ID:")
 				fmt.Println(responseJson.PipelineID)
 				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
 				cmdStr += responseJson.PipelineID + "' > " + homeDir + "/.irgsh/LAST_PIPELINE_ID"

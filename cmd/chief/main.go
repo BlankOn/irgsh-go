@@ -32,12 +32,13 @@ var (
 type Submission struct {
 	TaskUUID       string    `json:"taskUUID"`
 	Timestamp      time.Time `json:"timestamp"`
-	SourceURL      string    `json:"sourceUrl"`
-	PackageURL     string    `json:"packageUrl"`
-	Tarball        string    `json:"tarball"`
-	IsExperimental bool      `json:"isExperimental"`
-	Maintainer     string    `json:"maintainer"`
 	PackageName    string    `json:"packageName"`
+	PackageURL     string    `json:"packageUrl"`
+	SourceURL      string    `json:"sourceUrl"`
+	Maintainer     string    `json:"maintainer"`
+	Component      string    `json:"component"`
+	IsExperimental bool      `json:"isExperimental"`
+	Tarball        string    `json:"tarball"`
 }
 
 type ArtifactsPayloadResponse struct {

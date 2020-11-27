@@ -86,10 +86,11 @@ func Repo(payload string) (err error) {
 	}
 
 	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
-	%s reprepro -v -v -v --nothingiserror includedeb %s %s/artifacts/%s/*.deb`,
+	%s reprepro -v -v -v --nothingiserror --component %s includedeb %s %s/artifacts/%s/*.deb`,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		gnupgDir,
+		raw["component"],
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
 		raw["taskUUID"],
