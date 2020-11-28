@@ -21,8 +21,6 @@ jobs:
         sudo mv go /usr/local
         echo ${{ steps.date.outputs.date }}-nightly-build > VERSION
         make release
-        cp irgsh-go/usr/bin/irgsh-cli target/irgsh-cli
-
     - uses: actions/upload-artifact@master
       with:
         name: release.tar.gz
@@ -39,8 +37,8 @@ jobs:
           Nightly release
         draft: false
         prerelease: false
-    - name: Upload Release Asset
-      id: upload-release-asset 
+    - name: Upload Full Release Asset
+      id: upload-full-release-asset 
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,6 +47,16 @@ jobs:
         asset_path: ./target/release.tar.gz
         asset_name: release.tar.gz
         asset_content_type: application/tar+gzip
+    - name: Upload CLI Release
+      id: upload-cli-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./irgsh-go/usr/bin/irgsh-cli
+        asset_name: irgsh-cli
+        asset_content_type: application/x-executable
 
   deploy:
     runs-on: ubuntu-latest

@@ -20,7 +20,7 @@ if [ -f ./target/release.tar.gz ]; then
 	DEV_INSTALL=1
 else
 	# Download and extract
-	DOWNLOAD_URL=$(curl -ksL "https://api.github.com/repos/BlankOn/irgsh-go/releases/latest" | jq -r ".assets[0].browser_download_url")
+	DOWNLOAD_URL=$(curl -ksL "https://api.github.com/repos/BlankOn/irgsh-go/releases/latest" | jq -r '.assets | .[] | select(.name == "release.tar.gz")| .browser_download_url')
 	echo "Downloading ... "
 	echo "$DOWNLOAD_URL"
 	rm -f $TEMP_PATH/release.tar.gz && cd $TEMP_PATH && curl -L -f -o ./release.tar.gz $DOWNLOAD_URL
