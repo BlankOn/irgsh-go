@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -507,7 +508,6 @@ func main() {
 			Usage: "Update the irgsh-cli tool",
 			Action: func(c *cli.Context) (err error) {
 				cmdStr := "curl -ksL 'https://api.github.com/repos/BlankOn/irgsh-go/releases/latest' | jq -r '.assets | .[] | select(.name == \"irgsh-cli\")| .browser_download_url'"
-				log.Println(cmdStr)
 				output, err := exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
 					log.Println("error: %v\n", err)
@@ -528,7 +528,18 @@ func main() {
 					log.Println(err)
 					return err
 				}
-				log.Println(app.Version)
+				processDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+				if err != nil {
+					log.Fatal(err)
+				}
+				cmdStr = processDir + "/irgsh-cli --version"
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package name.")
+					return
+				}
+				log.Println("Updated to " + strings.TrimSuffix(string(output), "\n"))
 				return
 			},
 		},
