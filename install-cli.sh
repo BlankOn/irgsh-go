@@ -45,6 +45,7 @@ else
 
   echo "Installing file ... "
   cp -v $TEMP_PATH/irgsh-cli /usr/bin/irgsh-cli
+  chmod +x /usr/bin/irgsh-cli
 fi
 
 popd >/dev/null
