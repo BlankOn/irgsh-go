@@ -419,7 +419,8 @@ func submissionUploadHandler() http.HandlerFunc {
 
 		// check file type, detectcontenttype only needs the first 512 bytes
 		filetype := strings.Split(http.DetectContentType(fileBytes), ";")[0]
-		if !strings.Contains(filetype, "tar") {
+		log.Println(filetype)
+		if !strings.Contains(filetype, "gzip") {
 			log.Println("File upload rejected: should be a tar.gz file.")
 			w.WriteHeader(http.StatusBadRequest)
 		}
