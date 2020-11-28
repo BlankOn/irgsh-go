@@ -113,7 +113,7 @@ func Repo(payload string) (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Initialize the reprepro repository for the first time",
+		"Re-export and publish the reprepro repository",
 		logPath,
 	)
 	if err != nil {
@@ -258,7 +258,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Initialize the reprepro repository for the first time",
+		"Re-export and publish the reprepro repository",
 		logPath,
 	)
 	if err != nil {
@@ -368,7 +368,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Initialize the reprepro repository for the first time",
+		"Re-export and publish the reprepro repository",
 		logPath,
 	)
 	if err != nil {
@@ -405,7 +405,7 @@ func UpdateRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Initialize the reprepro repository for the first time",
+		"Re-export and publish the reprepro repository",
 		logPath,
 	)
 	if err != nil {
