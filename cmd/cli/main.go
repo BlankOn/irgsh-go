@@ -264,7 +264,7 @@ func main() {
 
 				// Getting maintainer identity
 				maintainerIdentity := ""
-				cmdStr = "gpg -K | grep ultimate | cut -d ']' -f 2"
+				cmdStr = "gpg -K | grep -A 1 " + maintainerSigningKey + " | tail -n 1 | cut -d ']' -f 2"
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
