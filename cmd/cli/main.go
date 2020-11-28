@@ -165,7 +165,8 @@ func main() {
 			Action: func(ctx *cli.Context) (err error) {
 				err = checkForInitValues()
 				if err != nil {
-					os.Exit(1)
+					log.Println(err)
+					return err
 				}
 
 				// Check version first
@@ -178,12 +179,14 @@ func main() {
 				}
 				result, err := req.Get(chiefAddress+"/api/v1/version", nil)
 				if err != nil {
+					log.Println(err)
 					return err
 				}
 				responseStr := fmt.Sprintf("%+v", result)
 				versionResponse := VersionResponse{}
 				err = json.Unmarshal([]byte(responseStr), &versionResponse)
 				if err != nil {
+					log.Println(err)
 					return
 				}
 
@@ -200,6 +203,7 @@ func main() {
 				if len(sourceUrl) > 0 {
 					_, err = url.ParseRequestURI(sourceUrl)
 					if err != nil {
+						log.Println(err)
 						return
 					}
 				}
@@ -210,6 +214,7 @@ func main() {
 				}
 				_, err = url.ParseRequestURI(packageUrl)
 				if err != nil {
+					log.Println(err)
 					return
 				}
 				isExperimental = true
@@ -222,6 +227,7 @@ func main() {
 					// Avoid shadowed err
 					err = promptErr
 					if err != nil {
+						log.Println(err)
 						return
 					}
 					if strings.ToLower(result) != "y" {
@@ -250,6 +256,7 @@ func main() {
 				}
 
 				// Getting package name
+				log.Println("Getting package name...")
 				packageName := ""
 				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/package && cat debian/control | grep 'Source:' | head -n 1 | cut -d ' ' -f 2"
@@ -263,6 +270,7 @@ func main() {
 				packageName = strings.TrimSuffix(string(output), "\n")
 
 				// Getting maintainer identity
+				log.Println("Getting maintainer identity...")
 				maintainerIdentity := ""
 				cmdStr = "gpg -K | grep -A 1 " + maintainerSigningKey + " | tail -n 1 | cut -d ']' -f 2"
 				fmt.Println(cmdStr)
@@ -275,6 +283,7 @@ func main() {
 				maintainerIdentity = strings.TrimSuffix(string(output), "\n")
 
 				// Signing DSC
+				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/package && debuild -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
@@ -291,17 +300,21 @@ func main() {
 				}
 
 				// Clean up
+				log.Println("Cleaning up...")
 				cmdStr = "rm -rf " + homeDir + "/.irgsh/tmp/" + tmpID + "/package"
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
+					log.Println(err)
 					return
 				}
 
 				// Compressing
+				log.Println("Compressing...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += " && tar -zcvf ../" + tmpID + ".tar.gz ."
 				err = exec.Command("bash", "-c", cmdStr).Run()
 				if err != nil {
+					log.Println(err)
 					return err
 				}
 
@@ -317,8 +330,9 @@ func main() {
 				jsonByte, _ := json.Marshal(submission)
 
 				// Signing a token
+				log.Println("Signing auth token...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/ && echo '" + string(jsonByte) + "' > token && gpg --clearsign --output token.sig --sign token"
+				cmdStr += "/ && echo '" + string(jsonByte) + "' > token && gpg -u " + maintainerSigningKey + " --clearsign --output token.sig --sign token"
 				fmt.Println(cmdStr)
 				cmd = exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
@@ -333,14 +347,17 @@ func main() {
 				}
 
 				// Upload
-				cmdStr = "curl -v -F 'blob=@" + homeDir + "/.irgsh/tmp/" + tmpID + ".tar.gz" + "' "
+				log.Println("Uploading blob...")
+				cmdStr = "curl -f -s --show-error -F 'blob=@" + homeDir + "/.irgsh/tmp/" + tmpID + ".tar.gz" + "' "
 				cmdStr += " -F 'token=@" + homeDir + "/.irgsh/tmp/" + tmpID + "/token.sig" + "'"
-				cmdStr += " '" + chiefAddress + "/api/v1/submission-upload'"
+				cmdStr += " '" + chiefAddress + "/api/v1/submission-upload' 2>&1"
+				log.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println(output)
+					log.Println(string(output))
 					return err
 				}
+
 				blobStr := strings.TrimSuffix(string(output), "\n")
 				type Blob struct {
 					ID string `json:"id"`
@@ -348,14 +365,17 @@ func main() {
 				blob := Blob{}
 				err = json.Unmarshal([]byte(blobStr), &blob)
 				if err != nil {
+					log.Println(err)
 					return err
 				}
 
 				submission.Tarball = blob.ID
 				jsonByte, _ = json.Marshal(submission)
 
+				log.Println("Submitting...")
 				result, err = req.Post(chiefAddress+"/api/v1/submit", header, req.BodyJSON(string(jsonByte)))
 				if err != nil {
+					log.Println(err)
 					return
 				}
 
@@ -371,6 +391,7 @@ func main() {
 				submissionResponse := SubmitResponse{}
 				err = json.Unmarshal([]byte(responseStr), &submissionResponse)
 				if err != nil {
+					log.Println(err)
 					return
 				}
 				fmt.Println("Submission succeeded. Pipeline ID:")
@@ -380,6 +401,7 @@ func main() {
 				cmd = exec.Command("bash", "-c", cmdStr)
 				err = cmd.Run()
 				if err != nil {
+					log.Println(err)
 					return
 				}
 
@@ -476,6 +498,20 @@ func main() {
 				}
 				fmt.Println(fmt.Sprintf("%+v", result))
 
+				return
+			},
+		},
+		{
+			Name:  "update",
+			Usage: "Update the irgsh-cli tool",
+			Action: func(c *cli.Context) (err error) {
+				cmdStr := "curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install-cli.sh | bash"
+				cmd := exec.Command("bash", "-c", cmdStr)
+				// Make it interactive
+				cmd.Stdout = os.Stdout
+				cmd.Stdin = os.Stdin
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
 				return
 			},
 		},
