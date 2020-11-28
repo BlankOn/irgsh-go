@@ -33,7 +33,7 @@ The command will install the irgsh binaries, default configuration and daemons. 
 
 ## Package maintainer update
 
-Package maintainer can update their irgsh-cli by running the same command as installation or using `irgsh-cli update` to let irgsh-cli update itself.
+Package maintainer can update their irgsh-cli by running the same command as installation or using `sudo irgsh-cli update` to let irgsh-cli update itself.
 
 ## Components
 
