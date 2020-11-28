@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -528,16 +527,13 @@ func main() {
 					log.Println(err)
 					return err
 				}
-				processDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-				if err != nil {
-					log.Fatal(err)
-				}
-				cmdStr = processDir + "/irgsh-cli --version"
+				cmdStr = "/usr/bin/irgsh-cli --version"
+				log.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
+					log.Println(output)
 					log.Println("error: %v\n", err)
 					log.Println("Failed to get package name.")
-					return
 				}
 				log.Println("Updated to " + strings.TrimSuffix(string(output), "\n"))
 				return

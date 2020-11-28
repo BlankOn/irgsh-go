@@ -35,7 +35,7 @@ The command will install the irgsh-cli binary to your system.
 
 ## Package maintainer update
 
-Package maintainer can update their irgsh-cli by running the same command as installation or using `irgsh-cli update` to let irgsh-cli updates itself.
+Package maintainer can update their irgsh-cli by running the same command as installation or using `sudo irgsh-cli update` to let irgsh-cli updates itself.
 
 ## Components
 
