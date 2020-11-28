@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.1.0
 	github.com/hpcloud/tail v1.0.0
 	github.com/imroc/req v0.2.3
+	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jinzhu/configor v1.0.0
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/leodido/go-urn v1.1.0 // indirect

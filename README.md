@@ -31,6 +31,10 @@ curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install-cl
 
 The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
 
+## Package maintainer update
+
+Package maintainer can update their irgsh-cli by running the same command as installation or using `irgsh-cli update` to let irgsh-cli update itself.
+
 ## Components
 
 A minimal IRGSH ecosystem contains three services and a CLI tool.

@@ -11,10 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/imroc/req"
+	"github.com/inconshreveable/go-update"
 	"github.com/manifoldco/promptui"
 	"github.com/urfave/cli"
 	"gopkg.in/src-d/go-git.v4"
@@ -292,7 +294,7 @@ func main() {
 				cmd.Stdout = os.Stdout
 				cmd.Stdin = os.Stdin
 				cmd.Stderr = os.Stderr
-				cmd.Run()
+				err = cmd.Run()
 				if err != nil {
 					log.Println("error: %v\n", err)
 					log.Println("Failed to sign the package using " + maintainerSigningKey + ". Please check your GPG key list.")
@@ -339,7 +341,7 @@ func main() {
 				cmd.Stdout = os.Stdout
 				cmd.Stdin = os.Stdin
 				cmd.Stderr = os.Stderr
-				cmd.Run()
+				err = cmd.Run()
 				if err != nil {
 					log.Println("error: %v\n", err)
 					log.Println("Failed to sign the auth token using " + maintainerSigningKey + ". Please check your GPG key list.")
@@ -505,13 +507,39 @@ func main() {
 			Name:  "update",
 			Usage: "Update the irgsh-cli tool",
 			Action: func(c *cli.Context) (err error) {
-				cmdStr := "curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install-cli.sh | bash"
-				cmd := exec.Command("bash", "-c", cmdStr)
-				// Make it interactive
-				cmd.Stdout = os.Stdout
-				cmd.Stdin = os.Stdin
-				cmd.Stderr = os.Stderr
-				err = cmd.Run()
+				cmdStr := "curl -ksL 'https://api.github.com/repos/BlankOn/irgsh-go/releases/latest' | jq -r '.assets | .[] | select(.name == \"irgsh-cli\")| .browser_download_url'"
+				output, err := exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package name.")
+					return
+				}
+				downloadURL := strings.TrimSuffix(string(output), "\n")
+				log.Println(downloadURL)
+				log.Println("Self-updating...")
+				resp, err := http.Get(downloadURL)
+				if err != nil {
+					log.Println(err)
+					return err
+				}
+				defer resp.Body.Close()
+				err = update.Apply(resp.Body, update.Options{})
+				if err != nil {
+					log.Println(err)
+					return err
+				}
+				processDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+				if err != nil {
+					log.Fatal(err)
+				}
+				cmdStr = processDir + "/irgsh-cli --version"
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package name.")
+					return
+				}
+				log.Println("Updated to " + strings.TrimSuffix(string(output), "\n"))
 				return
 			},
 		},
