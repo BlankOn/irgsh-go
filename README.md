@@ -151,10 +151,6 @@ To build a package using `pbuilder`, `sudo` or root privilege is required but it
 
 ## Troubleshooting notes
 
-###
-
-## Todos
-
 ### No secret key
 
 The error message may be like this,
@@ -171,6 +167,8 @@ It may caused either by:
 - Your defined key for signing is not available on your GPG keystore. Please redefine it with `rgsh-cli config --chief https://irgsh.blankonlinux.or.id --key YOURKEYIDENTITY`
 - The latest maintainer information that written in the debian/changelog does not matched with the one on your GPG keystore. Please adjust the changelog file.
 
+## Todos
+
 ### CLI
 
 - Submit :heavy_check_mark:
@@ -179,7 +177,7 @@ It may caused either by:
 
 ### Chief
 
-- Auth (GPG or mutual auth)
+- Auth (GPG or mutual auth) :heavy_check_mark:
 - WebSocket
 - Builder registration
 - Repo registration
