@@ -23,17 +23,19 @@ Install all deps + released IRGSH with this command bellow,
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash
 ```
 
+The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
+
 ## Package maintainer installation
 
 ```
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install-cli.sh | bash
 ```
 
-The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
+The command will install the irgsh-cli binary to your system.
 
 ## Package maintainer update
 
-Package maintainer can update their irgsh-cli by running the same command as installation or using `irgsh-cli update` to let irgsh-cli update itself.
+Package maintainer can update their irgsh-cli by running the same command as installation or using `irgsh-cli update` to let irgsh-cli updates itself.
 
 ## Components
 
