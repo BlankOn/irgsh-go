@@ -22,14 +22,16 @@ import (
 )
 
 type Submission struct {
-	PackageName           string `json:"packageName"`
-	PackageURL            string `json:"packageUrl"`
-	SourceURL             string `json:"sourceUrl"`
-	Maintainer            string `json:"maintainer"`
-	MaintainerFingerprint string `json:"maintainerFingerprint"`
-	Component             string `json:"component"`
-	IsExperimental        bool   `json:"isExperimental"`
-	Tarball               string `json:"tarball"`
+	PackageName            string `json:"packageName"`
+	PackageVersion         string `json:"packageVersion"`
+	PackageExtendedVersion string `json:"packageExtendedVersion"`
+	PackageURL             string `json:"packageUrl"`
+	SourceURL              string `json:"sourceUrl"`
+	Maintainer             string `json:"maintainer"`
+	MaintainerFingerprint  string `json:"maintainerFingerprint"`
+	Component              string `json:"component"`
+	IsExperimental         bool   `json:"isExperimental"`
+	Tarball                string `json:"tarball"`
 }
 
 var (
@@ -256,9 +258,10 @@ func main() {
 					return
 				}
 
+				var packageName, packageVersion, packageExtendedVersion, packageLastMaintainer string
+
 				// Getting package name
 				log.Println("Getting package name...")
-				packageName := ""
 				cmdStr := "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/package && cat debian/control | grep 'Source:' | head -n 1 | cut -d ' ' -f 2"
 				fmt.Println(cmdStr)
@@ -269,6 +272,48 @@ func main() {
 					return
 				}
 				packageName = strings.TrimSuffix(string(output), "\n")
+
+				// Getting package version
+				log.Println("Getting package version ...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/package && cat debian/changelog | head -n 1 | cut -d '(' -f 2 | cut -d ')' -f 1 | cut -d '-' -f 1"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package version.")
+					return
+				}
+				packageVersion = strings.TrimSuffix(string(output), "\n")
+				log.Println(packageVersion)
+
+				// Getting package extended version
+				log.Println("Getting package extended version ...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/package && cat debian/changelog | head -n 1 | cut -d '(' -f 2 | cut -d ')' -f 1 | cut -d '-' -f 2"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package extended version.")
+					return
+				}
+				packageExtendedVersion = strings.TrimSuffix(string(output), "\n")
+				log.Println(packageExtendedVersion)
+
+				// Getting package last maintainer
+				log.Println("Getting package last maintainer ...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/package && echo $(cat debian/changelog | grep ' --' | cut -d '-' -f 3 | cut -d '>' -f 1 | head -n 1)'>'"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get package extended version.")
+					return
+				}
+				packageLastMaintainer = strings.TrimSuffix(string(output), "\n")
+				log.Println(packageLastMaintainer)
 
 				// Getting maintainer identity
 				log.Println("Getting maintainer identity...")
@@ -283,10 +328,66 @@ func main() {
 				}
 				maintainerIdentity = strings.TrimSuffix(string(output), "\n")
 
+				if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) {
+					err = errors.New("The last maintainer in the debian/changelog does not matched with your identity. Please update the debian/changelog file.")
+					log.Println("The last maintainer in the debian/changelog: " + packageLastMaintainer)
+					log.Println("Your signing key identity: " + maintainerIdentity)
+					return
+				}
+
+				// TODO run lintian here
+
+				// Rename the package dir so we can run dh_make and debuild without warning/error
+				workdir := packageName + "-" + packageVersion
+				if len(packageExtendedVersion) > 0 {
+					workdir += "-" + packageExtendedVersion
+				}
+				log.Println("Renaming workdir...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/ && mv package " + workdir
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to rename workdir.")
+					return
+				}
+
+				// Prepare orig
+				log.Println("Preparing orig tarball...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/" + workdir + " && dh_make -s -y --createorig || true"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to prepare orig tarball.")
+					return
+				}
+
+				// Package with quilt spec need different orig file name
+				orig := packageName + "-" + packageVersion
+				if len(packageExtendedVersion) > 0 {
+					orig += "_" + packageExtendedVersion
+				}
+				orig += ".orig.tar.xz"
+				origForQuilt := packageName + "_" + packageVersion + ".orig.tar.xz"
+				// Prepare orig
+				log.Println("Preparing orig tarball...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += " &&mv " + orig + " " + origForQuilt
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to prepare orig for quilt tarball.")
+					return
+				}
+
 				// Signing DSC
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/package && debuild -S -k" + maintainerSigningKey
+				cmdStr += "/" + workdir + " && debuild -d -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
 				cmd := exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
@@ -296,7 +397,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println("error: %v\n", err)
-					log.Println("Failed to sign the package using " + maintainerSigningKey + ". Please check your GPG key list.")
+					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
 
@@ -320,13 +421,15 @@ func main() {
 				}
 
 				submission := Submission{
-					PackageName:           packageName,
-					PackageURL:            packageUrl,
-					SourceURL:             sourceUrl,
-					Maintainer:            maintainerIdentity,
-					MaintainerFingerprint: maintainerSigningKey,
-					Component:             component,
-					IsExperimental:        isExperimental,
+					PackageName:            packageName,
+					PackageVersion:         packageVersion,
+					PackageExtendedVersion: packageExtendedVersion,
+					PackageURL:             packageUrl,
+					SourceURL:              sourceUrl,
+					Maintainer:             maintainerIdentity,
+					MaintainerFingerprint:  maintainerSigningKey,
+					Component:              component,
+					IsExperimental:         isExperimental,
 				}
 				jsonByte, _ := json.Marshal(submission)
 
