@@ -9,6 +9,7 @@ import (
 
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 	"gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 func uploadLog(logPath string, id string) {
@@ -76,13 +77,16 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning source files
 	sourceURL := raw["sourceUrl"].(string)
+	sourceBranch := raw["sourceBranch"].(string)
 	if len(sourceURL) > 0 {
 		_, err = git.PlainClone(
 			irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/source",
 			false,
 			&git.CloneOptions{
-				URL:      sourceURL,
-				Progress: os.Stdout,
+				URL:           sourceURL,
+				Progress:      os.Stdout,
+				SingleBranch:  true,
+				ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", sourceBranch)),
 			},
 		)
 		if err != nil {
@@ -93,12 +97,15 @@ func Clone(payload string) (next string, err error) {
 
 	// Cloning Debian package files
 	packageURL := raw["packageUrl"].(string)
+	packageBranch := raw["packageBranch"].(string)
 	_, err = git.PlainClone(
 		irgshConfig.Builder.Workdir+"/"+raw["taskUUID"].(string)+"/package",
 		false,
 		&git.CloneOptions{
-			URL:      packageURL,
-			Progress: os.Stdout,
+			URL:           packageURL,
+			Progress:      os.Stdout,
+			SingleBranch:  true,
+			ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", packageBranch)),
 		},
 	)
 	if err != nil {

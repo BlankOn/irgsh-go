@@ -19,6 +19,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/urfave/cli"
 	"gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 type Submission struct {
@@ -32,6 +33,8 @@ type Submission struct {
 	Component              string `json:"component"`
 	IsExperimental         bool   `json:"isExperimental"`
 	Tarball                string `json:"tarball"`
+	PackageBranch          string `json:"packageBranch"`
+	SourceBranch           string `json:"sourceBranch"`
 }
 
 var (
@@ -41,6 +44,8 @@ var (
 	maintainerSigningKey string
 	sourceUrl            string
 	component            string
+	packageBranch        string
+	sourceBranch         string
 	packageUrl           string
 	version              string
 	isExperimental       bool
@@ -160,6 +165,18 @@ func main() {
 					Destination: &component,
 					Usage:       "Repository component",
 				},
+				cli.StringFlag{
+					Name:        "package-branch",
+					Value:       "",
+					Destination: &packageBranch,
+					Usage:       "package git branch",
+				},
+				cli.StringFlag{
+					Name:        "source-branch",
+					Value:       "",
+					Destination: &sourceBranch,
+					Usage:       "source git branch",
+				},
 				cli.BoolFlag{
 					Name:  "experimental",
 					Usage: "Enable experimental flag",
@@ -201,6 +218,14 @@ func main() {
 				// Default component is main
 				if len(component) < 1 {
 					component = "main"
+				}
+
+				// Default branch is master
+				if len(packageBranch) < 1 {
+					packageBranch = "master"
+				}
+				if len(sourceBranch) < 1 {
+					sourceBranch = "master"
 				}
 
 				if len(sourceUrl) > 0 {
@@ -249,8 +274,10 @@ func main() {
 					homeDir+"/.irgsh/tmp/"+tmpID+"/package",
 					false,
 					&git.CloneOptions{
-						URL:      packageUrl,
-						Progress: os.Stdout,
+						URL:           packageUrl,
+						Progress:      os.Stdout,
+						SingleBranch:  true,
+						ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", packageBranch)),
 					},
 				)
 				if err != nil {
@@ -442,6 +469,8 @@ func main() {
 					MaintainerFingerprint:  maintainerSigningKey,
 					Component:              component,
 					IsExperimental:         isExperimental,
+					PackageBranch:          packageBranch,
+					SourceBranch:           sourceBranch,
 				}
 				jsonByte, _ := json.Marshal(submission)
 
