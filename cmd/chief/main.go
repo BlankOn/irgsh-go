@@ -42,6 +42,8 @@ type Submission struct {
 	Component              string    `json:"component"`
 	IsExperimental         bool      `json:"isExperimental"`
 	Tarball                string    `json:"tarball"`
+	PackageBranch          string    `json:"packageBranch"`
+	SourceBranch           string    `json:"sourceBranch"`
 }
 
 type ArtifactsPayloadResponse struct {

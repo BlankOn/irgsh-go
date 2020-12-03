@@ -19,6 +19,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/urfave/cli"
 	"gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 type Submission struct {
@@ -32,6 +33,8 @@ type Submission struct {
 	Component              string `json:"component"`
 	IsExperimental         bool   `json:"isExperimental"`
 	Tarball                string `json:"tarball"`
+	PackageBranch          string `json:"packageBranch"`
+	SourceBranch           string `json:"sourceBranch"`
 }
 
 var (
@@ -41,6 +44,8 @@ var (
 	maintainerSigningKey string
 	sourceUrl            string
 	component            string
+	packageBranch        string
+	sourceBranch         string
 	packageUrl           string
 	version              string
 	isExperimental       bool
@@ -160,6 +165,18 @@ func main() {
 					Destination: &component,
 					Usage:       "Repository component",
 				},
+				cli.StringFlag{
+					Name:        "package-branch",
+					Value:       "",
+					Destination: &packageBranch,
+					Usage:       "package git branch",
+				},
+				cli.StringFlag{
+					Name:        "source-branch",
+					Value:       "",
+					Destination: &sourceBranch,
+					Usage:       "source git branch",
+				},
 				cli.BoolFlag{
 					Name:  "experimental",
 					Usage: "Enable experimental flag",
@@ -201,6 +218,14 @@ func main() {
 				// Default component is main
 				if len(component) < 1 {
 					component = "main"
+				}
+
+				// Default branch is master
+				if len(packageBranch) < 1 {
+					packageBranch = "master"
+				}
+				if len(sourceBranch) < 1 {
+					sourceBranch = "master"
 				}
 
 				if len(sourceUrl) > 0 {
@@ -249,8 +274,10 @@ func main() {
 					homeDir+"/.irgsh/tmp/"+tmpID+"/package",
 					false,
 					&git.CloneOptions{
-						URL:      packageUrl,
-						Progress: os.Stdout,
+						URL:           packageUrl,
+						Progress:      os.Stdout,
+						SingleBranch:  true,
+						ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", packageBranch)),
 					},
 				)
 				if err != nil {
@@ -299,6 +326,9 @@ func main() {
 					return
 				}
 				packageExtendedVersion = strings.TrimSuffix(string(output), "\n")
+				if packageExtendedVersion == packageVersion {
+					packageExtendedVersion = ""
+				}
 				log.Println(packageExtendedVersion)
 
 				// Getting package last maintainer
@@ -335,8 +365,6 @@ func main() {
 					return
 				}
 
-				// TODO run lintian here
-
 				// Rename the package dir so we can run dh_make and debuild without warning/error
 				workdir := packageName + "-" + packageVersion
 				if len(packageExtendedVersion) > 0 {
@@ -365,17 +393,16 @@ func main() {
 					return
 				}
 
-				// Package with quilt spec need different orig file name
+				// We need orig tarball with underscore as delimiter
+				// Some were made with strip instead
 				orig := packageName + "-" + packageVersion
 				if len(packageExtendedVersion) > 0 {
 					orig += "_" + packageExtendedVersion
 				}
 				orig += ".orig.tar.xz"
 				origForQuilt := packageName + "_" + packageVersion + ".orig.tar.xz"
-				// Prepare orig
-				log.Println("Preparing orig tarball...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += " &&mv " + orig + " " + origForQuilt
+				cmdStr += " && cp " + orig + " " + origForQuilt + " || true"
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
@@ -387,7 +414,7 @@ func main() {
 				// Signing DSC
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + workdir + " && debuild -d -S -k" + maintainerSigningKey
+				cmdStr += "/" + workdir + " && debuild --no-lintian -d -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
 				cmd := exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
@@ -398,6 +425,18 @@ func main() {
 				if err != nil {
 					log.Println("error: %v\n", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
+					return
+				}
+
+				// Lintian
+				log.Println("Lintian test...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/" + workdir + " && lintian --profile blankon --fail-on error 2>&1"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				log.Println(string(output))
+				if err != nil {
+					log.Println("Failed to pass lintian.")
 					return
 				}
 
@@ -430,6 +469,8 @@ func main() {
 					MaintainerFingerprint:  maintainerSigningKey,
 					Component:              component,
 					IsExperimental:         isExperimental,
+					PackageBranch:          packageBranch,
+					SourceBranch:           sourceBranch,
 				}
 				jsonByte, _ := json.Marshal(submission)
 
