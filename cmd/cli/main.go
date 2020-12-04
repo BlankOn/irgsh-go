@@ -690,7 +690,7 @@ func main() {
 					log.Println(err)
 					return err
 				}
-				cmdStr = "/usr/bin/irgsh-cli --version"
+				cmdStr = "ln -sf /usr/bin/irgsh-cli /usr/bin/irgsh && /usr/bin/irgsh-cli --version"
 				log.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
