@@ -285,7 +285,7 @@ func main() {
 					return
 				}
 
-				var packageName, packageVersion, packageExtendedVersion, packageLastMaintainer string
+				var packageName, packageVersion, packageExtendedVersion, packageLastMaintainer, uploaders string
 
 				// Getting package name
 				log.Println("Getting package name...")
@@ -345,6 +345,19 @@ func main() {
 				packageLastMaintainer = strings.TrimSuffix(string(output), "\n")
 				log.Println(packageLastMaintainer)
 
+				// Getting uploaders
+				log.Println("Getting package name...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/package && cat debian/control | grep 'Uploaders:' | head -n 1 | cut -d ':' -f 2"
+				fmt.Println(cmdStr)
+				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to get uploaders value.")
+					return
+				}
+				uploaders = strings.TrimSpace(strings.TrimSuffix(string(output), "\n"))
+
 				// Getting maintainer identity
 				log.Println("Getting maintainer identity...")
 				maintainerIdentity := ""
@@ -356,7 +369,14 @@ func main() {
 					log.Println("Failed to get maintainer identity.")
 					return
 				}
-				maintainerIdentity = strings.TrimSuffix(string(output), "\n")
+				maintainerIdentity = strings.TrimSpace(strings.TrimSuffix(string(output), "\n"))
+
+				if strings.TrimSpace(uploaders) != strings.TrimSpace(maintainerIdentity) {
+					err = errors.New("The uploaders value in the debian/control does not matched with your identity. Please update the debian/control file.")
+					log.Println("The uploader in the debian/control: " + uploaders)
+					log.Println("Your signing key identity: " + maintainerIdentity)
+					return
+				}
 
 				if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) {
 					err = errors.New("The last maintainer in the debian/changelog does not matched with your identity. Please update the debian/changelog file.")
@@ -410,7 +430,6 @@ func main() {
 					log.Println("Failed to prepare orig for quilt tarball.")
 					return
 				}
-
 				// Signing DSC
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID

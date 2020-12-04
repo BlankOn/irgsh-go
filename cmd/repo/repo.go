@@ -85,6 +85,36 @@ func Repo(payload string) (err error) {
 		}
 	}
 
+	// Injecting changes
+	ignoreDistribution := ""
+	if raw["isExperimental"].(bool) {
+		ignoreDistribution = "--ignore=wrongdistribution"
+	}
+
+	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
+	%s reprepro -v -v -v --nothingiserror %s --component %s include %s %s/artifacts/%s/*source.changes`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		gnupgDir,
+		ignoreDistribution,
+		raw["component"],
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		irgshConfig.Repo.Workdir,
+		raw["taskUUID"],
+	)
+
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"Injecting the changes file from artifact to the repository",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		uploadLog(logPath, raw["taskUUID"].(string))
+		return
+	}
+
+	// Injecting the package
 	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
 	%s reprepro -v -v -v --nothingiserror --component %s includedeb %s %s/artifacts/%s/*.deb`,
 		irgshConfig.Repo.Workdir,
