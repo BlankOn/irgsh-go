@@ -139,7 +139,7 @@ func BuildPreparation(payload string) (next string, err error) {
 
 	// Extract the signed dsc
 	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
-	cmdStr += " && tar -xvf debuild.tar.gz && rm -f debuild.tar.gz"
+	cmdStr += " && tar -xvf debuild.tar.gz && cp *.dsc signature && cp *source.changes changelogsignature"
 	_, err = systemutil.CmdExec(
 		cmdStr,
 		"",
@@ -203,6 +203,20 @@ func BuildPackage(payload string) (next string, err error) {
 	)
 	if err != nil {
 		log.Println(err.Error())
+		return
+	}
+
+	// Restore the signed dsc
+	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/" + raw["taskUUID"].(string)
+	cmdStr += " && mv signature " + raw["packageName"].(string) + "*.dsc && mv changelogsignature " + raw["packageName"].(string) + "*source.changes"
+	log.Println(cmdStr)
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"",
+		"",
+	)
+	if err != nil {
+		log.Printf("error: %v\n", err)
 		return
 	}
 
