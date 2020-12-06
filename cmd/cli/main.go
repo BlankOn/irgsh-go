@@ -181,8 +181,15 @@ func main() {
 					Name:  "experimental",
 					Usage: "Enable experimental flag",
 				},
+				cli.BoolFlag{
+					Name:  "ignore-checks",
+					Usage: "Ignoring value checks",
+				},
 			},
 			Action: func(ctx *cli.Context) (err error) {
+
+				ignoreChecks := ctx.Bool("ignore-checks")
+
 				err = checkForInitValues()
 				if err != nil {
 					log.Println(err)
@@ -299,6 +306,12 @@ func main() {
 					return
 				}
 				packageName = strings.TrimSuffix(string(output), "\n")
+				if len(packageName) < 1 {
+					log.Println("It seems the repository does not contain debian spec directory.")
+					return
+
+				}
+				log.Println("Package name: " + packageName)
 
 				// Getting package version
 				log.Println("Getting package version ...")
@@ -312,7 +325,7 @@ func main() {
 					return
 				}
 				packageVersion = strings.TrimSuffix(string(output), "\n")
-				log.Println(packageVersion)
+				log.Println("Package version: " + packageVersion)
 
 				// Getting package extended version
 				log.Println("Getting package extended version ...")
@@ -329,7 +342,7 @@ func main() {
 				if packageExtendedVersion == packageVersion {
 					packageExtendedVersion = ""
 				}
-				log.Println(packageExtendedVersion)
+				log.Println("Package extended version: " + packageExtendedVersion)
 
 				// Getting package last maintainer
 				log.Println("Getting package last maintainer ...")
@@ -371,14 +384,14 @@ func main() {
 				}
 				maintainerIdentity = strings.TrimSpace(strings.TrimSuffix(string(output), "\n"))
 
-				if strings.TrimSpace(uploaders) != strings.TrimSpace(maintainerIdentity) {
+				if strings.TrimSpace(uploaders) != strings.TrimSpace(maintainerIdentity) && !ignoreChecks {
 					err = errors.New("The uploaders value in the debian/control does not matched with your identity. Please update the debian/control file.")
 					log.Println("The uploader in the debian/control: " + uploaders)
 					log.Println("Your signing key identity: " + maintainerIdentity)
 					return
 				}
 
-				if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) {
+				if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) && !ignoreChecks {
 					err = errors.New("The last maintainer in the debian/changelog does not matched with your identity. Please update the debian/changelog file.")
 					log.Println("The last maintainer in the debian/changelog: " + packageLastMaintainer)
 					log.Println("Your signing key identity: " + maintainerIdentity)
@@ -450,11 +463,14 @@ func main() {
 				// Lintian
 				log.Println("Lintian test...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + workdir + " && lintian --profile blankon --fail-on error 2>&1"
+				cmdStr += "/" + workdir + " && lintian --profile blankon 2>&1"
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
-				log.Println(string(output))
-				if err != nil {
+				log.Println(string(output)) // Print warnings as well
+				// There is --fail-on error option on newer lintian version,
+				// but let's just check the existence of "E:" string on output to determine error
+				// to achieve backward compatibility with older lintian
+				if !ignoreChecks && (err != nil || strings.Contains(string(output), "E:")) {
 					log.Println("Failed to pass lintian.")
 					return
 				}
