@@ -492,14 +492,16 @@ func main() {
 					return
 				}
 
-				// Rename orig tarball to orig
-				log.Println("Rename orig tarbal to orig")
-				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += " && mv *.orig.tar.gz orig"
-				err = exec.Command("bash", "-c", cmdStr).Run()
-				if err != nil {
-					log.Println(err)
-					return
+				if len(sourceUrl) > 0 {
+					// Rename orig tarball to orig
+					log.Println("Rename orig tarbal to orig")
+					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+					cmdStr += " && mv *.orig.tar.gz orig"
+					err = exec.Command("bash", "-c", cmdStr).Run()
+					if err != nil {
+						log.Println(err)
+						return
+					}
 				}
 
 				// Clean up
