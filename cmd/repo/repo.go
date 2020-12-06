@@ -92,7 +92,7 @@ func Repo(payload string) (err error) {
 	}
 
 	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
-	%s reprepro -v -v -v --nothingiserror %s --component %s include %s %s/artifacts/%s/*source.changes`,
+	%s reprepro -v -v -v --nothingiserror --ignore=missingfile %s --component %s include %s %s/artifacts/%s/*source.changes`,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		gnupgDir,
