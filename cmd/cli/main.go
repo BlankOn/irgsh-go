@@ -270,12 +270,29 @@ func main() {
 					}
 					isExperimental = false
 				}
+				tmpID := uuid.New().String()
 				if len(sourceUrl) > 0 {
+					// TODO Ensure that the debian spec's source format is quilt.
+					// Otherwise (native), terminate the submission.
 					fmt.Println("sourceUrl: " + sourceUrl)
+					// Cloning Debian package files
+					_, err = git.PlainClone(
+						homeDir+"/.irgsh/tmp/"+tmpID+"/source",
+						false,
+						&git.CloneOptions{
+							URL:           sourceUrl,
+							Progress:      os.Stdout,
+							SingleBranch:  true,
+							ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", sourceBranch)),
+						},
+					)
+					if err != nil {
+						fmt.Println(err.Error())
+						return
+					}
 				}
 				fmt.Println("packageUrl: " + packageUrl)
 
-				tmpID := uuid.New().String()
 				// Cloning Debian package files
 				_, err = git.PlainClone(
 					homeDir+"/.irgsh/tmp/"+tmpID+"/package",
@@ -398,14 +415,43 @@ func main() {
 					return
 				}
 
-				// Rename the package dir so we can run dh_make and debuild without warning/error
-				workdir := packageName + "-" + packageVersion
+				// Determine package name with version
+				packageNameVersion := packageName + "-" + packageVersion
 				if len(packageExtendedVersion) > 0 {
-					workdir += "-" + packageExtendedVersion
+					packageNameVersion += "-" + packageExtendedVersion
 				}
+
+				if len(sourceUrl) > 0 {
+					// Copy the source into package
+					log.Println("Include source to package...")
+					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+					cmdStr += "/ && cp -vR source/* package/"
+					fmt.Println(cmdStr)
+					output, err = exec.Command("bash", "-c", cmdStr).Output()
+					if err != nil {
+						log.Println("error: %v\n", err)
+						log.Println("Failed to rename workdir.")
+						return
+					}
+
+					origFileName := packageName + "_" + strings.Split(packageVersion, "-")[0] // Discard quilt revision
+					// Compress source to orig tarball
+					log.Println("Include source to package...")
+					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+					cmdStr += "/ && tar -zcvf " + origFileName + ".orig.tar.gz source && rm -rf source "
+					fmt.Println(cmdStr)
+					output, err = exec.Command("bash", "-c", cmdStr).Output()
+					if err != nil {
+						log.Println("error: %v\n", err)
+						log.Println("Failed to rename workdir.")
+						return
+					}
+				}
+
+				// Rename the package dir so we can run debuild without warning/error
 				log.Println("Renaming workdir...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/ && mv package " + workdir
+				cmdStr += "/ && mv package " + packageNameVersion
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
@@ -414,39 +460,10 @@ func main() {
 					return
 				}
 
-				// Prepare orig
-				log.Println("Preparing orig tarball...")
-				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + workdir + " && dh_make -s -y --createorig || true"
-				fmt.Println(cmdStr)
-				output, err = exec.Command("bash", "-c", cmdStr).Output()
-				if err != nil {
-					log.Println("error: %v\n", err)
-					log.Println("Failed to prepare orig tarball.")
-					return
-				}
-
-				// We need orig tarball with underscore as delimiter
-				// Some were made with strip instead
-				orig := packageName + "-" + packageVersion
-				if len(packageExtendedVersion) > 0 {
-					orig += "_" + packageExtendedVersion
-				}
-				orig += ".orig.tar.xz"
-				origForQuilt := packageName + "_" + packageVersion + ".orig.tar.xz"
-				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += " && cp " + orig + " " + origForQuilt + " || true"
-				fmt.Println(cmdStr)
-				output, err = exec.Command("bash", "-c", cmdStr).Output()
-				if err != nil {
-					log.Println("error: %v\n", err)
-					log.Println("Failed to prepare orig for quilt tarball.")
-					return
-				}
 				// Signing DSC
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + workdir + " && debuild --no-lintian -d -S -k" + maintainerSigningKey
+				cmdStr += "/" + packageNameVersion + " && debuild --no-lintian -d -sa -S -k" + maintainerSigningKey
 				fmt.Println(cmdStr)
 				cmd := exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
@@ -463,7 +480,7 @@ func main() {
 				// Lintian
 				log.Println("Lintian test...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + workdir + " && lintian --profile blankon 2>&1"
+				cmdStr += "/" + packageNameVersion + " && lintian --profile blankon 2>&1"
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				log.Println(string(output)) // Print warnings as well
@@ -472,6 +489,16 @@ func main() {
 				// to achieve backward compatibility with older lintian
 				if !ignoreChecks && (err != nil || strings.Contains(string(output), "E:")) {
 					log.Println("Failed to pass lintian.")
+					return
+				}
+
+				// Rename orig tarball to orig
+				log.Println("Rename orig tarbal to orig")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += " && mv *.orig.tar.gz orig"
+				err = exec.Command("bash", "-c", cmdStr).Run()
+				if err != nil {
+					log.Println(err)
 					return
 				}
 
