@@ -14,7 +14,7 @@ Patches, suggestions and comments are welcome!
 You need Docker, Redis and these packages,
 
 ```
-gpg pbuilder debootstrap devscripts curl reprepro
+gpg pbuilder debootstrap devscripts curl reprepro dh-make
 ```
 
 Install all deps + released IRGSH with this command bellow,
