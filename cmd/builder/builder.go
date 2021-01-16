@@ -35,13 +35,6 @@ func Build(payload string) (next string, err error) {
 	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/build.log"
 	go systemutil.StreamLog(logPath)
 
-	next, err = Clone(payload)
-	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		uploadLog(logPath, raw["taskUUID"].(string))
-		return
-	}
-
 	next, err = BuildPreparation(payload)
 	if err != nil {
 		uploadLog(logPath, raw["taskUUID"].(string))
@@ -65,17 +58,6 @@ func Build(payload string) (next string, err error) {
 
 	fmt.Println("Done.")
 
-	return
-}
-
-func Clone(payload string) (next string, err error) {
-	in := []byte(payload)
-	var raw map[string]interface{}
-	json.Unmarshal(in, &raw)
-
-	// We are not recloning repositories since it's already bundled in the submission tarball
-
-	next = payload
 	return
 }
 
