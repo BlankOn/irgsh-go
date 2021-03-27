@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -288,7 +289,54 @@ func main() {
 					)
 					if err != nil {
 						fmt.Println(err.Error())
-						return
+						if strings.Contains(err.Error(), "repository not found") {
+							// Downloadable tarball? Let's try.
+							downloadURL := strings.TrimSuffix(string(sourceUrl), "\n")
+							log.Println(downloadURL)
+							log.Println("Downloading the tarball " + downloadURL)
+							resp, err1 := http.Get(downloadURL)
+							if err1 != nil {
+								log.Println(err)
+								err = err1
+								return
+								panic(err)
+							}
+							defer resp.Body.Close()
+							// Prepare dirs
+							targetDir := "/tmp/" + tmpID
+							err = os.MkdirAll(targetDir, 0755)
+							if err != nil {
+								log.Printf("error: %v\n", err)
+								return
+							}
+							err = os.MkdirAll(targetDir+"/extracted", 0755)
+							if err != nil {
+								log.Printf("error: %v\n", err)
+								return
+							}
+							err = os.MkdirAll(homeDir+"/.irgsh/tmp/"+tmpID+"/source", 0755)
+							if err != nil {
+								log.Printf("error: %v\n", err)
+								return
+							}
+
+							// Write the tarball
+							out, err := os.Create(targetDir + "/tarball")
+							defer out.Close()
+							io.Copy(out, resp.Body)
+
+							// Extract and move to appropriate path
+							cmdStr := "tar -xvf " + targetDir + "/tarball -C " + targetDir + "/extracted && mv " + targetDir + "/extracted/* " + homeDir + "/.irgsh/tmp/" + tmpID + "/source"
+							fmt.Println(cmdStr)
+							_, err = exec.Command("bash", "-c", cmdStr).Output()
+							if err != nil {
+								log.Println(err.Error())
+								panic(err)
+							}
+						} else {
+							log.Println(err.Error())
+							return
+						}
 					}
 				}
 				fmt.Println("packageUrl: " + packageUrl)
@@ -342,6 +390,9 @@ func main() {
 					return
 				}
 				packageVersion = strings.TrimSuffix(string(output), "\n")
+				if strings.Contains(packageVersion, ":") {
+					packageVersion = strings.Split(packageVersion, ":")[0]
+				}
 				log.Println("Package version: " + packageVersion)
 
 				// Getting package extended version
@@ -416,7 +467,10 @@ func main() {
 				}
 
 				// Determine package name with version
+				log.Println(packageVersion)
 				packageNameVersion := packageName + "-" + packageVersion
+				log.Println(packageNameVersion)
+				log.Println(packageExtendedVersion)
 				if len(packageExtendedVersion) > 0 {
 					packageNameVersion += "-" + packageExtendedVersion
 				}
