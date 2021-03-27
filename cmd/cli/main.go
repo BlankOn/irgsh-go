@@ -422,21 +422,9 @@ func main() {
 				}
 
 				if len(sourceUrl) > 0 {
-					// Copy the source into package
-					log.Println("Include source to package...")
-					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-					cmdStr += "/ && cp -vR source/* package/"
-					fmt.Println(cmdStr)
-					output, err = exec.Command("bash", "-c", cmdStr).Output()
-					if err != nil {
-						log.Println("error: %v\n", err)
-						log.Println("Failed to rename workdir.")
-						return
-					}
-
 					origFileName := packageName + "_" + strings.Split(packageVersion, "-")[0] // Discard quilt revision
 					// Compress source to orig tarball
-					log.Println("Include source to package...")
+					log.Println("Creating orig tarball...")
 					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 					cmdStr += "/ && tar -zcvf " + origFileName + ".orig.tar.gz source && rm -rf source "
 					fmt.Println(cmdStr)
