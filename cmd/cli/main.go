@@ -391,7 +391,7 @@ func main() {
 				}
 				packageVersion = strings.TrimSuffix(string(output), "\n")
 				if strings.Contains(packageVersion, ":") {
-					packageVersion = strings.Split(packageVersion, ":")[0]
+					packageVersion = strings.Split(packageVersion, ":")[1]
 				}
 				log.Println("Package version: " + packageVersion)
 
