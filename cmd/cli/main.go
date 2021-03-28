@@ -452,14 +452,14 @@ func main() {
 				}
 				maintainerIdentity = strings.TrimSpace(strings.TrimSuffix(string(output), "\n"))
 
-				if strings.TrimSpace(uploaders) != strings.TrimSpace(maintainerIdentity) && !ignoreChecks {
+				if strings.TrimSpace(uploaders) != strings.TrimSpace(maintainerIdentity) && !(ignoreChecks || ctx.Bool("experimental")) {
 					err = errors.New("The uploaders value in the debian/control does not matched with your identity. Please update the debian/control file.")
 					log.Println("The uploader in the debian/control: " + uploaders)
 					log.Println("Your signing key identity: " + maintainerIdentity)
 					return
 				}
 
-				if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) && !ignoreChecks {
+				if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) && !(ignoreChecks || ctx.Bool("experimental")) {
 					err = errors.New("The last maintainer in the debian/changelog does not matched with your identity. Please update the debian/changelog file.")
 					log.Println("The last maintainer in the debian/changelog: " + packageLastMaintainer)
 					log.Println("Your signing key identity: " + maintainerIdentity)
