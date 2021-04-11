@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path"
 	"strings"
 
 	"github.com/google/uuid"
@@ -272,6 +273,7 @@ func main() {
 					isExperimental = false
 				}
 				tmpID := uuid.New().String()
+				var downloadableTarballURL string
 				if len(sourceUrl) > 0 {
 					// TODO Ensure that the debian spec's source format is quilt.
 					// Otherwise (native), terminate the submission.
@@ -284,6 +286,7 @@ func main() {
 							URL:           sourceUrl,
 							Progress:      os.Stdout,
 							SingleBranch:  true,
+							Depth:         1,
 							ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", sourceBranch)),
 						},
 					)
@@ -291,10 +294,10 @@ func main() {
 						fmt.Println(err.Error())
 						if strings.Contains(err.Error(), "repository not found") {
 							// Downloadable tarball? Let's try.
-							downloadURL := strings.TrimSuffix(string(sourceUrl), "\n")
-							log.Println(downloadURL)
-							log.Println("Downloading the tarball " + downloadURL)
-							resp, err1 := http.Get(downloadURL)
+							downloadableTarballURL = strings.TrimSuffix(string(sourceUrl), "\n")
+							log.Println(downloadableTarballURL)
+							log.Println("Downloading the tarball " + downloadableTarballURL)
+							resp, err1 := http.Get(downloadableTarballURL)
 							if err1 != nil {
 								log.Println(err)
 								err = err1
@@ -303,36 +306,22 @@ func main() {
 							}
 							defer resp.Body.Close()
 							// Prepare dirs
-							targetDir := "/tmp/" + tmpID
+							targetDir := homeDir + "/.irgsh/tmp/" + tmpID
 							err = os.MkdirAll(targetDir, 0755)
-							if err != nil {
-								log.Printf("error: %v\n", err)
-								return
-							}
-							err = os.MkdirAll(targetDir+"/extracted", 0755)
-							if err != nil {
-								log.Printf("error: %v\n", err)
-								return
-							}
-							err = os.MkdirAll(homeDir+"/.irgsh/tmp/"+tmpID+"/source", 0755)
 							if err != nil {
 								log.Printf("error: %v\n", err)
 								return
 							}
 
 							// Write the tarball
-							out, err := os.Create(targetDir + "/tarball")
+							out, err := os.Create(targetDir + "/" + path.Base(downloadableTarballURL))
 							defer out.Close()
-							io.Copy(out, resp.Body)
-
-							// Extract and move to appropriate path
-							cmdStr := "tar -xvf " + targetDir + "/tarball -C " + targetDir + "/extracted && mv " + targetDir + "/extracted/* " + homeDir + "/.irgsh/tmp/" + tmpID + "/source"
-							fmt.Println(cmdStr)
-							_, err = exec.Command("bash", "-c", cmdStr).Output()
 							if err != nil {
 								log.Println(err.Error())
 								panic(err)
 							}
+							io.Copy(out, resp.Body)
+
 						} else {
 							log.Println(err.Error())
 							return
@@ -349,6 +338,7 @@ func main() {
 						URL:           packageUrl,
 						Progress:      os.Stdout,
 						SingleBranch:  true,
+						Depth:         1,
 						ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", packageBranch)),
 					},
 				)
@@ -475,7 +465,7 @@ func main() {
 					packageNameVersion += "-" + packageExtendedVersion
 				}
 
-				if len(sourceUrl) > 0 {
+				if len(sourceUrl) > 0 && len(downloadableTarballURL) < 1 {
 					origFileName := packageName + "_" + strings.Split(packageVersion, "-")[0] // Discard quilt revision
 					// Compress source to orig tarball
 					log.Println("Creating orig tarball...")
@@ -486,7 +476,6 @@ func main() {
 					if err != nil {
 						log.Println("error: %v\n", err)
 						log.Println("Failed to rename workdir.")
-						return
 					}
 				}
 
@@ -502,12 +491,29 @@ func main() {
 					return
 				}
 
+				// Generate DSC file
+				log.Println("Signing the dsc file...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/" + packageNameVersion + " && dpkg-source --build . && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes"
+				fmt.Println(cmdStr)
+				cmd := exec.Command("bash", "-c", cmdStr)
+				// Make it interactive
+				cmd.Stdout = os.Stdout
+				cmd.Stdin = os.Stdin
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
+					return
+				}
+
 				// Signing DSC
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + packageNameVersion + " && debuild --no-lintian -d -sa -S -k" + maintainerSigningKey
+				cmdStr += "/ && debsign -k" + maintainerSigningKey + " *.dsc"
 				fmt.Println(cmdStr)
-				cmd := exec.Command("bash", "-c", cmdStr)
+				cmd = exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
 				cmd.Stdout = os.Stdout
 				cmd.Stdin = os.Stdin
@@ -534,7 +540,7 @@ func main() {
 					return
 				}
 
-				if len(sourceUrl) > 0 {
+				if len(sourceUrl) > 0 && len(downloadableTarballURL) < 1 {
 					// Rename orig tarball to orig
 					log.Println("Rename orig tarbal to orig")
 					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
