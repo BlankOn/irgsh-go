@@ -100,7 +100,7 @@ func BuildPreparation(payload string) (next string, err error) {
 	// Until we found how to reproduce the exact tarball binary,
 	// we prioritize the tarball that generated from package maintainer.
 	// Anyway, after build finished we will re-check the contents
-	cmdStr += " && cp *orig.tar.* maintainerTarball "
+	cmdStr += " && cp orig maintainerTarball "
 	cmdStr += " && cp *.dsc maintainerSignature "
 	cmdStr += " && cp *source.changes maintainerChanges "
 	_, err = systemutil.CmdExec(
@@ -140,7 +140,7 @@ func BuildPackage(payload string) (next string, err error) {
 	if len(raw["sourceUrl"].(string)) > 0 {
 		origFileName := raw["packageName"].(string) + "_" + strings.Split(raw["packageVersion"].(string), "-")[0]
 		cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-		cmdStr += " && mv orig " + origFileName + ".orig.tar.gz"
+		cmdStr += " && mv orig " + origFileName + ".orig.tar.xz"
 		log.Println(cmdStr)
 		_, err = systemutil.CmdExec(
 			cmdStr,
@@ -178,7 +178,7 @@ func BuildPackage(payload string) (next string, err error) {
 	if len(raw["sourceUrl"].(string)) > 0 {
 		origFileName := raw["packageName"].(string) + "_" + strings.Split(raw["packageVersion"].(string), "-")[0]
 		cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-		cmdStr += " && mv " + origFileName + ".orig.tar.gz orig"
+		cmdStr += " && mv " + origFileName + ".orig.tar.xz orig"
 		log.Println(cmdStr)
 		_, err = systemutil.CmdExec(
 			cmdStr,
@@ -211,7 +211,7 @@ func BuildPackage(payload string) (next string, err error) {
 	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
 	cmdStr += " && mv maintainerSignature " + raw["packageName"].(string) + "*.dsc "
 	cmdStr += " && mv maintainerChanges " + raw["packageName"].(string) + "*source.changes "
-	cmdStr += " && mv maintainerTarball " + raw["packageName"].(string) + "*tar.* "
+	cmdStr += " && mv maintainerTarball " + raw["packageName"].(string) + "*orig.tar.* "
 	log.Println(cmdStr)
 	_, err = systemutil.CmdExec(
 		cmdStr,
@@ -228,7 +228,7 @@ func BuildPackage(payload string) (next string, err error) {
 	if len(raw["sourceUrl"].(string)) > 0 {
 		origFileName := raw["packageName"].(string) + "_" + strings.Split(raw["packageVersion"].(string), "-")[0]
 		cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-		cmdStr += " && mv orig " + origFileName + ".orig.tar.gz"
+		cmdStr += " && mv orig " + origFileName + ".orig.tar.xz"
 		log.Println(cmdStr)
 		_, err = systemutil.CmdExec(
 			cmdStr,

@@ -470,7 +470,7 @@ func main() {
 					// Compress source to orig tarball
 					log.Println("Creating orig tarball...")
 					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-					cmdStr += "/ && tar -zcvf " + origFileName + ".orig.tar.gz source && rm -rf source "
+					cmdStr += "/ && mkdir -p tmp && mv source tmp && cd tmp && mv source " + packageName + "-" + packageVersion + " && tar cfJ " + origFileName + ".orig.tar.xz " + packageName + "-" + packageVersion + " && rm -rf " + packageName + "-" + packageVersion + " && mv *.xz .. && cd .. && rm -rf tmp "
 					fmt.Println(cmdStr)
 					output, err = exec.Command("bash", "-c", cmdStr).Output()
 					if err != nil {
@@ -540,11 +540,11 @@ func main() {
 					return
 				}
 
-				if len(sourceUrl) > 0 && len(downloadableTarballURL) < 1 {
+				if len(sourceUrl) > 0 {
 					// Rename orig tarball to orig
-					log.Println("Rename orig tarbal to orig")
+					log.Println("Rename orig tarball to orig")
 					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-					cmdStr += " && mv *.orig.tar.gz orig"
+					cmdStr += " && mv *.orig.tar.* orig"
 					err = exec.Command("bash", "-c", cmdStr).Run()
 					if err != nil {
 						log.Println(err)
