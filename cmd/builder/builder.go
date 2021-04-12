@@ -100,7 +100,7 @@ func BuildPreparation(payload string) (next string, err error) {
 	// Until we found how to reproduce the exact tarball binary,
 	// we prioritize the tarball that generated from package maintainer.
 	// Anyway, after build finished we will re-check the contents
-	cmdStr += " && cp *tar.* maintainerTarball "
+	cmdStr += " && cp *orig.tar.* maintainerTarball "
 	cmdStr += " && cp *.dsc maintainerSignature "
 	cmdStr += " && cp *source.changes maintainerChanges "
 	_, err = systemutil.CmdExec(
