@@ -745,15 +745,27 @@ func main() {
 
 				result, err = req.Get(chiefAddress+"/logs/"+pipelineId+".build.log", nil)
 				if err != nil {
+					log.Println(err.Error())
 					return err
 				}
-				fmt.Println(fmt.Sprintf("%+v", result))
+				logResult := fmt.Sprintf("%+v", result)
+				if strings.Contains(logResult, "404 page not found") {
+					err = errors.New("Builder log is not found. The worker/pipeline may terminated ungracefully.")
+					return err
+				}
+				fmt.Println(logResult)
 
 				result, err = req.Get(chiefAddress+"/logs/"+pipelineId+".repo.log", nil)
 				if err != nil {
+					log.Println(err.Error())
 					return err
 				}
-				fmt.Println(fmt.Sprintf("%+v", result))
+				logResult = fmt.Sprintf("%+v", result)
+				if strings.Contains(logResult, "404 page not found") {
+					err = errors.New("Repo log is not found. The worker/pipeline may terminated ungracefully.")
+					return err
+				}
+				fmt.Println(logResult)
 
 				return
 			},
