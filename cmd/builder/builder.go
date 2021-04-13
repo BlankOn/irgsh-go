@@ -193,7 +193,7 @@ func BuildPackage(payload string) (next string, err error) {
 	// Recheck the tarball
 	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
 	cmdStr += " && mkdir a b"
-	cmdStr += " && tar -xf *.tar.* -C a "
+	cmdStr += " && tar -xf orig -C a "
 	cmdStr += " && tar -xf maintainerTarball -C b "
 	cmdStr += " && diff a b && rm -rf a b"
 	log.Println(cmdStr)
