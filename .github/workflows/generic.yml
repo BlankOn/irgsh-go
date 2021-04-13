@@ -16,7 +16,7 @@ jobs:
     steps:
     - name: Get current date
       id: date
-      run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+      run: echo "::set-output name=date::$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')"
     - uses: actions/checkout@v1
     - name: Build Development release
       run: |
