@@ -100,7 +100,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmdStr = "cd " + irgshConfig.Chief.Workdir + "/submissions/" + submission.TaskUUID + " && "
-	cmdStr += gnupgDir + " gpg --verify *.dsc"
+	cmdStr += gnupgDir + " gpg --verify signed/*.dsc"
 	err = exec.Command("bash", "-c", cmdStr).Run()
 	if err != nil {
 		log.Println(err)
