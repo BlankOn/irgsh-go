@@ -470,7 +470,7 @@ func main() {
 					// Compress source to orig tarball
 					log.Println("Creating orig tarball...")
 					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-					cmdStr += "/ && tar -zcvf " + origFileName + ".orig.tar.gz source && rm -rf source "
+					cmdStr += "/ && mkdir -p tmp && mv source tmp && cd tmp && mv source " + packageName + "-" + packageVersion + " && tar cfJ " + origFileName + ".orig.tar.xz " + packageName + "-" + packageVersion + " && rm -rf " + packageName + "-" + packageVersion + " && mv *.xz .. && cd .. && rm -rf tmp "
 					fmt.Println(cmdStr)
 					output, err = exec.Command("bash", "-c", cmdStr).Output()
 					if err != nil {
@@ -491,10 +491,10 @@ func main() {
 					return
 				}
 
-				// Generate DSC file
+				// Generate the dsc file
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/" + packageNameVersion + " && dpkg-source --build . && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes"
+				cmdStr += "/" + packageNameVersion + " && dpkg-source --build . "
 				fmt.Println(cmdStr)
 				cmd := exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
@@ -508,10 +508,27 @@ func main() {
 					return
 				}
 
-				// Signing DSC
+				// Signing the dsc file
 				log.Println("Signing the dsc file...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/ && debsign -k" + maintainerSigningKey + " *.dsc"
+				fmt.Println(cmdStr)
+				cmd = exec.Command("bash", "-c", cmdStr)
+				// Make it interactive
+				cmd.Stdout = os.Stdout
+				cmd.Stdin = os.Stdin
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
+					return
+				}
+
+				// Generate the changes file
+				log.Println("Signing the dsc file...")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/" + packageNameVersion + " && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes "
 				fmt.Println(cmdStr)
 				cmd = exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
@@ -540,11 +557,13 @@ func main() {
 					return
 				}
 
-				if len(sourceUrl) > 0 && len(downloadableTarballURL) < 1 {
-					// Rename orig tarball to orig
-					log.Println("Rename orig tarbal to orig")
+				if len(sourceUrl) > 0 {
+					log.Println("Rename move generated files to signed dir")
 					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-					cmdStr += " && mv *.orig.tar.gz orig"
+					cmdStr += " && mkdir signed"
+					cmdStr += " && mv *.xz ./signed/ "
+					cmdStr += " && mv *.dsc ./signed/ "
+					cmdStr += " && mv *.changes ./signed/ "
 					err = exec.Command("bash", "-c", cmdStr).Run()
 					if err != nil {
 						log.Println(err)
@@ -745,15 +764,27 @@ func main() {
 
 				result, err = req.Get(chiefAddress+"/logs/"+pipelineId+".build.log", nil)
 				if err != nil {
+					log.Println(err.Error())
 					return err
 				}
-				fmt.Println(fmt.Sprintf("%+v", result))
+				logResult := fmt.Sprintf("%+v", result)
+				if strings.Contains(logResult, "404 page not found") {
+					err = errors.New("Builder log is not found. The worker/pipeline may terminated ungracefully.")
+					return err
+				}
+				fmt.Println(logResult)
 
 				result, err = req.Get(chiefAddress+"/logs/"+pipelineId+".repo.log", nil)
 				if err != nil {
+					log.Println(err.Error())
 					return err
 				}
-				fmt.Println(fmt.Sprintf("%+v", result))
+				logResult = fmt.Sprintf("%+v", result)
+				if strings.Contains(logResult, "404 page not found") {
+					err = errors.New("Repo log is not found. The worker/pipeline may terminated ungracefully.")
+					return err
+				}
+				fmt.Println(logResult)
 
 				return
 			},
