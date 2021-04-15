@@ -10,15 +10,67 @@ on:
       - '*'
 
 jobs:
-  build:
+  build-devel:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')"
     - uses: actions/checkout@v1
-    - name: Run a multi-line script
+    - name: Build Development release
       run: |
         sudo apt update && sudo apt install -y gpg pbuilder debootstrap devscripts python-apt reprepro make
         curl -O https://storage.googleapis.com/golang/go1.13.14.linux-amd64.tar.gz
         tar -xf go1.13.14.linux-amd64.tar.gz
         sudo mv go /usr/local
+        echo ${{ steps.date.outputs.date }}-development-build > VERSION
         make release
+        mv target/{release,pre-release}.tar.gz
+    - uses: actions/upload-artifact@master
+      with:
+        name: pre-release.tar.gz
+        path: target/
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+      with:
+        tag_name: ${{ steps.date.outputs.date }}
+        release_name: ${{ steps.date.outputs.date }} Development Release
+        body: |
+          Development release ${{ steps.date.outputs.date }}
+        draft: false
+        prerelease: true
+    - name: Upload Full Release Asset
+      id: upload-full-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+        asset_path: ./target/pre-release.tar.gz
+        asset_name: pre-release.tar.gz
+        asset_content_type: application/tar+gzip
+    - name: Upload CLI Release
+      id: upload-cli-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./irgsh-go/usr/bin/irgsh-cli
+        asset_name: irgsh-cli
+        asset_content_type: application/x-executable
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build-devel]
+    steps:
+    - name: Deployment
+      env:
+        HOST: ${{secrets.RAFI_HOSTNAME}}
+        KEY: ${{secrets.RAFI_DEPLOYMENT_KEY}}
+      run: |
+        curl --header "Content-Type: application/json" --request POST --data "{\"name\":\"irgsh-dev\",\"token\": \""$KEY"\"}" https://$HOST/tendang

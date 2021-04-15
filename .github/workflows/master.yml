@@ -11,7 +11,7 @@ jobs:
     steps:
     - name: Get current date
       id: date
-      run: echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+      run: echo "::set-output name=date::$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')"
     - uses: actions/checkout@v1
     - name: Run a multi-line script
       run: |
@@ -38,12 +38,12 @@ jobs:
         draft: false
         prerelease: false
     - name: Upload Full Release Asset
-      id: upload-full-release-asset 
+      id: upload-full-release-asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
         asset_path: ./target/release.tar.gz
         asset_name: release.tar.gz
         asset_content_type: application/tar+gzip
