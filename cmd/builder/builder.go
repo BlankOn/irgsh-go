@@ -128,19 +128,17 @@ func BuildPackage(payload string) (next string, err error) {
 	}
 
 	// Copy the maintainer's generated files from signed dir
-	if len(raw["sourceUrl"].(string)) > 0 {
-		cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-		cmdStr += " && cp signed/* ."
-		log.Println(cmdStr)
-		_, err = systemutil.CmdExec(
-			cmdStr,
-			"Copy the maintainer's generated files from signed dir.",
-			logPath,
-		)
-		if err != nil {
-			log.Printf("error: %v\n", err)
-			return
-		}
+	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
+	cmdStr += " && cp signed/* ."
+	log.Println(cmdStr)
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"Copy the maintainer's generated files from signed dir.",
+		logPath,
+	)
+	if err != nil {
+		log.Printf("error: %v\n", err)
+		return
 	}
 
 	// Cleanup pbuilder cache result
@@ -151,7 +149,7 @@ func BuildPackage(payload string) (next string, err error) {
 	)
 
 	// Building the package
-	cmdStr := "docker run -v " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
+	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
 	cmdStr += ":/tmp/build --privileged=true -i pbocker bash -c /build.sh"
 	fmt.Println(cmdStr)
 	_, err = systemutil.CmdExec(
