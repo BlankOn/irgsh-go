@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# stop when error
+set -e
+
 DIST=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
 
 # Require sudo or root privilege
@@ -12,6 +15,15 @@ TEMP_PATH=/tmp
 DEV_INSTALL=0
 
 apt update
+
+# Check if docker is installed
+if [[ -x "$(command -v docker)" && $(docker --version) ]]; then
+    echo "Docker installed [OK]"
+else
+    echo "Installing docker"
+    apt install -y docker.io
+fi
+
 apt install -y gnupg pbuilder debootstrap devscripts debhelper python-apt reprepro jq
 
 if [ -f ./target/release.tar.gz ]; then
@@ -25,10 +37,10 @@ else
 	echo "$DOWNLOAD_URL"
 	rm -f $TEMP_PATH/release.tar.gz && cd $TEMP_PATH && curl -L -f -o ./release.tar.gz $DOWNLOAD_URL
 	if test $? -gt 0; then
-		echo "Downloding [FAILED]"
+		echo "Downloading [FAILED]"
 		exit 1
 	fi
-	echo "Downloding [OK]"
+	echo "Downloading [OK]"
 	echo
 fi
 
@@ -39,20 +51,22 @@ rm -rf irgsh-go && tar -xf release.tar.gz
 echo "Extracting [OK]"
 echo
 
-# Stop any existing instances
-echo "Stopping existing instance(s) ... "
-systemctl daemon-reload
-/etc/init.d/irgsh-chief stop || true
-/etc/init.d/irgsh-builder stop || true
-/etc/init.d/irgsh-repo stop || true
-systemctl stop irgsh-chief
-systemctl stop irgsh-builder
-systemctl stop irgsh-repo
-killall irgsh-chief || true
-killall irgsh-builder || true
-killall irgsh-repo || true
-echo "Stopping existing instance(s) [OK]"
-echo
+# Stop any existing instances if installed
+if [ -x "$(command -v irgsh-chief )" ]; then
+	echo "Stopping existing instance(s) ... "
+	systemctl daemon-reload
+	/etc/init.d/irgsh-chief stop || true
+	/etc/init.d/irgsh-builder stop || true
+	/etc/init.d/irgsh-repo stop || true
+	systemctl stop irgsh-chief
+	systemctl stop irgsh-builder
+	systemctl stop irgsh-repo
+	killall irgsh-chief || true
+	killall irgsh-builder || true
+	killall irgsh-repo || true
+	echo "Stopping existing instance(s) [OK]"
+	echo
+fi
 
 if [ $DEV_INSTALL = 1 ]; then
 	# For development/testing purpose
@@ -87,7 +101,7 @@ if [ ! -f "/etc/irgsh/config.yml" ]; then
 	cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
 fi
 # irgsh user
-groupadd irgsh || true
+#groupadd irgsh || true
 if getent passwd irgsh >/dev/null 2>&1; then
 	echo "irgsh user is already exists"
 else
@@ -97,7 +111,7 @@ else
 	usermod -aG docker irgsh
 	echo "irgsh user added to system"
 fi
-usermod -aG irgsh irgsh
+#usermod -aG irgsh irgsh
 echo "Installing files [OK]"
 echo
 
