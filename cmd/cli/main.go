@@ -557,18 +557,16 @@ func main() {
 					return
 				}
 
-				if len(sourceUrl) > 0 {
-					log.Println("Rename move generated files to signed dir")
-					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-					cmdStr += " && mkdir signed"
-					cmdStr += " && mv *.xz ./signed/ "
-					cmdStr += " && mv *.dsc ./signed/ "
-					cmdStr += " && mv *.changes ./signed/ "
-					err = exec.Command("bash", "-c", cmdStr).Run()
-					if err != nil {
-						log.Println(err)
-						return
-					}
+				log.Println("Rename move generated files to signed dir")
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += " && mkdir signed"
+				cmdStr += " && mv *.xz ./signed/ || true " // ignore if err, native package has no orig tarball
+				cmdStr += " && mv *.dsc ./signed/ "
+				cmdStr += " && mv *.changes ./signed/ "
+				err = exec.Command("bash", "-c", cmdStr).Run()
+				if err != nil {
+					log.Println(err)
+					return
 				}
 
 				// Clean up
