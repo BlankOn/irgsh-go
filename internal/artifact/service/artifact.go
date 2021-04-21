@@ -1,18 +1,15 @@
 package service
 
 import (
+	"github.com/RichardKnop/machinery/v1"
+	artifactModel "github.com/blankon/irgsh-go/internal/artifact/model"
 	artifactRepo "github.com/blankon/irgsh-go/internal/artifact/repo"
 )
-
-// ArtifactItem representation of artifact data
-type ArtifactItem struct {
-	Name string `json:"name"`
-}
 
 // ArtifactList list of artifact
 type ArtifactList struct {
 	TotalData int
-	Artifacts []ArtifactItem `json:"artifacts"`
+	Artifacts []artifactModel.Artifact `json:"artifacts"`
 }
 
 // Service interface for artifact service
@@ -22,11 +19,12 @@ type Service interface {
 
 // ArtifactService implement service
 type ArtifactService struct {
-	repo artifactRepo.Repo
+	repo            artifactRepo.Repo
+	machineryServer *machinery.Server
 }
 
 // NewArtifactService return artifact service instance
-func NewArtifactService(repo artifactRepo.Repo) *ArtifactService {
+func NewArtifactService(repo artifactRepo.Repo, machineryServer *machinery.Server) *ArtifactService {
 	return &ArtifactService{
 		repo: repo,
 	}
@@ -41,10 +39,10 @@ func (A *ArtifactService) GetArtifactList(pageNum int64, rows int64) (list Artif
 	}
 
 	list.TotalData = alist.TotalData
-	list.Artifacts = []ArtifactItem{}
+	list.Artifacts = []artifactModel.Artifact{}
 
 	for _, a := range alist.Artifacts {
-		list.Artifacts = append(list.Artifacts, ArtifactItem{Name: a.Name})
+		list.Artifacts = append(list.Artifacts, artifactModel.Artifact{Name: a.Name})
 	}
 
 	return
