@@ -56,8 +56,14 @@ func main() {
 			Name:    "init-base",
 			Aliases: []string{"i"},
 			Usage:   "Initialize pbuilder base.tgz. This need to be run under sudo or root",
-			Action: func(c *cli.Context) error {
-				err := InitBase()
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "internalrepo",
+					Usage: "Use internal repo",
+				},
+			},
+			Action: func(ctx *cli.Context) error {
+				err := InitBase(ctx.Bool("internalrepo"))
 				return err
 			},
 		},

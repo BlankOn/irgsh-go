@@ -25,6 +25,7 @@ repo:
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
   upstream_dist_components: 'main non-free>restricted contrib>extras'
   gnupg_dir: '/var/lib/irgsh/gnupg'
+  dist_url: 'http://arsip-dev.blankonlinux.or.id/blankon'
 
 iso:
   workdir: '/var/lib/irgsh/iso'

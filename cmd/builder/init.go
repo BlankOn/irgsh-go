@@ -10,7 +10,7 @@ import (
 	"github.com/manifoldco/promptui"
 )
 
-func InitBase() (err error) {
+func InitBase(useInternalRepo bool) (err error) {
 	logPath := irgshConfig.Builder.Workdir
 	logPath += "/irgsh-builder-init-base-" + uuid.New().String() + ".log"
 	go systemutil.StreamLog(logPath)
@@ -62,8 +62,17 @@ func InitBase() (err error) {
 		fmt.Printf("error: %v\n", err)
 		return
 	}
+
+	// Determine the upstream repo
+	upstreamDistUrl := irgshConfig.Repo.UpstreamDistUrl
+	upstreamDistCodename := irgshConfig.Repo.UpstreamDistCodename
+	if useInternalRepo {
+		upstreamDistUrl = irgshConfig.Repo.DistUrl // Use internal repo
+		upstreamDistCodename = irgshConfig.Repo.DistCodename
+	}
+
 	cmdStr = "pbuilder create --debootstrapopts --variant=buildd"
-	if strings.Contains(irgshConfig.Repo.UpstreamDistUrl, "debian") && (strings.Contains(distribution, "Ubuntu") ||
+	if (strings.Contains(upstreamDistUrl, "debian") || strings.Contains(upstreamDistUrl, "blankon")) && (strings.Contains(distribution, "Ubuntu") ||
 		strings.Contains(distribution, "Pop")) {
 		_, err = systemutil.CmdExec(
 			"apt-get update && apt-get -y install debian-archive-keyring",
@@ -74,7 +83,7 @@ func InitBase() (err error) {
 			fmt.Printf("error: %v\n", err)
 			return
 		}
-		cmdStr = "pbuilder create --distribution " + irgshConfig.Repo.UpstreamDistCodename + " --mirror " + irgshConfig.Repo.UpstreamDistUrl + " --debootstrapopts \"--keyring=/usr/share/keyrings/debian-archive-keyring.gpg\""
+		cmdStr = "pbuilder create --distribution " + upstreamDistCodename + " --mirror " + upstreamDistUrl + " --debootstrapopts \"--keyring=/usr/share/keyrings/debian-archive-keyring.gpg\""
 	}
 	_, err = systemutil.CmdExec(
 		cmdStr,

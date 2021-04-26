@@ -50,6 +50,7 @@ type RepoConfig struct {
 	UpstreamDistUrl            string `json:"upstream_dist_url" validate:"required"`            // http://kartolo.sby.datautama.net.id/debian
 	UpstreamDistComponents     string `json:"upstream_dist_components" validate:"required"`     // main non-free>restricted contrib>extras
 	GnupgDir                   string `json:"gnupg_dir" validate:"required"`                    // GNUPG dir path
+	DistUrl                    string `json:"dist_url" validate:"required"`                     // http://arsip-dev.blankonlinux.or.id/blankon
 }
 
 // LoadConfig load irgsh config from file
