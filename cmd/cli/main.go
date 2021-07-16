@@ -1,6 +1,7 @@
 package main
 
 import (
+	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -190,7 +191,7 @@ func main() {
 			},
 			Action: func(ctx *cli.Context) (err error) {
 
-				ignoreChecks := ctx.Bool("ignore-checks")
+				ignoreChecks := ctx.Bool("ignore-checks") && ctx.Bool("experimental")
 
 				err = checkForInitValues()
 				if err != nil {
@@ -606,7 +607,7 @@ func main() {
 				// Signing a token
 				log.Println("Signing auth token...")
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
-				cmdStr += "/ && echo '" + string(jsonByte) + "' > token && gpg -u " + maintainerSigningKey + " --clearsign --output token.sig --sign token"
+				cmdStr += "/ && echo '" + b64.StdEncoding.EncodeToString(jsonByte) + "' | base64 -d > token && gpg -u " + maintainerSigningKey + " --clearsign --output token.sig --sign token"
 				fmt.Println(cmdStr)
 				cmd = exec.Command("bash", "-c", cmdStr)
 				// Make it interactive
