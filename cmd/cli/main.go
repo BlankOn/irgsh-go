@@ -190,7 +190,7 @@ func main() {
 			},
 			Action: func(ctx *cli.Context) (err error) {
 
-				ignoreChecks := ctx.Bool("ignore-checks")
+				ignoreChecks := ctx.Bool("ignore-checks") && ctx.Bool("experimental")
 
 				err = checkForInitValues()
 				if err != nil {
