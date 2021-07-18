@@ -3,7 +3,6 @@ name: generic
 on:
   push:
     branches:
-      - '*'
       - '!master'
   pull_request:
     branches:
