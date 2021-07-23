@@ -23,14 +23,15 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install .
+          pip install mkdocs
+          pip install mkdocs-material
           pip install \
             mkdocs-minify-plugin>=0.3 \
             mkdocs-redirects>=1.0
 
       - name: Deploy documentation
-        env:
-          GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
+        # env:
+        #   GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
         run: |
           mkdocs gh-deploy -f mkdocs/mkdocs.yml --force
           mkdocs --version
