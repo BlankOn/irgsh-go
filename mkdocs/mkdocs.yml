@@ -13,7 +13,7 @@ theme:
     repo: fontawesome/brands/github
   #logo: material/library
   favicon: img/favicon.ico
-  custom_dir: docs/theme-overrides
+  custom_dir: theme-overrides
   palette:
     - scheme: default
       toggle:
@@ -57,3 +57,5 @@ markdown_extensions:
 
 repo_url: https://github.com/blankon/irgsh-go
 repo_name: BlankOn/irgsh-go
+
+docs_dir: ../docs
