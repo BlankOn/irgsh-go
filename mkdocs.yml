@@ -1,0 +1,59 @@
+site_name: IRGSH Go
+site_url: https://irgsh-go.nacita.id/
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+  #logo: material/library
+  favicon: img/favicon.ico
+  custom_dir: docs/theme-overrides
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+
+nav:
+    - Home: index.md
+    - Developer Guide: hacking.md
+    - Reference: reference.md
+    - Issue Tracker: https://github.com/BlankOn/irgsh-go/issues
+    - About:
+      - License: license.md
+      - Contributing: contributing.md
+
+extra:
+#  homepage: https://example.com
+  social:
+    - icon: fontawesome/brands/facebook
+      link: https://www.facebook.com/blankon.linux/
+      name: Facebook BlankOn Linux
+    - icon: fontawesome/brands/twitter
+      link:
+      name: Twitter BlankOn Linux
+    - icon: fontawesome/brands/instagram
+      link: https://instagram.com/nacita.id
+      name: Instagram BlankOn Linux
+    - icon: fontawesome/brands/github
+      link: https://github.com/blankon
+      name: GitHub BlankOn Linux
+
+copyright: Copyright &copy; 2021 BlankOn Linux Developer
+
+markdown_extensions:
+  - toc:
+      permalink: true
+
+repo_url: https://github.com/blankon/irgsh-go
+repo_name: BlankOn/irgsh-go
