@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://irgsh-go.nacita.id/</loc>
+         <lastmod>2021-08-12</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://irgsh-go.nacita.id/about/</loc>
+         <lastmod>2021-08-12</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://irgsh-go.nacita.id/contributing/</loc>
+         <lastmod>2021-08-12</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://irgsh-go.nacita.id/hacking/</loc>
+         <lastmod>2021-08-12</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://irgsh-go.nacita.id/license/</loc>
+         <lastmod>2021-08-12</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://irgsh-go.nacita.id/reference/</loc>
+         <lastmod>2021-08-12</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+</urlset>
