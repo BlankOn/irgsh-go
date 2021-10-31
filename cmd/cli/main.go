@@ -221,6 +221,8 @@ func main() {
 				}
 
 				if versionResponse.Version != app.Version {
+					log.Println("Target version", versionResponse.Version)
+					log.Println("Local version", app.Version)
 					err = errors.New("Client version mismatch. Please update your irgsh-cli.")
 					return
 				}
@@ -526,8 +528,24 @@ func main() {
 					return
 				}
 
-				// Generate the changes file
 				log.Println("Signing the dsc file...")
+				// Generate the buildinfo file
+				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+				cmdStr += "/" + packageNameVersion + " && dpkg-genbuildinfo "
+				fmt.Println(cmdStr)
+				cmd = exec.Command("bash", "-c", cmdStr)
+				// Make it interactive
+				cmd.Stdout = os.Stdout
+				cmd.Stdin = os.Stdin
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+				if err != nil {
+					log.Println("error: %v\n", err)
+					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
+					return
+				}
+
+				// Generate the changes file
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/" + packageNameVersion + " && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes "
 				fmt.Println(cmdStr)
