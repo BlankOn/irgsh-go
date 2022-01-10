@@ -150,7 +150,7 @@ func BuildPackage(payload string) (next string, err error) {
 
 	// Building the package
 	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-	cmdStr += ":/tmp/build --privileged=true -i pbocker bash -c /build.sh"
+	cmdStr += ":/tmp/build --privileged=true -i pbocker bash -c /build.sh" // See builder/init.go to modify this script
 	fmt.Println(cmdStr)
 	_, err = systemutil.CmdExec(
 		cmdStr,
