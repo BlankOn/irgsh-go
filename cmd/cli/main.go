@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -528,7 +530,7 @@ func main() {
 					return
 				}
 
-				log.Println("Signing the dsc file...")
+				log.Println("Generate buildinfo file...")
 				// Generate the buildinfo file
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
 				cmdStr += "/" + packageNameVersion + " && dpkg-genbuildinfo "
@@ -537,13 +539,16 @@ func main() {
 				// Make it interactive
 				cmd.Stdout = os.Stdout
 				cmd.Stdin = os.Stdin
-				cmd.Stderr = os.Stderr
+				var buffer bytes.Buffer
+				bufWriter := bufio.NewWriter(&buffer)
+				cmd.Stderr = bufWriter
 				err = cmd.Run()
-				if err != nil {
-					log.Println("error: %v\n", err)
+				if err != nil && !strings.Contains(buffer.String(), ".buildinfo is meaningless") {
+					log.Println("error: %v\n", err.Error())
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
+				err = nil
 
 				// Generate the changes file
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
