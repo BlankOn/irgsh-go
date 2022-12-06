@@ -47,7 +47,11 @@ This command will:
 - Create pbuilder base.tgz that follow our configuration. This step need root privilege, you'll be asked for root password.
 - Create docker image that will be used to build packages.
 
+This one may take longer as it need to build an entire chroot environment.
+
 #### Repository
+
+You need to set the `repo.dist_signing_key` in `./utils/config.yaml` to your GPG key identity. For local development, it's okay to use the same key. In production, the repo signing key should be something else than maintainer's keys. Then,
 
 `make repo-init`
 
@@ -72,7 +76,7 @@ Open the fourth terminal and try to submit dummy package using this command bell
 
 You may be asked for your GPG key passphrase. You'll see the package preprared in this terminal, then in the chief terminal (job coordination), then in builder terminal (package building), then in repo terminal (package submission into the repository).
 
-If all is well, you can see the result by opening `http://localhost:8082/experimental/` on your web browser. At this point, you may start to hack.
+If all is well, you can see the result by opening `http://localhost:8082/experimental/` on your web browser. At this point, you have explored the full cycle of the basic usage. You may want to start to hack.
 
 
 Check the status of a pipeline
