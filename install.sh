@@ -24,7 +24,7 @@ else
     apt install -y docker.io
 fi
 
-apt install -y gnupg pbuilder debootstrap devscripts debhelper python-apt reprepro jq
+apt install -y gnupg pbuilder debootstrap devscripts debhelper python3-apt reprepro jq
 
 if [ -f ./target/release.tar.gz ]; then
 	# For development/testing purpose

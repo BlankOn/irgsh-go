@@ -42,6 +42,14 @@ type Submission struct {
 	SourceBranch           string `json:"sourceBranch"`
 }
 
+type GithubReleaseResponse struct {
+	Url    string `json:"url"`
+	Assets []struct {
+		Name               string `json:"name"`
+		BrowserDownloadUrl string `json:"browser_download_url"`
+	}
+}
+
 var (
 	app                  *cli.App
 	homeDir              string
@@ -815,36 +823,72 @@ func main() {
 			Name:  "update",
 			Usage: "Update the irgsh-cli tool",
 			Action: func(c *cli.Context) (err error) {
-				cmdStr := "curl -ksL 'https://api.github.com/repos/BlankOn/irgsh-go/releases/latest' | jq -r '.assets | .[] | select(.name == \"irgsh-cli\")| .browser_download_url'"
-				output, err := exec.Command("bash", "-c", cmdStr).Output()
+				var (
+					cmdStr          = "ln -sf /usr/bin/irgsh-cli /usr/bin/irgsh && /usr/bin/irgsh-cli --version"
+					downloadURL     string
+					githubResponse  GithubReleaseResponse
+					githubAssetName = "irgsh-cli"
+					url             = "https://api.github.com/repos/BlankOn/irgsh-go/releases/latest"
+				)
+
+				response, err := http.Get(url)
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v\n", err)
 					log.Println("Failed to get package name.")
+
 					return
 				}
-				downloadURL := strings.TrimSuffix(string(output), "\n")
+				defer response.Body.Close()
+
+				body, err := ioutil.ReadAll(response.Body)
+				if err != nil {
+					log.Printf("error: %v\n", err)
+
+					return
+				}
+
+				if err := json.Unmarshal(body, &githubResponse); err != nil {
+					log.Printf("error: %v\n", err)
+
+					return err
+				}
+
+				for _, asset := range githubResponse.Assets {
+					if asset.Name == githubAssetName {
+						downloadURL = strings.TrimSuffix(string(asset.BrowserDownloadUrl), "\n")
+						break
+					}
+				}
+
 				log.Println(downloadURL)
 				log.Println("Self-updating...")
+
 				resp, err := http.Get(downloadURL)
 				if err != nil {
-					log.Println(err)
+					log.Printf("error: %v\n", err)
+
 					return err
 				}
+
 				defer resp.Body.Close()
+
 				err = update.Apply(resp.Body, update.Options{})
 				if err != nil {
-					log.Println(err)
+					log.Printf("error: %v\n", err)
+
 					return err
 				}
-				cmdStr = "ln -sf /usr/bin/irgsh-cli /usr/bin/irgsh && /usr/bin/irgsh-cli --version"
+
 				log.Println(cmdStr)
-				output, err = exec.Command("bash", "-c", cmdStr).Output()
+
+				output, err := exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
 					log.Println(output)
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v\n", err)
 					log.Println("Failed to get package name.")
 				}
 				log.Println("Updated to " + strings.TrimSuffix(string(output), "\n"))
+
 				return
 			},
 		},

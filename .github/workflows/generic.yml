@@ -3,7 +3,7 @@ name: Generic github actions
 on:
   push:
     branches-ignore:
-      - 'master'
+      - "master"
 
 permissions:
   contents: write
@@ -12,34 +12,34 @@ jobs:
   build-devel:
     runs-on: ubuntu-latest
     steps:
-    - name: Get current date
-      run: echo "irgsh_build_date=$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')" >> $GITHUB_ENV
-    - uses: actions/checkout@v3
-    - name: Install needed apt packages
-      uses: awalsh128/cache-apt-pkgs-action@v1.2.3
-      with:
-        packages: gpg pbuilder debootstrap devscripts python3-apt reprepro make
-        version: 1.0
-    - uses: actions/setup-go@v3
-      with:
-        go-version: '1.13.14'
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-    - name: Build development release
-      run: |
-        echo ${{ env.irgsh_build_date }}-development-build > VERSION
-        make release
-        mv target/{release,pre-release}.tar.gz
-    - uses: actions/upload-artifact@v3
-      with:
-        name: pre-release.tar.gz
-        path: target/
+      - name: Get current date
+        run: echo "irgsh_build_date=$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')" >> $GITHUB_ENV
+      - uses: actions/checkout@v3
+      - name: Install needed apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.2.3
+        with:
+          packages: gpg pbuilder debootstrap devscripts python3-apt reprepro make
+          version: 1.0
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "1.13.14"
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Build development release
+        run: |
+          echo ${{ env.irgsh_build_date }}-development-build > VERSION
+          make release
+          mv target/{release,pre-release}.tar.gz
+      - uses: actions/upload-artifact@v3
+        with:
+          name: pre-release.tar.gz
+          path: target/
     outputs:
       irgsh_build_date: ${{ env.irgsh_build_date }}
 
@@ -47,32 +47,32 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-devel]
     steps:
-    - uses: actions/download-artifact@v3
-      with:
-        name: pre-release.tar.gz
-    - name: Extract pre-release
-      run: |
-        tar xvzf pre-release.tar.gz
-        cp $(find . -type f -name "irgsh-cli") .
-    - name: Create github pre-release
-      uses: softprops/action-gh-release@v0.1.15
-      with:
-        name: ${{ needs.build-devel.outputs.irgsh_build_date }} Development Release
-        body: Development release ${{ needs.build-devel.outputs.irgsh_build_date }}
-        draft: false
-        prerelease: true
-        tag_name: ${{ needs.build-devel.outputs.irgsh_build_date }}-development-build
-        files: |
-          pre-release.tar.gz
-          irgsh-cli
+      - uses: actions/download-artifact@v3
+        with:
+          name: pre-release.tar.gz
+      - name: Extract pre-release
+        run: |
+          tar xvzf pre-release.tar.gz
+          cp $(find . -type f -name "irgsh-cli") .
+      - name: Create github pre-release
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          name: ${{ needs.build-devel.outputs.irgsh_build_date }} Development Release
+          body: Development release ${{ needs.build-devel.outputs.irgsh_build_date }}
+          draft: false
+          prerelease: true
+          tag_name: ${{ needs.build-devel.outputs.irgsh_build_date }}-development-build
+          files: |
+            pre-release.tar.gz
+            irgsh-cli
 
   deploy:
     runs-on: ubuntu-latest
     needs: [release]
     steps:
-    - name: Deploy to irgsh development server
-      uses: kudaliar032/tendang-action@v1
-      with:
-        url: ${{ secrets.RAFI_TENDANG_URL }}
-        token: ${{ secrets.RAFI_DEPLOYMENT_KEY }}
-        name: ${{ secrets.RAFI_DEPLOYMENT_NAME }}
+      - name: Deploy to irgsh development server
+        uses: kudaliar032/tendang-action@v1
+        with:
+          url: ${{ secrets.RAFI_TENDANG_URL }}
+          token: ${{ secrets.RAFI_DEPLOYMENT_KEY }}
+          name: ${{ secrets.RAFI_DEPLOYMENT_NAME }}

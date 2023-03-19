@@ -3,7 +3,7 @@ name: Master github actions
 on:
   push:
     branches:
-      - 'master'
+      - "master"
 
 permissions:
   contents: write
@@ -12,33 +12,33 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
     steps:
-    - name: Get current date
-      run: echo "irgsh_build_date=$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')" >> $GITHUB_ENV
-    - uses: actions/checkout@v3
-    - name: Install needed apt packages
-      uses: awalsh128/cache-apt-pkgs-action@v1.2.3
-      with:
-        packages: gpg pbuilder debootstrap devscripts python3-apt reprepro make
-        version: 1.0
-    - uses: actions/setup-go@v3
-      with:
-        go-version: '1.13.14'
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-    - name: Build nightly release
-      run: |
-        echo ${{ steps.date.outputs.date }}-nightly-build > VERSION
-        make release
-    - uses: actions/upload-artifact@v3
-      with:
-        name: release.tar.gz
-        path: target/
+      - name: Get current date
+        run: echo "irgsh_build_date=$(TZ='Asia/Jakarta' date +'%Y%m%d%H%M')" >> $GITHUB_ENV
+      - uses: actions/checkout@v3
+      - name: Install needed apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.2.3
+        with:
+          packages: gpg pbuilder debootstrap devscripts python3-apt reprepro make
+          version: 1.0
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "1.13.14"
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Build nightly release
+        run: |
+          echo ${{ steps.date.outputs.date }}-nightly-build > VERSION
+          make release
+      - uses: actions/upload-artifact@v3
+        with:
+          name: release.tar.gz
+          path: target/
     outputs:
       irgsh_build_date: ${{ env.irgsh_build_date }}
 
@@ -46,32 +46,32 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-release]
     steps:
-    - uses: actions/download-artifact@v3
-      with:
-        name: release.tar.gz
-    - name: Extract release
-      run: |
-        tar xvzf release.tar.gz
-        cp $(find . -type f -name "irgsh-cli") .
-    - name: Create github release
-      uses: softprops/action-gh-release@v0.1.15
-      with:
-        name: ${{ needs.build-release.outputs.irgsh_build_date }} Nightly Release
-        body: Nightly release
-        draft: false
-        prerelease: false
-        tag_name: ${{ needs.build-release.outputs.irgsh_build_date }}-nightly-build
-        files: |
-          release.tar.gz
-          irgsh-cli
+      - uses: actions/download-artifact@v3
+        with:
+          name: release.tar.gz
+      - name: Extract release
+        run: |
+          tar xvzf release.tar.gz
+          cp $(find . -type f -name "irgsh-cli") .
+      - name: Create github release
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          name: ${{ needs.build-release.outputs.irgsh_build_date }} Nightly Release
+          body: Nightly release
+          draft: false
+          prerelease: false
+          tag_name: ${{ needs.build-release.outputs.irgsh_build_date }}-nightly-build
+          files: |
+            release.tar.gz
+            irgsh-cli
 
   deploy:
     runs-on: ubuntu-latest
     needs: [release]
     steps:
-    - name: Deploy to irgsh server
-      uses: kudaliar032/tendang-action@v1
-      with:
-        url: ${{ secrets.RANI_TENDANG_URL }}
-        token: ${{ secrets.RANI_DEPLOYMENT_KEY }}
-        name: ${{ secrets.RANI_DEPLOYMENT_NAME }}
+      - name: Deploy to irgsh server
+        uses: kudaliar032/tendang-action@v1
+        with:
+          url: ${{ secrets.RANI_TENDANG_URL }}
+          token: ${{ secrets.RANI_DEPLOYMENT_KEY }}
+          name: ${{ secrets.RANI_DEPLOYMENT_NAME }}
