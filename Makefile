@@ -95,3 +95,12 @@ redis:
 
 submit:
 	curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"https://github.com/BlankOn/bromo-theme.git","packageUrl":"https://github.com/BlankOn-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
+
+clean:
+	rm -rf bin/
+	rm -rf tmp/
+	rm -rf ~/.irgsh
+	rm -rf irgsh-go
+	rm -rf target
+	rm -f release.tar.gz
+	rm -f coverage.txt
