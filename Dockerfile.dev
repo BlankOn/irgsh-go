@@ -1,0 +1,31 @@
+FROM debian:buster
+
+RUN echo "deb http://archive.debian.org/debian buster main" > /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99ignore-valid-until
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    git \
+    build-essential \
+    gpg \
+    pbuilder \
+    debootstrap \
+    devscripts \
+    curl \
+    reprepro \
+    dh-make \
+    sudo \
+    lsb-release \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget https://dl.google.com/go/go1.13.15.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.13.15.linux-amd64.tar.gz && \
+    rm go1.13.15.linux-amd64.tar.gz
+
+ENV PATH=$PATH:/usr/local/go/bin
+
+WORKDIR /app
+
+EXPOSE 8080 8081 8082

@@ -1,0 +1,56 @@
+---
+redis: 'redis://redis:6379'
+
+chief:
+  address: 'http://localhost:8080'
+  workdir: '/var/lib/irgsh/chief'
+  gnupg_dir: '/var/lib/irgsh/gnupg'
+
+builder:
+  workdir: '/var/lib/irgsh/builder'
+  upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
+
+repo:
+  workdir: '/var/lib/irgsh/repo'
+  dist_name: 'BlankOn'
+  dist_label: 'BlankOn'
+  dist_codename: 'verbeek'
+  dist_components: 'main restricted extras extras-restricted'
+  dist_supported_architectures: 'amd64 source'
+  dist_version: '12.0'
+  dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
+  dist_signing_key: 'GPG_SIGN_KEY'
+  upstream_name: 'merge.sid'
+  upstream_dist_codename: 'sid'
+  upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
+  upstream_dist_components: 'main non-free>restricted contrib>extras'
+  gnupg_dir: '/var/lib/irgsh/gnupg'
+
+iso:
+  workdir: '/var/lib/irgsh/iso'
+
+  variant: desktop
+  archs: 'amd64'
+  keyring: '/usr/share/keyrings/blankon-archive-keyring.gpg'
+  gnupg_dir: '/root/.gnupg'
+  dist: 'verbeek'
+  mirror: 'http://arsip-dev.blankonlinux.or.id/blankon/'
+  script: './uluwatu.debootstrap'
+  components: 'main restricted extras extras-restricted'
+  local_repo_source_path: '`pwd`/$DIST-local-repo`'
+  local_repo_keyring_path: '`pwd`/$DIST-local-repo/.gnupg-archive/'
+  local_repo_keyring: 9120A048
+  packages: 'blankon-role-keyring blankon-keyring blankon-desktop plymouth-theme-blankon blankon-kernel-headers blankon-keyring aufs-tools gnome-control-center manokwari manokwari-theme-greeter openssh-client openssh-server tebu-flat-icon-theme gnome-terminal plymouth-theme-blankon sudo lsb-release midori libglib2.0-bin curl locales-all vim tempel'
+  blacklist: 'gdm3 gnome-session lightdm-gtk-greeter'
+  kernel: linux-image-generic
+  kernel_amd64: linux-image-4.9.0-3-amd64
+  squashfs: squashfs-tools
+  cdvolume: blankon
+  live_packages: ''
+  live_system: live
+  live_packages: 'live-boot live-config blankon-live-config blankon-repository-setup blankon-installer gparted'
+  max_size: 1000
+  templates_path: '/var/lib/irgsh/src/pabrik-cc/templates-dvd/'
+  recipient: blankon-gev@googlegroups.com
+  publish_path: '/home/cdimage/images/livedvd-harian/'
+  publish_url: 'http://cdimage-dev.blankonlinux.or.id/blankon/livedvd-harian/'
