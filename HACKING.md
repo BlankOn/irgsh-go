@@ -5,17 +5,17 @@
 Ensure that you have:
 - Golang
 - Docker
-- These packages installed: `gpg pbuilder debootstrap devscripts curl reprepro`
+- These packages installed: `build-essential gpg pbuilder debootstrap devscripts curl reprepro`
 
 ## Cloning
 
-`https://github.com/BlankOn/irgsh-go.git && cd irgsh-go`
+`git clone git@github.com:BlankOn/irgsh-go.git && cd irgsh-go`
 
 ## Preparation
 
 ### GPG Key
 
-You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it with `gpg --generate-key`. Check it by running `gpg --list-key`
+You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it with `gpg --generate-key`. When generating GPG key for irgsh infrastructure, please do not set any passphrase. Check it by running `gpg --list-key`
 
 ```
 $ gpg --list-key
@@ -72,12 +72,11 @@ Open three different terminal and run these command for each:
 
 Open the fourth terminal and try to submit dummy package using this command bellow:
 
-- `./bin/irgsh-cli submit --experimental --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git`
+- `./bin/irgsh-cli submit --experimental --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git --ignore-checks`
 
 You may be asked for your GPG key passphrase. You'll see the package preprared in this terminal, then in the chief terminal (job coordination), then in builder terminal (package building), then in repo terminal (package submission into the repository).
 
 If all is well, you can see the result by opening `http://localhost:8082/experimental/` on your web browser. At this point, you have explored the full cycle of the basic usage. You may want to start to hack.
-
 
 Check the status of a pipeline
 
