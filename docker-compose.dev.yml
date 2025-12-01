@@ -15,9 +15,9 @@ services:
       - IRGSH_CONFIG_PATH=/app/utils/config.docker.yml
     privileged: true
     ports:
-      - "8080:8080"
-      - "8081:8081"
-      - "8082:8082"
+      - "18080:8080"
+      - "18081:8081"
+      - "18082:8082"
 
   redis:
     image: redis:latest

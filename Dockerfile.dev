@@ -1,8 +1,7 @@
-FROM debian:buster
+ARG DEBIAN_SUITE=bookworm
+FROM debian:${DEBIAN_SUITE}
 
-RUN echo "deb http://archive.debian.org/debian buster main" > /etc/apt/sources.list && \
-    echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
-    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99ignore-valid-until
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     wget \
@@ -18,11 +17,13 @@ RUN apt-get update && apt-get install -y \
     sudo \
     lsb-release \
     docker.io \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://dl.google.com/go/go1.13.15.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.13.15.linux-amd64.tar.gz && \
-    rm go1.13.15.linux-amd64.tar.gz
+ARG GO_VERSION=1.13.15
+RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz
 
 ENV PATH=$PATH:/usr/local/go/bin
 
