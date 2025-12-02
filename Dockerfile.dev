@@ -1,4 +1,7 @@
-FROM debian:trixie
+ARG DEBIAN_SUITE=bookworm
+FROM debian:${DEBIAN_SUITE}
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     wget \
@@ -18,9 +21,10 @@ RUN apt-get update && apt-get install -y \
     redis-server \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://dl.google.com/go/go1.13.15.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.13.15.linux-amd64.tar.gz && \
-    rm go1.13.15.linux-amd64.tar.gz
+ARG GO_VERSION=1.13.15
+RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz
 
 ENV PATH=$PATH:/usr/local/go/bin
 

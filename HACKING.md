@@ -86,6 +86,66 @@ Open three different terminal and run these command for each:
 - `make builder`, occupying port 8081
 - `make repo`, occupying port 8082
 
+### Containerized Development (Docker Compose)
+
+Alternatively, you can use the provided `docker-compose.dev.yml` for an isolated, reproducible environment (Debian bookworm by default). This mounts the source tree and the host Docker socket (for nested Docker usage required by the builder pbuilder workflow) and exposes service ports.
+
+Build and start the dev container:
+
+```bash
+docker compose -f docker-compose.dev.yml build dev
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Enter the container shell and run services:
+
+```bash
+docker compose -f docker-compose.dev.yml exec dev bash
+make chief &
+make builder &
+make repo &
+```
+
+(You can also run them one per terminal using `docker compose exec dev make chief` etc.)
+
+Initialization steps (if first run):
+
+```bash
+docker compose -f docker-compose.dev.yml exec dev make builder-init
+docker compose -f docker-compose.dev.yml exec dev make repo-init
+```
+
+Submitting a test package from inside the container:
+
+```bash
+docker compose -f docker-compose.dev.yml exec dev bash
+./bin/irgsh-cli config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
+./bin/irgsh-cli submit --experimental --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git --ignore-checks
+```
+
+Access services from the host:
+- Chief: `http://localhost:18080` (mapped from container's 8080)
+- Builder: `http://localhost:18081` (mapped from container's 8081)
+- Repo: `http://localhost:18082` (mapped from container's 8082)
+
+To stop and clean up:
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+Override Debian suite (for testing `trixie`):
+
+```bash
+docker compose -f docker-compose.dev.yml build --build-arg DEBIAN_SUITE=trixie dev
+```
+
+**Notes:**
+- The builder requires Docker access for creating build images; the socket mount plus `privileged: true` handles this (docker-in-docker via host daemon, not a nested daemon).
+- If pbuilder base creation (`make builder-init`) fails due to permissions, ensure the container runs in privileged mode (already set) and the host user has Docker rights.
+- GPG key provisioning still happens on the host; import or generate keys inside the container if isolating completely.
+- Port mappings default to 18080-18082 on the host to avoid conflicts. Adjust in `docker-compose.dev.yml` as needed.
+
 ## Testing
 
 Open the fourth terminal and try to submit dummy package using this command bellow:

@@ -13,9 +13,6 @@ services:
       - IRGSH_CONFIG_PATH=${PROJECT_PATH:-/app}/utils/config.docker.yml
     privileged: true
     ports:
-      - "8080:8080"
-      - "8081:8081"
-      - "8082:8082"
-
-# Don't forget to run vm.overcommit_memory = 1, in host machine
-# Temporary fix
+      - "18080:8080"
+      - "18081:8081"
+      - "18082:8082"
