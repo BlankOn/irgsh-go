@@ -29,6 +29,8 @@ Enter the container shell and run services:
 docker-compose -f docker-compose.dev.yml exec -it dev bash
 ```
 
+you may need to run `vm.overcommit_memory = 1` in host machine
+
 ### GPG Key
 
 You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it with `gpg --generate-key`. When generating GPG key for irgsh infrastructure, please do not set any passphrase. Check it by running `gpg --list-key`
