@@ -13,6 +13,22 @@ Ensure that you have:
 
 ## Preparation
 
+### Containerized Development (Docker Compose)
+
+Alternatively, you can use the provided `docker-compose.dev.yml` for an isolated, reproducible environment (Debian bookworm by default). This mounts the source tree and the host Docker socket (for nested Docker usage required by the builder pbuilder workflow) and exposes service ports.
+
+Build and start the dev container:
+
+```bash
+PROJECT_PATH=$(pwd) docker-compose -f docker-compose.dev.yml up -d --build
+```
+
+Enter the container shell and run services:
+
+```bash
+docker-compose -f docker-compose.dev.yml exec -it dev bash
+```
+
 ### GPG Key
 
 You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it with `gpg --generate-key`. When generating GPG key for irgsh infrastructure, please do not set any passphrase. Check it by running `gpg --list-key`
