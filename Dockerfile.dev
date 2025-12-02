@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     sudo \
     lsb-release \
     docker.io \
-    ca-certificates \
+    vim \
+    redis-server \
     && rm -rf /var/lib/apt/lists/*
 
 ARG GO_VERSION=1.13.15
@@ -27,6 +28,6 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
 
 ENV PATH=$PATH:/usr/local/go/bin
 
-WORKDIR /app
+WORKDIR ${PROJECT_PATH:-/app}
 
 EXPOSE 8080 8081 8082
