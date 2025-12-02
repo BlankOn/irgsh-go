@@ -4,22 +4,18 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     volumes:
-      - .:/app
+      - .:${PROJECT_PATH:-/app}
       - /var/run/docker.sock:/var/run/docker.sock
-    working_dir: /app
-    command: tail -f /dev/null
-    depends_on:
-      - redis
+    working_dir: ${PROJECT_PATH:-/app}
+    command: sh -c "service redis-server start && tail -f /dev/null"
     environment:
       - DEV=1
-      - IRGSH_CONFIG_PATH=/app/utils/config.docker.yml
+      - IRGSH_CONFIG_PATH=${PROJECT_PATH:-/app}/utils/config.docker.yml
     privileged: true
-    ports:
+    ports:g
       - "8080:8080"
       - "8081:8081"
       - "8082:8082"
 
-  redis:
-    image: redis:latest
-    ports:
-      - "6379:6379"
+# Don't forget to run vm.overcommit_memory = 1, in host machine
+# Temporary fix
