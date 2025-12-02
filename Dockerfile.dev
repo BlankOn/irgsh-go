@@ -1,4 +1,8 @@
-FROM debian:trixie
+FROM debian:buster
+
+RUN echo "deb http://archive.debian.org/debian buster main" > /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99ignore-valid-until
 
 RUN apt-get update && apt-get install -y \
     wget \
@@ -14,8 +18,6 @@ RUN apt-get update && apt-get install -y \
     sudo \
     lsb-release \
     docker.io \
-    vim \
-    redis-server \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget https://dl.google.com/go/go1.13.15.linux-amd64.tar.gz && \
@@ -24,6 +26,6 @@ RUN wget https://dl.google.com/go/go1.13.15.linux-amd64.tar.gz && \
 
 ENV PATH=$PATH:/usr/local/go/bin
 
-WORKDIR ${PROJECT_PATH:-/app}
+WORKDIR /app
 
 EXPOSE 8080 8081 8082
