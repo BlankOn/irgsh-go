@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/blankon/irgsh-go/internal/config"
+	easypgp "github.com/blankon/irgsh-go/pkg/easygpg"
 
 	artifactEndpoint "github.com/blankon/irgsh-go/internal/artifact/endpoint"
 	artifactRepo "github.com/blankon/irgsh-go/internal/artifact/repo"
@@ -71,9 +72,12 @@ func main() {
 	}
 	log.Println(irgshConfig.Chief.Workdir)
 
+	// EasyGPG
+	egpg := easypgp.EasyPGP{}
+
 	artifactHTTPEndpoint = artifactEndpoint.NewArtifactHTTPEndpoint(
 		artifactService.NewArtifactService(
-			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
+			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir, egpg), server))
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -114,6 +118,8 @@ func serve() {
 	http.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())
 	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
 	http.HandleFunc("/api/v1/version", VersionHandler)
+
+	http.HandleFunc("/api/v2/submit", artifactHTTPEndpoint.SubmitPackageHandler)
 
 	// Pages
 	http.HandleFunc("/maintainers", MaintainersHandler)
