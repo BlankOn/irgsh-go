@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha1"
+	"encoding/hex"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -81,6 +83,73 @@ func getRemoteHash(repoUrl string, branch string) (string, error) {
 	}
 	return "", fmt.Errorf("repo or branch not found")
 }
+
+func copyDir(src string, dst string) error {
+	cmd := exec.Command("cp", "-r", src, dst)
+	return cmd.Run()
+}
+
+func syncRepo(repoUrl string, branch string, targetDir string) error {
+	hasher := sha1.New()
+	hasher.Write([]byte(repoUrl))
+	repoHash := hex.EncodeToString(hasher.Sum(nil))
+	cacheDir := homeDir + "/.irgsh/cache/" + repoHash
+
+	remoteHash, err := getRemoteHash(repoUrl, branch)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(cacheDir); !os.IsNotExist(err) {
+		repo, err := git.PlainOpen(cacheDir)
+		if err == nil {
+			ref, err := repo.Head()
+			if err == nil {
+				if ref.Hash().String() == remoteHash {
+					log.Println("[syncRepo] cache hit for " + repoUrl)
+					return copyDir(cacheDir, targetDir)
+				}
+			}
+		}
+		log.Println("[syncRepo] cache stale, updating...")
+		worktree, err := repo.Worktree()
+		if err == nil {
+			err = worktree.Pull(&git.PullOptions{
+				RemoteName:    "origin",
+				ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+				SingleBranch:  true,
+			})
+			if err != nil && err != git.NoErrAlreadyUpToDate {
+				os.RemoveAll(cacheDir)
+			} else {
+				return copyDir(cacheDir, targetDir)
+			}
+		} else {
+			os.RemoveAll(cacheDir)
+		}
+	}
+
+	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		log.Println("[syncRepo] cloning to cache " + repoUrl)
+		_, err = git.PlainClone(
+			cacheDir,
+			false,
+			&git.CloneOptions{
+				URL:           repoUrl,
+				Progress:      os.Stdout,
+				SingleBranch:  true,
+				Depth:         1,
+				ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return copyDir(cacheDir, targetDir)
+}
+
 func checkForInitValues() (err error) {
 	dat0, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
 	chiefAddress = string(dat0)
@@ -308,20 +377,10 @@ func main() {
 					// Otherwise (native), terminate the submission.
 					fmt.Println("sourceUrl: " + sourceUrl)
 					// Cloning Debian package files
-					_, err = git.PlainClone(
-						homeDir+"/.irgsh/tmp/"+tmpID+"/source",
-						false,
-						&git.CloneOptions{
-							URL:           sourceUrl,
-							Progress:      os.Stdout,
-							SingleBranch:  true,
-							Depth:         1,
-							ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", sourceBranch)),
-						},
-					)
+					err = syncRepo(sourceUrl, sourceBranch, homeDir + "/.irgsh/tmp/" + tmpID + "/source")
 					if err != nil {
 						fmt.Println(err.Error())
-						if strings.Contains(err.Error(), "repository not found") {
+						if strings.Contains(err.Error(), "repository not found") || strings.Contains(err.Error(), "repo or branch not found") {
 							// Downloadable tarball? Let's try.
 							downloadableTarballURL = strings.TrimSuffix(string(sourceUrl), "\n")
 							log.Println(downloadableTarballURL)
@@ -360,17 +419,7 @@ func main() {
 				fmt.Println("packageUrl: " + packageUrl)
 
 				// Cloning Debian package files
-				_, err = git.PlainClone(
-					homeDir+"/.irgsh/tmp/"+tmpID+"/package",
-					false,
-					&git.CloneOptions{
-						URL:           packageUrl,
-						Progress:      os.Stdout,
-						SingleBranch:  true,
-						Depth:         1,
-						ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", packageBranch)),
-					},
-				)
+				err = syncRepo(packageUrl, packageBranch, homeDir + "/.irgsh/tmp/" + tmpID + "/package")
 				if err != nil {
 					fmt.Println(err.Error())
 					return
