@@ -65,6 +65,22 @@ var (
 	pipelineId           string
 )
 
+func getRemoteHash(repoUrl string, branch string) (string, error) {
+	cmd := exec.Command("git", "ls-remote", repoUrl, branch)
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("%s: %s", err, stderr.String())
+	}
+	parts := strings.Fields(out.String())
+	if len(parts) > 0 {
+		return parts[0], nil
+	}
+	return "", fmt.Errorf("repo or branch not found")
+}
 func checkForInitValues() (err error) {
 	dat0, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
 	chiefAddress = string(dat0)
