@@ -162,12 +162,18 @@ func useCache(
 	repo, err := git.PlainOpen(cacheDir)
 	if err != nil {
 		log.Printf("[useCache] failed to open cache: %v", err)
-		removeCacheDir(cacheDir)
+		removeErr := removeCacheDir(cacheDir)
+		if removeErr != nil {
+			return false, removeErr
+		}
 		return false, nil
 	}
 	if repo == nil {
 		log.Println("[useCache] cache repo is nil")
-		removeCacheDir(cacheDir)
+		removeErr := removeCacheDir(cacheDir)
+		if removeErr != nil {
+			return false, removeErr
+		}
 		return false, nil
 	}
 
@@ -188,7 +194,10 @@ func useCache(
 	worktree, err := repo.Worktree()
 	if err != nil {
 		log.Printf("[useCache] failed to get worktree: %v", err)
-		removeCacheDir(cacheDir)
+		removeErr := removeCacheDir(cacheDir)
+		if removeErr != nil {
+			return false, removeErr
+		}
 		return false, nil
 	}
 
@@ -199,7 +208,10 @@ func useCache(
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		log.Printf("[useCache] failed to pull cache: %v", err)
-		removeCacheDir(cacheDir)
+		removeErr := removeCacheDir(cacheDir)
+		if removeErr != nil {
+			return false, removeErr
+		}
 		return false, nil
 	}
 	if err == git.NoErrAlreadyUpToDate {
