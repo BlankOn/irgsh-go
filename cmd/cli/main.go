@@ -67,7 +67,10 @@ var (
 	pipelineId           string
 )
 
-func getRemoteHash(repoUrl string, branch string) (string, error) {
+func getRemoteHash(
+	repoUrl string,
+	branch string,
+) (string, error) {
 	cmd := exec.Command("git", "ls-remote", repoUrl, branch)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
@@ -84,12 +87,158 @@ func getRemoteHash(repoUrl string, branch string) (string, error) {
 	return "", fmt.Errorf("repo or branch not found")
 }
 
-func copyDir(src string, dst string) error {
+func copyDir(
+	src string,
+	dst string,
+) error {
 	cmd := exec.Command("cp", "-r", src, dst)
-	return cmd.Run()
+
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("[copyDir] failed to copy %s to %s: %v", src, dst, err)
+		return err
+	}
+
+	return nil
 }
 
-func syncRepo(repoUrl string, branch string, targetDir string) error {
+func cacheDirExists(
+	cacheDir string,
+) (bool, error) {
+	_, err := os.Stat(cacheDir)
+	if err == nil {
+		return true, nil
+	}
+
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	return false, err
+}
+
+func removeCacheDir(
+	cacheDir string,
+) error {
+	err := os.RemoveAll(cacheDir)
+	if err != nil {
+		log.Printf("[removeCacheDir] failed to remove cache dir: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func useCache(
+	repoUrl string,
+	branch string,
+	cacheDir string,
+	remoteHash string,
+	targetDir string,
+) (bool, error) {
+	cacheExists, err := cacheDirExists(cacheDir)
+	if err != nil {
+		log.Printf("[useCache] failed to stat cache dir: %v", err)
+		return false, err
+	}
+	if !cacheExists {
+		return false, nil
+	}
+
+	repo, err := git.PlainOpen(cacheDir)
+	if err != nil {
+		log.Printf("[useCache] failed to open cache: %v", err)
+		removeCacheDir(cacheDir)
+		return false, nil
+	}
+	if repo == nil {
+		log.Println("[useCache] cache repo is nil")
+		removeCacheDir(cacheDir)
+		return false, nil
+	}
+
+	ref, err := repo.Head()
+	if err != nil {
+		log.Printf("[useCache] failed to read cache HEAD: %v", err)
+	}
+	if err == nil && ref.Hash().String() == remoteHash {
+		log.Println("[useCache] cache hit for " + repoUrl)
+		err = copyDir(cacheDir, targetDir)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	log.Println("[useCache] cache stale, updating...")
+	worktree, err := repo.Worktree()
+	if err != nil {
+		log.Printf("[useCache] failed to get worktree: %v", err)
+		removeCacheDir(cacheDir)
+		return false, nil
+	}
+
+	err = worktree.Pull(&git.PullOptions{
+		RemoteName:    "origin",
+		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+		SingleBranch:  true,
+	})
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		log.Printf("[useCache] failed to pull cache: %v", err)
+		removeCacheDir(cacheDir)
+		return false, nil
+	}
+	if err == git.NoErrAlreadyUpToDate {
+		log.Println("[useCache] cache already up to date")
+	}
+
+	err = copyDir(cacheDir, targetDir)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func cloneCache(
+	repoUrl string,
+	branch string,
+	cacheDir string,
+) error {
+	cacheExists, err := cacheDirExists(cacheDir)
+	if err != nil {
+		log.Printf("[cloneCache] failed to stat cache dir: %v", err)
+		return err
+	}
+	if cacheExists {
+		return nil
+	}
+
+	log.Println("[cloneCache] cloning to cache " + repoUrl)
+	_, err = git.PlainClone(
+		cacheDir,
+		false,
+		&git.CloneOptions{
+			URL:           repoUrl,
+			Progress:      os.Stdout,
+			SingleBranch:  true,
+			Depth:         1,
+			ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+		},
+	)
+	if err != nil {
+		log.Printf("[cloneCache] failed to clone cache: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func syncRepo(
+	repoUrl string,
+	branch string,
+	targetDir string,
+) error {
 	hasher := sha1.New()
 	hasher.Write([]byte(repoUrl))
 	repoHash := hex.EncodeToString(hasher.Sum(nil))
@@ -97,57 +246,30 @@ func syncRepo(repoUrl string, branch string, targetDir string) error {
 
 	remoteHash, err := getRemoteHash(repoUrl, branch)
 	if err != nil {
+		log.Printf("[syncRepo] failed to fetch remote hash: %v", err)
 		return err
 	}
 
-	if _, err := os.Stat(cacheDir); !os.IsNotExist(err) {
-		repo, err := git.PlainOpen(cacheDir)
-		if err == nil {
-			ref, err := repo.Head()
-			if err == nil {
-				if ref.Hash().String() == remoteHash {
-					log.Println("[syncRepo] cache hit for " + repoUrl)
-					return copyDir(cacheDir, targetDir)
-				}
-			}
-		}
-		log.Println("[syncRepo] cache stale, updating...")
-		worktree, err := repo.Worktree()
-		if err == nil {
-			err = worktree.Pull(&git.PullOptions{
-				RemoteName:    "origin",
-				ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
-				SingleBranch:  true,
-			})
-			if err != nil && err != git.NoErrAlreadyUpToDate {
-				os.RemoveAll(cacheDir)
-			} else {
-				return copyDir(cacheDir, targetDir)
-			}
-		} else {
-			os.RemoveAll(cacheDir)
-		}
+	cacheReady, err := useCache(repoUrl, branch, cacheDir, remoteHash, targetDir)
+	if err != nil {
+		return err
 	}
 
-	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
-		log.Println("[syncRepo] cloning to cache " + repoUrl)
-		_, err = git.PlainClone(
-			cacheDir,
-			false,
-			&git.CloneOptions{
-				URL:           repoUrl,
-				Progress:      os.Stdout,
-				SingleBranch:  true,
-				Depth:         1,
-				ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
-			},
-		)
-		if err != nil {
-			return err
-		}
+	if !cacheReady {
+		err = cloneCache(repoUrl, branch, cacheDir)
+	}
+	if err != nil {
+		return err
 	}
 
-	return copyDir(cacheDir, targetDir)
+	if !cacheReady {
+		err = copyDir(cacheDir, targetDir)
+	}
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func checkForInitValues() (err error) {
