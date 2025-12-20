@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha1"
-	"encoding/hex"
 	b64 "encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -71,6 +71,8 @@ func getRemoteHash(
 	repoUrl string,
 	branch string,
 ) (string, error) {
+	log.Println("[getRemoteHash] getting remote hash for " + repoUrl + " branch " + branch)
+
 	cmd := exec.Command("git", "ls-remote", repoUrl, branch)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
@@ -78,7 +80,9 @@ func getRemoteHash(
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("%s: %s", err, stderr.String())
+		err = fmt.Errorf("%s: %s", err, stderr.String())
+		log.Println("[getRemoteHash]" + err.Error())
+		return "", err
 	}
 	parts := strings.Fields(out.String())
 	if len(parts) > 0 {
@@ -91,20 +95,26 @@ func copyDir(
 	src string,
 	dst string,
 ) error {
+	log.Println("[copyDir] copying dir from " + src + " to " + dst)
 	cmd := exec.Command("cp", "-r", src, dst)
-
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		log.Printf("[copyDir] failed to copy %s to %s: %v", src, dst, err)
+		err = fmt.Errorf("%s: %s", err, stderr.String())
+		log.Println("[copyDir]" + err.Error())
 		return err
 	}
-
 	return nil
 }
 
 func cacheDirExists(
 	cacheDir string,
 ) (bool, error) {
+	log.Println("[cacheDirExists] checking if cache dir exists: " + cacheDir)
+
 	_, err := os.Stat(cacheDir)
 	if err == nil {
 		return true, nil
@@ -120,6 +130,8 @@ func cacheDirExists(
 func removeCacheDir(
 	cacheDir string,
 ) error {
+	log.Println("[removeCacheDir] removing cache dir: " + cacheDir)
+
 	err := os.RemoveAll(cacheDir)
 	if err != nil {
 		log.Printf("[removeCacheDir] failed to remove cache dir: %v", err)
@@ -136,6 +148,8 @@ func useCache(
 	remoteHash string,
 	targetDir string,
 ) (bool, error) {
+	log.Println("[useCache] checking cache for " + repoUrl)
+
 	cacheExists, err := cacheDirExists(cacheDir)
 	if err != nil {
 		log.Printf("[useCache] failed to stat cache dir: %v", err)
@@ -205,6 +219,8 @@ func cloneCache(
 	branch string,
 	cacheDir string,
 ) error {
+	log.Println("[cloneCache] cloning cache for " + repoUrl)
+
 	cacheExists, err := cacheDirExists(cacheDir)
 	if err != nil {
 		log.Printf("[cloneCache] failed to stat cache dir: %v", err)
@@ -239,6 +255,8 @@ func syncRepo(
 	branch string,
 	targetDir string,
 ) error {
+	log.Println("[syncRepo] syncing repo " + repoUrl + " branch " + branch)
+
 	hasher := sha1.New()
 	hasher.Write([]byte(repoUrl))
 	repoHash := hex.EncodeToString(hasher.Sum(nil))
@@ -499,7 +517,7 @@ func main() {
 					// Otherwise (native), terminate the submission.
 					fmt.Println("sourceUrl: " + sourceUrl)
 					// Cloning Debian package files
-					err = syncRepo(sourceUrl, sourceBranch, homeDir + "/.irgsh/tmp/" + tmpID + "/source")
+					err = syncRepo(sourceUrl, sourceBranch, homeDir+"/.irgsh/tmp/"+tmpID+"/source")
 					if err != nil {
 						fmt.Println(err.Error())
 						if strings.Contains(err.Error(), "repository not found") || strings.Contains(err.Error(), "repo or branch not found") {
@@ -541,7 +559,7 @@ func main() {
 				fmt.Println("packageUrl: " + packageUrl)
 
 				// Cloning Debian package files
-				err = syncRepo(packageUrl, packageBranch, homeDir + "/.irgsh/tmp/" + tmpID + "/package")
+				err = syncRepo(packageUrl, packageBranch, homeDir+"/.irgsh/tmp/"+tmpID+"/package")
 				if err != nil {
 					fmt.Println(err.Error())
 					return
