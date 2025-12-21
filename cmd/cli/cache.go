@@ -106,7 +106,10 @@ func lockCacheDir(
 	}
 
 	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
-		lockFile.Close()
+		closeErr := lockFile.Close()
+		if closeErr != nil {
+			return nil, fmt.Errorf("failed to acquire lock: %w (close error: %v)", err, closeErr)
+		}
 		return nil, err
 	}
 
@@ -114,11 +117,17 @@ func lockCacheDir(
 
 	return func() error {
 		log.Println("[lockCacheDir] releasing cache lock: " + cacheDir)
-		if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
-			lockFile.Close()
-			return err
+		unlockErr := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+		closeErr := lockFile.Close()
+
+		// Return both errors if they both occurred
+		if unlockErr != nil && closeErr != nil {
+			return fmt.Errorf("failed to unlock: %w (close error: %v)", unlockErr, closeErr)
 		}
-		return lockFile.Close()
+		if unlockErr != nil {
+			return unlockErr
+		}
+		return closeErr
 	}, nil
 }
 
