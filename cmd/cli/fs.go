@@ -85,15 +85,25 @@ func copyFile(
 	}
 	defer in.Close()
 
+	srcInfo, err := in.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat source file: %w", err)
+	}
+
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
 
-	_, err = io.Copy(out, in)
+	written, err := io.Copy(out, in)
 	if err != nil {
 		out.Close()
 		return err
+	}
+
+	if written != srcInfo.Size() {
+		out.Close()
+		return fmt.Errorf("incomplete copy: wrote %d bytes, expected %d bytes", written, srcInfo.Size())
 	}
 
 	if err := out.Sync(); err != nil {
