@@ -117,21 +117,22 @@ func copyDir(
 	return nil
 }
 
+// cacheDirExists reports whether the cache directory exists.
 func cacheDirExists(
 	cacheDir string,
-) (bool, error) {
+) error {
 	log.Println("[cacheDirExists] checking if cache dir exists: " + cacheDir)
 
 	_, err := os.Stat(cacheDir)
 	if err == nil {
-		return true, nil
+		return nil
 	}
 
 	if os.IsNotExist(err) {
-		return false, nil
+		return nil
 	}
 
-	return false, err
+	return err
 }
 
 // removeCacheDir deletes the cache directory and its contents.
@@ -156,16 +157,13 @@ func useCache(
 	cacheDir string,
 	remoteHash string,
 	targetDir string,
-) (bool, error) {
+) error {
 	log.Println("[useCache] checking cache for " + repoUrl)
 
-	cacheExists, err := cacheDirExists(cacheDir)
+	err := cacheDirExists(cacheDir)
 	if err != nil {
 		log.Printf("[useCache] failed to stat cache dir: %v", err)
-		return false, err
-	}
-	if !cacheExists {
-		return false, nil
+		return err
 	}
 
 	repo, err := git.PlainOpen(cacheDir)
@@ -173,9 +171,9 @@ func useCache(
 		log.Printf("[useCache] failed to open cache: %v", err)
 		removeErr := removeCacheDir(cacheDir)
 		if removeErr != nil {
-			return false, removeErr
+			return removeErr
 		}
-		return false, nil
+		return nil
 	}
 
 	ref, err := repo.Head()
@@ -183,17 +181,18 @@ func useCache(
 		log.Printf("[useCache] failed to read cache HEAD: %v", err)
 		removeErr := removeCacheDir(cacheDir)
 		if removeErr != nil {
-			return false, removeErr
+			return removeErr
 		}
-		return false, nil
+		return nil
 	}
+
 	if ref.Hash().String() == remoteHash {
 		log.Println("[useCache] cache hit for " + repoUrl)
 		err = copyDir(cacheDir, targetDir)
 		if err != nil {
-			return false, err
+			return err
 		}
-		return true, nil
+		return nil
 	}
 
 	log.Println("[useCache] cache stale, updating...")
@@ -202,9 +201,9 @@ func useCache(
 		log.Printf("[useCache] failed to get worktree: %v", err)
 		removeErr := removeCacheDir(cacheDir)
 		if removeErr != nil {
-			return false, removeErr
+			return removeErr
 		}
-		return false, nil
+		return nil
 	}
 
 	err = worktree.Pull(&git.PullOptions{
@@ -217,20 +216,21 @@ func useCache(
 		log.Printf("[useCache] failed to pull cache: %v", err)
 		removeErr := removeCacheDir(cacheDir)
 		if removeErr != nil {
-			return false, removeErr
+			return removeErr
 		}
-		return false, nil
+		return nil
 	}
+
 	if err == git.NoErrAlreadyUpToDate {
 		log.Println("[useCache] cache already up to date")
 	}
 
 	err = copyDir(cacheDir, targetDir)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 // cloneCache clones the repository into a local cache if it does not exist.
@@ -246,15 +246,6 @@ func cloneCache(
 	if err != nil {
 		log.Printf("[cloneCache] failed to create cache root: %v", err)
 		return err
-	}
-
-	cacheExists, err := cacheDirExists(cacheDir)
-	if err != nil {
-		log.Printf("[cloneCache] failed to stat cache dir: %v", err)
-		return err
-	}
-	if cacheExists {
-		return nil
 	}
 
 	log.Println("[cloneCache] cloning to cache " + repoUrl)
@@ -295,21 +286,17 @@ func syncRepo(
 		return err
 	}
 
-	cacheReady, err := useCache(repoUrl, branch, cacheDir, remoteHash, targetDir)
+	err = useCache(repoUrl, branch, cacheDir, remoteHash, targetDir)
 	if err != nil {
 		return err
 	}
 
-	if !cacheReady {
-		err = cloneCache(repoUrl, branch, cacheDir)
-	}
+	err = cloneCache(repoUrl, branch, cacheDir)
 	if err != nil {
 		return err
 	}
 
-	if !cacheReady {
-		err = copyDir(cacheDir, targetDir)
-	}
+	err = copyDir(cacheDir, targetDir)
 	if err != nil {
 		return err
 	}
