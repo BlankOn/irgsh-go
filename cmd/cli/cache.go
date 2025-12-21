@@ -51,11 +51,11 @@ func getRemoteHash(
 	return "", errRepoOrBranchNotFound
 }
 
-// cacheDirExists reports whether the cache directory exists.
-func cacheDirExists(
+// isCacheDirExists reports whether the cache directory exists.
+func isCacheDirExists(
 	cacheDir string,
 ) (bool, error) {
-	log.Println("[cacheDirExists] checking if cache dir exists: " + cacheDir)
+	log.Println("[isCacheDirExists] checking if cache dir exists: " + cacheDir)
 
 	info, err := os.Stat(cacheDir)
 	if err == nil {
@@ -131,16 +131,6 @@ func useCache(
 	targetDir string,
 ) error {
 	log.Println("[useCache] checking cache for " + repoUrl)
-
-	exists, err := cacheDirExists(cacheDir)
-	if err != nil {
-		log.Printf("[useCache] failed to stat cache dir: %v", err)
-		return err
-	}
-	if !exists {
-		log.Printf("[useCache] cache dir not found: %s", cacheDir)
-		return errCacheUnavailable
-	}
 
 	repo, err := git.PlainOpen(cacheDir)
 	if err != nil {
@@ -230,11 +220,11 @@ func cloneCache(
 ) error {
 	log.Println("[cloneCache] cloning cache for " + repoUrl)
 
-	exists, err := cacheDirExists(cacheDir)
+	isExists, err := isCacheDirExists(cacheDir)
 	if err != nil {
 		return err
 	}
-	if exists {
+	if isExists {
 		log.Println("[cloneCache] cache already exists, skipping clone")
 		return nil
 	}
