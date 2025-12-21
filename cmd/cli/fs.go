@@ -78,7 +78,7 @@ func copyFile(
 	src string,
 	dst string,
 	mode os.FileMode,
-) error {
+) (err error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -94,7 +94,11 @@ func copyFile(
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		if closeErr := out.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	written, err := io.Copy(out, in)
 	if err != nil {

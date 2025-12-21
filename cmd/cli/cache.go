@@ -42,34 +42,13 @@ func getRemoteHash(
 	if err != nil {
 		err = fmt.Errorf("git ls-remote: %w: %s", err, stderr.String())
 		log.Printf("[getRemoteHash] %v", err)
-		return "", err
+		return "", errRepoOrBranchNotFound
 	}
 	parts := strings.Fields(out.String())
 	if len(parts) > 0 {
 		return parts[0], nil
 	}
 	return "", errRepoOrBranchNotFound
-}
-
-// isCacheDirExists reports whether the cache directory exists.
-func isCacheDirExists(
-	cacheDir string,
-) (bool, error) {
-	log.Println("[isCacheDirExists] checking if cache dir exists: " + cacheDir)
-
-	info, err := os.Stat(cacheDir)
-	if err == nil {
-		if !info.IsDir() {
-			return false, fmt.Errorf("cache path exists but is not a directory: %s", cacheDir)
-		}
-		return true, nil
-	}
-
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-
-	return false, err
 }
 
 // removeCacheDir deletes the cache directory and its contents.
@@ -242,17 +221,8 @@ func cloneCache(
 ) error {
 	log.Println("[cloneCache] cloning cache for " + repoURL)
 
-	isExists, err := isCacheDirExists(cacheDir)
-	if err != nil {
-		return err
-	}
-	if isExists {
-		log.Println("[cloneCache] cache already exists, skipping clone")
-		return nil
-	}
-
 	cacheRoot := filepath.Dir(cacheDir)
-	err = os.MkdirAll(cacheRoot, 0755)
+	err := os.MkdirAll(cacheRoot, 0755)
 	if err != nil {
 		log.Printf("[cloneCache] failed to create cache root: %v", err)
 		return err
@@ -271,6 +241,18 @@ func cloneCache(
 		},
 	)
 	if err != nil {
+		if err == git.ErrRepositoryAlreadyExists {
+			log.Println("[cloneCache] cache already exists (created by another process)")
+			return nil
+		}
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "repository not found") ||
+			strings.Contains(errMsg, "Repository not found") ||
+			strings.Contains(errMsg, "reference not found") ||
+			strings.Contains(errMsg, "couldn't find remote ref") {
+			log.Printf("[cloneCache] repository or branch not found: %v", err)
+			return errRepoOrBranchNotFound
+		}
 		log.Printf("[cloneCache] failed to clone cache: %v", err)
 		return err
 	}
