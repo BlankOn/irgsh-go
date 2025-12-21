@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -275,10 +276,9 @@ func syncRepo(
 ) error {
 	log.Println("[syncRepo] syncing repo " + repoUrl + " branch " + branch)
 
-	hasher := sha1.New()
-	hasher.Write([]byte(repoUrl))
-	repoHash := hex.EncodeToString(hasher.Sum(nil))
-	cacheDir := homeDir + "/.irgsh/cache/" + repoHash
+	repoHashBytes := sha256.Sum256([]byte(repoUrl))
+	repoHash := hex.EncodeToString(repoHashBytes[:])
+	cacheDir := filepath.Join(homeDir, ".irgsh", "cache", repoHash)
 
 	remoteHash, err := getRemoteHash(repoUrl, branch)
 	if err != nil {
