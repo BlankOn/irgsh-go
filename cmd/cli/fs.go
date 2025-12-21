@@ -109,5 +109,5 @@ func copyFile(
 		return err
 	}
 
-	return out.Close()
+	return nil
 }
