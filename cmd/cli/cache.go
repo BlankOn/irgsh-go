@@ -181,9 +181,22 @@ func useCache(
 		return errCacheUnavailable
 	}
 
+	branchRefName := plumbing.NewBranchReferenceName(branch)
+	err = worktree.Checkout(&git.CheckoutOptions{
+		Branch: branchRefName,
+		Force:  true,
+	})
+	if err != nil {
+		log.Printf("[useCache] failed to checkout branch %q in cache: %v", branch, err)
+		removeErr := removeCacheDir(cacheDir)
+		if removeErr != nil {
+			return removeErr
+		}
+		return errCacheUnavailable
+	}
 	err = worktree.Pull(&git.PullOptions{
 		RemoteName:    "origin",
-		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+		ReferenceName: branchRefName,
 		SingleBranch:  true,
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
