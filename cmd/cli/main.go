@@ -136,7 +136,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					return
 				}
 				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
@@ -145,7 +145,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					return
 				}
 				// TODO test a connection against the chief
@@ -303,7 +303,6 @@ func main() {
 								log.Println(err)
 								err = err1
 								return
-								panic(err)
 							}
 							defer resp.Body.Close()
 							// Prepare dirs
@@ -347,7 +346,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err := exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package name.")
 					return
 				}
@@ -366,7 +365,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package version.")
 					return
 				}
@@ -383,7 +382,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package extended version.")
 					return
 				}
@@ -400,7 +399,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package extended version.")
 					return
 				}
@@ -414,7 +413,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get uploaders value.")
 					return
 				}
@@ -427,7 +426,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get maintainer identity.")
 					return
 				}
@@ -465,7 +464,7 @@ func main() {
 					fmt.Println(cmdStr)
 					output, err = exec.Command("bash", "-c", cmdStr).Output()
 					if err != nil {
-						log.Println("error: %v\n", err)
+						log.Printf("error: %v", err)
 						log.Println("Failed to rename workdir.")
 					}
 				}
@@ -477,7 +476,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to rename workdir.")
 					return
 				}
@@ -494,7 +493,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -511,7 +510,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -530,7 +529,7 @@ func main() {
 				cmd.Stderr = bufWriter
 				err = cmd.Run()
 				if err != nil && !strings.Contains(buffer.String(), ".buildinfo is meaningless") {
-					log.Println("error: %v\n", err.Error())
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -547,7 +546,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -625,7 +624,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the auth token using " + maintainerSigningKey + ". Please check your GPG key list.")
 					return
 				}
