@@ -2,10 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -275,7 +276,9 @@ func syncRepo(
 ) error {
 	log.Println("[syncRepo] syncing repo " + repoUrl + " branch " + branch)
 
-	cacheKey := url.PathEscape(repoUrl)
+	hasher := sha256.New()
+	hasher.Write([]byte(repoUrl))
+	cacheKey := hex.EncodeToString(hasher.Sum(nil))
 	cacheDir := filepath.Join(homeDir, ".irgsh", "cache", cacheKey)
 
 	remoteHash, err := getRemoteHash(repoUrl, branch)
