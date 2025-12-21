@@ -1,5 +1,32 @@
 package main
 
+// Cache Management Strategy:
+//
+// This file implements a local git repository cache to speed up repeated builds
+// and reduce network traffic. The cache works as follows:
+//
+// 1. Cache Directory Structure:
+//    ~/.irgsh/cache/<cache-key>/
+//    where <cache-key> is a SHA256 hash of "repoURL:branch"
+//
+// 2. Cache Key Generation:
+//    The cache key is computed as: SHA256(repoURL + ":" + branch)
+//    This ensures that:
+//    - Different repositories get separate cache directories
+//    - Different branches of the same repository get separate caches
+//    - The cache key is filesystem-safe (64 hex characters)
+//    - The cache key is collision-resistant
+//
+// 3. Cache Lifecycle:
+//    - First access: Clone repository with depth=1 (shallow clone)
+//    - Subsequent access: Pull updates if cache is stale
+//    - Cache validation: Compare local HEAD with remote branch hash
+//    - Cache invalidation: Remove and recreate if corrupted
+//
+// 4. Concurrency:
+//    File-based locking (flock) prevents concurrent access to the same cache
+//    directory, ensuring cache consistency across parallel builds.
+
 import (
 	"bytes"
 	"crypto/sha256"
@@ -22,7 +49,14 @@ var (
 	errRepoOrBranchNotFound = errors.New("repo or branch not found")
 )
 
-// getRemoteHash queries the remote repository for the commit hash at a branch ref.
+// getRemoteHash queries the remote repository for the commit hash of the given branch.
+// It uses 'git ls-remote' to fetch the commit hash without cloning the repository.
+//
+// The branch name is automatically prefixed with 'refs/heads/' if it's not already
+// a full reference path.
+//
+// Returns errRepoOrBranchNotFound if the repository or branch cannot be found
+// (git exits with code 128 or returns no matching refs).
 func getRemoteHash(
 	repoURL string,
 	branch string,
@@ -51,7 +85,10 @@ func getRemoteHash(
 	return "", errRepoOrBranchNotFound
 }
 
-// removeCacheDir deletes the cache directory and its contents.
+// removeCacheDir deletes the cache directory and all its contents.
+// It is called when a cache is corrupted or git operations fail.
+//
+// The caller should hold the cache lock before calling this function.
 func removeCacheDir(
 	cacheDir string,
 ) error {
@@ -66,7 +103,15 @@ func removeCacheDir(
 	return nil
 }
 
-// lockCacheDir acquires an exclusive lock for a cache directory.
+// lockCacheDir acquires an exclusive lock for the cache directory and returns
+// an unlock function. It uses flock to prevent concurrent access to the same cache.
+//
+// The lock file is named <cacheDir>.lock. The function blocks until the lock
+// is acquired. The returned unlock function must be called to release the lock:
+//
+//	unlock, err := lockCacheDir(cacheDir)
+//	if err != nil { return err }
+//	defer unlock()
 func lockCacheDir(
 	cacheDir string,
 ) (func() error, error) {
@@ -110,7 +155,15 @@ func lockCacheDir(
 	}, nil
 }
 
-// useCache checks the cache and copies it to targetDir if it is current.
+// useCache validates the cache and copies it to targetDir if current.
+// If the cache is stale, it pulls updates before copying.
+//
+// The function compares the local HEAD commit hash with remoteHash. If they match,
+// the cache is copied immediately. If they differ, the cache is updated via
+// checkout and pull, then copied.
+//
+// Returns errCacheUnavailable if any git operation fails (open, checkout, pull),
+// causing the cache to be removed. The caller will then clone a fresh copy.
 func useCache(
 	repoURL string,
 	branch string,
@@ -213,7 +266,14 @@ func useCache(
 	return nil
 }
 
-// cloneCache clones the repository into a local cache if it does not exist.
+// cloneCache creates a shallow clone (depth=1) of the repository in the cache directory.
+//
+// The function does not check if the cache exists before cloning. If another process
+// has already created the cache (git.ErrRepositoryAlreadyExists), this is treated as
+// success. This approach avoids TOCTOU race conditions.
+//
+// Returns errRepoOrBranchNotFound if the repository or branch doesn't exist,
+// allowing the caller to implement fallback behavior.
 func cloneCache(
 	repoURL string,
 	branch string,
@@ -260,7 +320,17 @@ func cloneCache(
 	return nil
 }
 
-// syncRepo keeps targetDir synced with the remote repository using a cache.
+// syncRepo synchronizes targetDir with the remote repository using a local cache.
+//
+// The cache key is a SHA256 hash of "repoURL:branch", ensuring unique, filesystem-safe
+// cache directories. For example:
+//
+//	repoURL: https://github.com/user/repo.git
+//	branch:  main
+//	cache:   ~/.irgsh/cache/a3b5c7d9.../
+//
+// The function first attempts to use an existing cache (updating if stale).
+// If the cache is unavailable or corrupted, it clones a fresh copy.
 func syncRepo(
 	repoURL string,
 	branch string,

@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 )
 
-// resetDir removes any existing destination directory and recreates it.
+// resetDir removes the directory if it exists and creates a new empty one.
+// It is idempotent and safe to call even if the directory doesn't exist.
 func resetDir(
 	dir string,
 	mode os.FileMode,
@@ -25,7 +26,11 @@ func resetDir(
 	return os.MkdirAll(dir, mode)
 }
 
-// copyDir copies the contents of src into dst.
+// copyDir recursively copies the entire directory tree from src to dst.
+// It preserves directory structure, file permissions, and symbolic links.
+// The destination directory is reset (removed and recreated) before copying.
+//
+// Hard links are not preserved; they are copied as regular files.
 func copyDir(
 	src string,
 	dst string,
@@ -73,7 +78,12 @@ func copyDir(
 	})
 }
 
-// copyFile copies a file from src to dst with the provided mode.
+// copyFile copies a file from src to dst, verifying that all bytes are written.
+//
+// The function uses a named return value and deferred close to ensure that
+// close errors on the destination file are captured. This is critical because
+// close flushes buffered data and can fail (disk full, I/O errors, quota exceeded),
+// potentially causing silent data loss if not checked.
 func copyFile(
 	src string,
 	dst string,
