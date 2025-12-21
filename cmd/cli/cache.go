@@ -24,16 +24,16 @@ var (
 
 // getRemoteHash queries the remote repository for the commit hash at a branch ref.
 func getRemoteHash(
-	repoUrl string,
+	repoURL string,
 	branch string,
 ) (string, error) {
-	log.Printf("[getRemoteHash] getting remote hash for %s branch %s", repoUrl, branch)
+	log.Printf("[getRemoteHash] getting remote hash for %s branch %s", repoURL, branch)
 
 	ref := branch
 	if !strings.HasPrefix(ref, "refs/") {
 		ref = fmt.Sprintf("refs/heads/%s", branch)
 	}
-	cmd := exec.Command("git", "ls-remote", repoUrl, ref)
+	cmd := exec.Command("git", "ls-remote", repoURL, ref)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -133,13 +133,13 @@ func lockCacheDir(
 
 // useCache checks the cache and copies it to targetDir if it is current.
 func useCache(
-	repoUrl string,
+	repoURL string,
 	branch string,
 	cacheDir string,
 	remoteHash string,
 	targetDir string,
 ) error {
-	log.Println("[useCache] checking cache for " + repoUrl)
+	log.Println("[useCache] checking cache for " + repoURL)
 
 	repo, err := git.PlainOpen(cacheDir)
 	if err != nil {
@@ -162,7 +162,7 @@ func useCache(
 	}
 
 	if ref.Hash().String() == remoteHash {
-		log.Println("[useCache] cache hit for " + repoUrl)
+		log.Println("[useCache] cache hit for " + repoURL)
 		err = copyDir(cacheDir, targetDir)
 		if err != nil {
 			return err
@@ -223,11 +223,11 @@ func useCache(
 
 // cloneCache clones the repository into a local cache if it does not exist.
 func cloneCache(
-	repoUrl string,
+	repoURL string,
 	branch string,
 	cacheDir string,
 ) error {
-	log.Println("[cloneCache] cloning cache for " + repoUrl)
+	log.Println("[cloneCache] cloning cache for " + repoURL)
 
 	isExists, err := isCacheDirExists(cacheDir)
 	if err != nil {
@@ -245,12 +245,12 @@ func cloneCache(
 		return err
 	}
 
-	log.Println("[cloneCache] cloning to cache " + repoUrl)
+	log.Println("[cloneCache] cloning to cache " + repoURL)
 	_, err = git.PlainClone(
 		cacheDir,
 		false,
 		&git.CloneOptions{
-			URL:           repoUrl,
+			URL:           repoURL,
 			Progress:      os.Stdout,
 			SingleBranch:  true,
 			Depth:         1,
@@ -267,19 +267,19 @@ func cloneCache(
 
 // syncRepo keeps targetDir synced with the remote repository using a cache.
 func syncRepo(
-	repoUrl string,
+	repoURL string,
 	branch string,
 	homeDir string,
 	targetDir string,
 ) error {
-	log.Println("[syncRepo] syncing repo " + repoUrl + " branch " + branch)
+	log.Println("[syncRepo] syncing repo " + repoURL + " branch " + branch)
 
 	hasher := sha256.New()
-	hasher.Write([]byte(repoUrl))
+	hasher.Write([]byte(repoURL + ":" + branch))
 	cacheKey := hex.EncodeToString(hasher.Sum(nil))
 	cacheDir := filepath.Join(homeDir, ".irgsh", "cache", cacheKey)
 
-	remoteHash, err := getRemoteHash(repoUrl, branch)
+	remoteHash, err := getRemoteHash(repoURL, branch)
 	if err != nil {
 		log.Printf("[syncRepo] failed to fetch remote hash: %v", err)
 		return err
@@ -296,7 +296,7 @@ func syncRepo(
 		}
 	}()
 
-	err = useCache(repoUrl, branch, cacheDir, remoteHash, targetDir)
+	err = useCache(repoURL, branch, cacheDir, remoteHash, targetDir)
 	if err == nil {
 		return nil
 	}
@@ -305,10 +305,10 @@ func syncRepo(
 	}
 
 	log.Println("[syncRepo] cache unavailable, cloning fresh copy")
-	err = cloneCache(repoUrl, branch, cacheDir)
+	err = cloneCache(repoURL, branch, cacheDir)
 	if err != nil {
 		return err
 	}
 
-	return useCache(repoUrl, branch, cacheDir, remoteHash, targetDir)
+	return useCache(repoURL, branch, cacheDir, remoteHash, targetDir)
 }
