@@ -102,19 +102,73 @@ func copyDir(
 	src string,
 	dst string,
 ) error {
-	log.Println("[copyDir] copying dir from " + src + " to " + dst)
-	cmd := exec.Command("cp", "-r", src, dst)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	log.Printf("[copyDir] copying dir from %s to %s", src, dst)
+
+	srcInfo, err := os.Stat(src)
 	if err != nil {
-		err = fmt.Errorf("%s: %s", err, stderr.String())
-		log.Println("[copyDir]" + err.Error())
+		return fmt.Errorf("[copyDir] failed to stat source dir: %w", err)
+	}
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("[copyDir] source is not a directory: %s", src)
+	}
+
+	err = os.MkdirAll(dst, srcInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("[copyDir] failed to create destination dir: %w", err)
+	}
+
+	return filepath.Walk(src, func(currentPath string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relPath, err := filepath.Rel(src, currentPath)
+		if err != nil {
+			return err
+		}
+		if relPath == "." {
+			return nil
+		}
+
+		targetPath := filepath.Join(dst, relPath)
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(currentPath)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(linkTarget, targetPath)
+		}
+
+		return copyFile(currentPath, targetPath, info.Mode())
+	})
+}
+
+// copyFile copies a file from src to dst with the provided mode.
+func copyFile(
+	src string,
+	dst string,
+	mode os.FileMode,
+) error {
+	in, err := os.Open(src)
+	if err != nil {
 		return err
 	}
-	return nil
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		out.Close()
+		return err
+	}
+
+	return out.Close()
 }
 
 // cacheDirExists reports whether the cache directory exists.
