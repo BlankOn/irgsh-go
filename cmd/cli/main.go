@@ -3,9 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha256"
 	b64 "encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +16,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -26,8 +23,6 @@ import (
 	"github.com/inconshreveable/go-update"
 	"github.com/manifoldco/promptui"
 	"github.com/urfave/cli"
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 type Submission struct {
@@ -67,296 +62,6 @@ var (
 	isExperimental       bool
 	pipelineId           string
 )
-
-// getRemoteHash queries the remote repository for the commit hash at a branch ref.
-func getRemoteHash(
-	repoUrl string,
-	branch string,
-) (string, error) {
-	log.Printf("[getRemoteHash] getting remote hash for %s branch %s", repoUrl, branch)
-
-	ref := branch
-	if !strings.HasPrefix(ref, "refs/") {
-		ref = fmt.Sprintf("refs/heads/%s", branch)
-	}
-	cmd := exec.Command("git", "ls-remote", repoUrl, ref)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		err = fmt.Errorf("git ls-remote: %w: %s", err, stderr.String())
-		log.Printf("[getRemoteHash] %v", err)
-		return "", err
-	}
-	parts := strings.Fields(out.String())
-	if len(parts) > 0 {
-		return parts[0], nil
-	}
-	return "", fmt.Errorf("repo or branch not found")
-}
-
-// copyDir copies the contents of src into dst.
-func copyDir(
-	src string,
-	dst string,
-) error {
-	log.Printf("[copyDir] copying dir from %s to %s", src, dst)
-
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("[copyDir] failed to stat source dir: %w", err)
-	}
-	if !srcInfo.IsDir() {
-		return fmt.Errorf("[copyDir] source is not a directory: %s", src)
-	}
-
-	err = os.MkdirAll(dst, srcInfo.Mode())
-	if err != nil {
-		return fmt.Errorf("[copyDir] failed to create destination dir: %w", err)
-	}
-
-	return filepath.Walk(src, func(currentPath string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		relPath, err := filepath.Rel(src, currentPath)
-		if err != nil {
-			return err
-		}
-		if relPath == "." {
-			return nil
-		}
-
-		targetPath := filepath.Join(dst, relPath)
-		if info.IsDir() {
-			return os.MkdirAll(targetPath, info.Mode())
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			linkTarget, err := os.Readlink(currentPath)
-			if err != nil {
-				return err
-			}
-			return os.Symlink(linkTarget, targetPath)
-		}
-
-		return copyFile(currentPath, targetPath, info.Mode())
-	})
-}
-
-// copyFile copies a file from src to dst with the provided mode.
-func copyFile(
-	src string,
-	dst string,
-	mode os.FileMode,
-) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		out.Close()
-		return err
-	}
-
-	return out.Close()
-}
-
-// cacheDirExists reports whether the cache directory exists.
-func cacheDirExists(
-	cacheDir string,
-) error {
-	log.Println("[cacheDirExists] checking if cache dir exists: " + cacheDir)
-
-	_, err := os.Stat(cacheDir)
-	if err == nil {
-		return nil
-	}
-
-	if os.IsNotExist(err) {
-		return nil
-	}
-
-	return err
-}
-
-// removeCacheDir deletes the cache directory and its contents.
-func removeCacheDir(
-	cacheDir string,
-) error {
-	log.Println("[removeCacheDir] removing cache dir: " + cacheDir)
-
-	err := os.RemoveAll(cacheDir)
-	if err != nil {
-		log.Printf("[removeCacheDir] failed to remove cache dir: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// useCache checks the cache and copies it to targetDir if it is current.
-func useCache(
-	repoUrl string,
-	branch string,
-	cacheDir string,
-	remoteHash string,
-	targetDir string,
-) error {
-	log.Println("[useCache] checking cache for " + repoUrl)
-
-	err := cacheDirExists(cacheDir)
-	if err != nil {
-		log.Printf("[useCache] failed to stat cache dir: %v", err)
-		return err
-	}
-
-	repo, err := git.PlainOpen(cacheDir)
-	if err != nil {
-		log.Printf("[useCache] failed to open cache: %v", err)
-		removeErr := removeCacheDir(cacheDir)
-		if removeErr != nil {
-			return removeErr
-		}
-		return nil
-	}
-
-	ref, err := repo.Head()
-	if err != nil {
-		log.Printf("[useCache] failed to read cache HEAD: %v", err)
-		removeErr := removeCacheDir(cacheDir)
-		if removeErr != nil {
-			return removeErr
-		}
-		return nil
-	}
-
-	if ref.Hash().String() == remoteHash {
-		log.Println("[useCache] cache hit for " + repoUrl)
-		err = copyDir(cacheDir, targetDir)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	log.Println("[useCache] cache stale, updating...")
-	worktree, err := repo.Worktree()
-	if err != nil {
-		log.Printf("[useCache] failed to get worktree: %v", err)
-		removeErr := removeCacheDir(cacheDir)
-		if removeErr != nil {
-			return removeErr
-		}
-		return nil
-	}
-
-	err = worktree.Pull(&git.PullOptions{
-		RemoteName:    "origin",
-		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
-		SingleBranch:  true,
-		Depth:         1,
-	})
-	if err != nil && err != git.NoErrAlreadyUpToDate {
-		log.Printf("[useCache] failed to pull cache: %v", err)
-		removeErr := removeCacheDir(cacheDir)
-		if removeErr != nil {
-			return removeErr
-		}
-		return nil
-	}
-
-	if err == git.NoErrAlreadyUpToDate {
-		log.Println("[useCache] cache already up to date")
-	}
-
-	err = copyDir(cacheDir, targetDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// cloneCache clones the repository into a local cache if it does not exist.
-func cloneCache(
-	repoUrl string,
-	branch string,
-	cacheDir string,
-) error {
-	log.Println("[cloneCache] cloning cache for " + repoUrl)
-
-	cacheRoot := filepath.Dir(cacheDir)
-	err := os.MkdirAll(cacheRoot, 0755)
-	if err != nil {
-		log.Printf("[cloneCache] failed to create cache root: %v", err)
-		return err
-	}
-
-	log.Println("[cloneCache] cloning to cache " + repoUrl)
-	_, err = git.PlainClone(
-		cacheDir,
-		false,
-		&git.CloneOptions{
-			URL:           repoUrl,
-			Progress:      os.Stdout,
-			SingleBranch:  true,
-			Depth:         1,
-			ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
-		},
-	)
-	if err != nil {
-		log.Printf("[cloneCache] failed to clone cache: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// syncRepo keeps targetDir synced with the remote repository using a cache.
-func syncRepo(
-	repoUrl string,
-	branch string,
-	targetDir string,
-) error {
-	log.Println("[syncRepo] syncing repo " + repoUrl + " branch " + branch)
-
-	repoHashBytes := sha256.Sum256([]byte(repoUrl))
-	repoHash := hex.EncodeToString(repoHashBytes[:])
-	cacheDir := filepath.Join(homeDir, ".irgsh", "cache", repoHash)
-
-	remoteHash, err := getRemoteHash(repoUrl, branch)
-	if err != nil {
-		log.Printf("[syncRepo] failed to fetch remote hash: %v", err)
-		return err
-	}
-
-	err = useCache(repoUrl, branch, cacheDir, remoteHash, targetDir)
-	if err != nil {
-		return err
-	}
-
-	err = cloneCache(repoUrl, branch, cacheDir)
-	if err != nil {
-		return err
-	}
-
-	err = copyDir(cacheDir, targetDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func checkForInitValues() (err error) {
 	dat0, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
@@ -588,7 +293,7 @@ func main() {
 					err = syncRepo(sourceUrl, sourceBranch, homeDir+"/.irgsh/tmp/"+tmpID+"/source")
 					if err != nil {
 						fmt.Println(err.Error())
-						if strings.Contains(err.Error(), "repository not found") || strings.Contains(err.Error(), "repo or branch not found") {
+						if strings.Contains(err.Error(), "repository not found") || errors.Is(err, errRepoOrBranchNotFound) {
 							// Downloadable tarball? Let's try.
 							downloadableTarballURL = strings.TrimSuffix(string(sourceUrl), "\n")
 							log.Println(downloadableTarballURL)
