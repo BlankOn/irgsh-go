@@ -73,17 +73,21 @@ func getRemoteHash(
 	repoUrl string,
 	branch string,
 ) (string, error) {
-	log.Println("[getRemoteHash] getting remote hash for " + repoUrl + " branch " + branch)
+	log.Printf("[getRemoteHash] getting remote hash for %s branch %s", repoUrl, branch)
 
-	cmd := exec.Command("git", "ls-remote", repoUrl, branch)
+	ref := branch
+	if !strings.HasPrefix(ref, "refs/") {
+		ref = fmt.Sprintf("refs/heads/%s", branch)
+	}
+	cmd := exec.Command("git", "ls-remote", repoUrl, ref)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		err = fmt.Errorf("%s: %s", err, stderr.String())
-		log.Println("[getRemoteHash]" + err.Error())
+		err = fmt.Errorf("git ls-remote: %w: %s", err, stderr.String())
+		log.Printf("[getRemoteHash] %v", err)
 		return "", err
 	}
 	parts := strings.Fields(out.String())
@@ -210,6 +214,7 @@ func useCache(
 		RemoteName:    "origin",
 		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
 		SingleBranch:  true,
+		Depth:         1,
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		log.Printf("[useCache] failed to pull cache: %v", err)
