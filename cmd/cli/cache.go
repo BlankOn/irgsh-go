@@ -186,7 +186,6 @@ func useCache(
 		RemoteName:    "origin",
 		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
 		SingleBranch:  true,
-		Depth:         1,
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		log.Printf("[useCache] failed to pull cache: %v", err)

@@ -94,20 +94,18 @@ func copyFile(
 	if err != nil {
 		return err
 	}
+	defer out.Close()
 
 	written, err := io.Copy(out, in)
 	if err != nil {
-		out.Close()
 		return err
 	}
 
 	if written != srcInfo.Size() {
-		out.Close()
 		return fmt.Errorf("incomplete copy: wrote %d bytes, expected %d bytes", written, srcInfo.Size())
 	}
 
 	if err := out.Sync(); err != nil {
-		out.Close()
 		return err
 	}
 
