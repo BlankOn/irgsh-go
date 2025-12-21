@@ -177,20 +177,17 @@ func useCache(
 		}
 		return false, nil
 	}
-	if repo == nil {
-		log.Println("[useCache] cache repo is nil")
+
+	ref, err := repo.Head()
+	if err != nil {
+		log.Printf("[useCache] failed to read cache HEAD: %v", err)
 		removeErr := removeCacheDir(cacheDir)
 		if removeErr != nil {
 			return false, removeErr
 		}
 		return false, nil
 	}
-
-	ref, err := repo.Head()
-	if err != nil {
-		log.Printf("[useCache] failed to read cache HEAD: %v", err)
-	}
-	if err == nil && ref.Hash().String() == remoteHash {
+	if ref.Hash().String() == remoteHash {
 		log.Println("[useCache] cache hit for " + repoUrl)
 		err = copyDir(cacheDir, targetDir)
 		if err != nil {
