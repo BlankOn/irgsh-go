@@ -67,6 +67,7 @@ var (
 	pipelineId           string
 )
 
+// getRemoteHash queries the remote repository for the commit hash at a branch ref.
 func getRemoteHash(
 	repoUrl string,
 	branch string,
@@ -91,6 +92,7 @@ func getRemoteHash(
 	return "", fmt.Errorf("repo or branch not found")
 }
 
+// copyDir copies the contents of src into dst.
 func copyDir(
 	src string,
 	dst string,
@@ -127,6 +129,7 @@ func cacheDirExists(
 	return false, err
 }
 
+// removeCacheDir deletes the cache directory and its contents.
 func removeCacheDir(
 	cacheDir string,
 ) error {
@@ -141,6 +144,7 @@ func removeCacheDir(
 	return nil
 }
 
+// useCache checks the cache and copies it to targetDir if it is current.
 func useCache(
 	repoUrl string,
 	branch string,
@@ -226,6 +230,7 @@ func useCache(
 	return true, nil
 }
 
+// cloneCache clones the repository into a local cache if it does not exist.
 func cloneCache(
 	repoUrl string,
 	branch string,
@@ -262,6 +267,7 @@ func cloneCache(
 	return nil
 }
 
+// syncRepo keeps targetDir synced with the remote repository using a cache.
 func syncRepo(
 	repoUrl string,
 	branch string,
