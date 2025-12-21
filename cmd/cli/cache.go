@@ -198,6 +198,8 @@ func useCache(
 
 	if err == git.NoErrAlreadyUpToDate {
 		log.Println("[useCache] cache already up to date")
+	} else {
+		log.Println("[useCache] cache updated successfully")
 	}
 
 	ref, err = repo.Head()
@@ -210,22 +212,7 @@ func useCache(
 		return errCacheUnavailable
 	}
 
-	localHash := ref.Hash().String()
-	if localHash != remoteHash {
-		refreshedHash, hashErr := getRemoteHash(repoUrl, branch)
-		if hashErr != nil {
-			log.Printf("[useCache] failed to refresh remote hash: %v", hashErr)
-			return hashErr
-		}
-		if localHash != refreshedHash {
-			log.Printf("[useCache] cache hash mismatch after pull: local %s remote %s", localHash, refreshedHash)
-			removeErr := removeCacheDir(cacheDir)
-			if removeErr != nil {
-				return removeErr
-			}
-			return errCacheUnavailable
-		}
-	}
+	log.Printf("[useCache] using cache at commit %s", ref.Hash().String())
 
 	err = copyDir(cacheDir, targetDir)
 	if err != nil {
