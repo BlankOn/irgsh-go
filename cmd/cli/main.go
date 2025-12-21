@@ -241,6 +241,13 @@ func cloneCache(
 ) error {
 	log.Println("[cloneCache] cloning cache for " + repoUrl)
 
+	cacheRoot := filepath.Dir(cacheDir)
+	err := os.MkdirAll(cacheRoot, 0755)
+	if err != nil {
+		log.Printf("[cloneCache] failed to create cache root: %v", err)
+		return err
+	}
+
 	cacheExists, err := cacheDirExists(cacheDir)
 	if err != nil {
 		log.Printf("[cloneCache] failed to stat cache dir: %v", err)
