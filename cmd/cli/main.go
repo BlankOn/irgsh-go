@@ -290,10 +290,10 @@ func main() {
 					// Otherwise (native), terminate the submission.
 					fmt.Println("sourceUrl: " + sourceUrl)
 					// Cloning Debian package files
-					err = syncRepo(sourceUrl, sourceBranch, homeDir+"/.irgsh/tmp/"+tmpID+"/source")
+					err = syncRepo(sourceUrl, sourceBranch, homeDir, homeDir+"/.irgsh/tmp/"+tmpID+"/source")
 					if err != nil {
 						fmt.Println(err.Error())
-						if strings.Contains(err.Error(), "repository not found") || errors.Is(err, errRepoOrBranchNotFound) {
+						if errors.Is(err, errRepoOrBranchNotFound) {
 							// Downloadable tarball? Let's try.
 							downloadableTarballURL = strings.TrimSuffix(string(sourceUrl), "\n")
 							log.Println(downloadableTarballURL)
@@ -331,7 +331,7 @@ func main() {
 				fmt.Println("packageUrl: " + packageUrl)
 
 				// Cloning Debian package files
-				err = syncRepo(packageUrl, packageBranch, homeDir+"/.irgsh/tmp/"+tmpID+"/package")
+				err = syncRepo(packageUrl, packageBranch, homeDir, homeDir+"/.irgsh/tmp/"+tmpID+"/package")
 				if err != nil {
 					fmt.Println(err.Error())
 					return

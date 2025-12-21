@@ -283,6 +283,7 @@ func cloneCache(
 func syncRepo(
 	repoUrl string,
 	branch string,
+	homeDir string,
 	targetDir string,
 ) error {
 	log.Println("[syncRepo] syncing repo " + repoUrl + " branch " + branch)
