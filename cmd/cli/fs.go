@@ -1,0 +1,127 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+)
+
+// resetDir removes the directory if it exists and creates a new empty one.
+// It is idempotent and safe to call even if the directory doesn't exist.
+func resetDir(
+	dir string,
+	mode os.FileMode,
+) error {
+	_, err := os.Stat(dir)
+	if err == nil {
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	return os.MkdirAll(dir, mode)
+}
+
+// copyDir recursively copies the entire directory tree from src to dst.
+// It preserves directory structure, file permissions, and symbolic links.
+// The destination directory is reset (removed and recreated) before copying.
+//
+// Hard links are not preserved; they are copied as regular files.
+func copyDir(
+	src string,
+	dst string,
+) error {
+	log.Printf("[copyDir] copying dir from %s to %s", src, dst)
+
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("[copyDir] failed to stat source dir: %w", err)
+	}
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("[copyDir] source is not a directory: %s", src)
+	}
+
+	err = resetDir(dst, srcInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("[copyDir] failed to prepare destination dir: %w", err)
+	}
+
+	return filepath.Walk(src, func(currentPath string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relPath, err := filepath.Rel(src, currentPath)
+		if err != nil {
+			return err
+		}
+		if relPath == "." {
+			return nil
+		}
+
+		targetPath := filepath.Join(dst, relPath)
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(currentPath)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(linkTarget, targetPath)
+		}
+
+		return copyFile(currentPath, targetPath, info.Mode())
+	})
+}
+
+// copyFile copies a file from src to dst, verifying that all bytes are written.
+//
+// The function uses a named return value and deferred close to ensure that
+// close errors on the destination file are captured. This is critical because
+// close flushes buffered data and can fail (disk full, I/O errors, quota exceeded),
+// potentially causing silent data loss if not checked.
+func copyFile(
+	src string,
+	dst string,
+	mode os.FileMode,
+) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	srcInfo, err := in.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat source file: %w", err)
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := out.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	written, err := io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+
+	if written != srcInfo.Size() {
+		return fmt.Errorf("incomplete copy: wrote %d bytes, expected %d bytes", written, srcInfo.Size())
+	}
+
+	if err := out.Sync(); err != nil {
+		return err
+	}
+
+	return nil
+}

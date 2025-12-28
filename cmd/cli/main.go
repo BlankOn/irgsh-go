@@ -23,8 +23,6 @@ import (
 	"github.com/inconshreveable/go-update"
 	"github.com/manifoldco/promptui"
 	"github.com/urfave/cli"
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 type Submission struct {
@@ -138,7 +136,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					return
 				}
 				cmdStr = "mkdir -p " + homeDir + "/.irgsh/tmp && echo -n '"
@@ -147,7 +145,7 @@ func main() {
 				err = cmd.Run()
 				if err != nil {
 					log.Println(cmdStr)
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					return
 				}
 				// TODO test a connection against the chief
@@ -292,20 +290,10 @@ func main() {
 					// Otherwise (native), terminate the submission.
 					fmt.Println("sourceUrl: " + sourceUrl)
 					// Cloning Debian package files
-					_, err = git.PlainClone(
-						homeDir+"/.irgsh/tmp/"+tmpID+"/source",
-						false,
-						&git.CloneOptions{
-							URL:           sourceUrl,
-							Progress:      os.Stdout,
-							SingleBranch:  true,
-							Depth:         1,
-							ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", sourceBranch)),
-						},
-					)
+					err = syncRepo(sourceUrl, sourceBranch, homeDir, homeDir+"/.irgsh/tmp/"+tmpID+"/source")
 					if err != nil {
 						fmt.Println(err.Error())
-						if strings.Contains(err.Error(), "repository not found") {
+						if errors.Is(err, errRepoOrBranchNotFound) {
 							// Downloadable tarball? Let's try.
 							downloadableTarballURL = strings.TrimSuffix(string(sourceUrl), "\n")
 							log.Println(downloadableTarballURL)
@@ -315,7 +303,6 @@ func main() {
 								log.Println(err)
 								err = err1
 								return
-								panic(err)
 							}
 							defer resp.Body.Close()
 							// Prepare dirs
@@ -344,17 +331,7 @@ func main() {
 				fmt.Println("packageUrl: " + packageUrl)
 
 				// Cloning Debian package files
-				_, err = git.PlainClone(
-					homeDir+"/.irgsh/tmp/"+tmpID+"/package",
-					false,
-					&git.CloneOptions{
-						URL:           packageUrl,
-						Progress:      os.Stdout,
-						SingleBranch:  true,
-						Depth:         1,
-						ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", packageBranch)),
-					},
-				)
+				err = syncRepo(packageUrl, packageBranch, homeDir, homeDir+"/.irgsh/tmp/"+tmpID+"/package")
 				if err != nil {
 					fmt.Println(err.Error())
 					return
@@ -369,7 +346,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err := exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package name.")
 					return
 				}
@@ -388,7 +365,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package version.")
 					return
 				}
@@ -405,7 +382,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package extended version.")
 					return
 				}
@@ -422,7 +399,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get package extended version.")
 					return
 				}
@@ -436,7 +413,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get uploaders value.")
 					return
 				}
@@ -449,7 +426,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to get maintainer identity.")
 					return
 				}
@@ -487,7 +464,7 @@ func main() {
 					fmt.Println(cmdStr)
 					output, err = exec.Command("bash", "-c", cmdStr).Output()
 					if err != nil {
-						log.Println("error: %v\n", err)
+						log.Printf("error: %v", err)
 						log.Println("Failed to rename workdir.")
 					}
 				}
@@ -499,7 +476,7 @@ func main() {
 				fmt.Println(cmdStr)
 				output, err = exec.Command("bash", "-c", cmdStr).Output()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to rename workdir.")
 					return
 				}
@@ -516,7 +493,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -533,7 +510,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -552,7 +529,7 @@ func main() {
 				cmd.Stderr = bufWriter
 				err = cmd.Run()
 				if err != nil && !strings.Contains(buffer.String(), ".buildinfo is meaningless") {
-					log.Println("error: %v\n", err.Error())
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -569,7 +546,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
 					return
 				}
@@ -647,7 +624,7 @@ func main() {
 				cmd.Stderr = os.Stderr
 				err = cmd.Run()
 				if err != nil {
-					log.Println("error: %v\n", err)
+					log.Printf("error: %v", err)
 					log.Println("Failed to sign the auth token using " + maintainerSigningKey + ". Please check your GPG key list.")
 					return
 				}
