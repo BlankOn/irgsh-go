@@ -1,0 +1,55 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create irgsh user and group if they don't exist
+        if ! getent group irgsh >/dev/null; then
+            addgroup --system irgsh
+        fi
+
+        if ! getent passwd irgsh >/dev/null; then
+            adduser --system --home /var/lib/irgsh --no-create-home \
+                    --ingroup irgsh --disabled-password --shell /bin/bash \
+                    --gecos "IRGSH System User" irgsh
+        fi
+
+        # Ensure home directory exists
+        if [ ! -d /var/lib/irgsh ]; then
+            mkdir -p /var/lib/irgsh
+        fi
+
+        # Set proper ownership and permissions
+        chown -R irgsh:irgsh /var/lib/irgsh
+        chown -R irgsh:irgsh /var/log/irgsh
+        chmod 755 /var/lib/irgsh
+        chmod 755 /var/log/irgsh
+
+        # Make config directory readable by irgsh user
+        chgrp irgsh /etc/irgsh
+        chmod 750 /etc/irgsh
+
+        # Config file should be readable by irgsh
+        if [ -f /etc/irgsh/config.yml ]; then
+            chown root:irgsh /etc/irgsh/config.yml
+            chmod 640 /etc/irgsh/config.yml
+        fi
+
+        # Add irgsh user to docker group if docker is installed
+        if getent group docker >/dev/null; then
+            usermod -aG docker irgsh || true
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

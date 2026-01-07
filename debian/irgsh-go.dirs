@@ -1,0 +1,6 @@
+usr/bin
+etc/irgsh
+usr/share/irgsh
+usr/share/irgsh/reprepro-template
+var/lib/irgsh
+var/log/irgsh

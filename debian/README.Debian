@@ -1,0 +1,72 @@
+irgsh-go for Debian
+====================
+
+IRGSH is an all-in-one tool for creating and maintaining Debian-derived
+GNU/Linux distributions.
+
+Initial Setup
+-------------
+
+After installation, you need to perform the following steps:
+
+1. Install and configure Redis server:
+
+   sudo apt-get install redis-server
+   sudo systemctl start redis-server
+   sudo systemctl enable redis-server
+
+2. Configure IRGSH by editing /etc/irgsh/config.yml according to your needs.
+
+3. Initialize IRGSH:
+
+   sudo -u irgsh /usr/share/irgsh/init.sh
+
+4. For the builder component, you need to initialize pbuilder base:
+
+   sudo -u irgsh irgsh-builder init-base
+   sudo -u irgsh irgsh-builder init-builder
+
+5. For the repository component, initialize it:
+
+   sudo -u irgsh irgsh-repo init
+
+Starting Services
+-----------------
+
+You can start the IRGSH services with:
+
+   sudo systemctl start irgsh-chief
+   sudo systemctl start irgsh-builder
+   sudo systemctl start irgsh-repo
+   sudo systemctl start irgsh-iso   # optional
+
+To enable them at boot:
+
+   sudo systemctl enable irgsh-chief
+   sudo systemctl enable irgsh-builder
+   sudo systemctl enable irgsh-repo
+
+Logs
+----
+
+Service logs are available at:
+   /var/log/irgsh/chief.log
+   /var/log/irgsh/builder.log
+   /var/log/irgsh/repo.log
+   /var/log/irgsh/iso.log
+
+Using the CLI
+-------------
+
+Configure the CLI tool to point to your IRGSH chief instance:
+
+   irgsh-cli config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
+
+Submit a package:
+
+   irgsh-cli submit --source SOURCE_URL --package PACKAGE_URL
+
+For more information, visit:
+https://github.com/BlankOn/irgsh-go
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 07 Jan 2026 21:00:00 +0700

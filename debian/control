@@ -1,0 +1,38 @@
+Source: irgsh-go
+Section: devel
+Priority: optional
+Maintainer: BlankOn Developers <blankon-dev@googlegroups.com>
+Build-Depends: debhelper-compat (= 13),
+               golang-go (>= 2:1.13~)
+Standards-Version: 4.6.0
+Homepage: https://github.com/BlankOn/irgsh-go
+Vcs-Browser: https://github.com/BlankOn/irgsh-go
+Vcs-Git: https://github.com/BlankOn/irgsh-go.git
+
+Package: irgsh-go
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         adduser
+Recommends: gpg,
+            devscripts,
+            redis-server | redis
+Suggests: pbuilder,
+          debootstrap,
+          reprepro,
+          dh-make,
+          docker.io | docker-ce
+Description: All-in-one tool for Debian-derived distribution maintenance
+ IRGSH (pronunciation: irgis) is an all-in-one tool to create and maintain
+ Debian-derived GNU/Linux distribution: from packaging to repository, from
+ ISO build to release management.
+ .
+ This package contains all IRGSH server components:
+  * irgsh-chief - acts as the master controller
+  * irgsh-builder - builder worker for package building
+  * irgsh-repo - repository server for package storage
+  * irgsh-iso - ISO image builder
+  * irgsh-cli - command-line client tool for package maintainers
+ .
+ A minimal IRGSH ecosystem requires irgsh-chief, irgsh-builder, and
+ irgsh-repo services running, along with a Redis server for task queuing.
