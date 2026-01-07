@@ -42,27 +42,27 @@ override_dh_strip:
 
 override_dh_auto_install:
 	# Install binaries
-	install -D -m 0755 bin/irgsh-repo $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-repo
-	install -D -m 0755 bin/irgsh-chief $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-chief
-	install -D -m 0755 bin/irgsh-builder $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-builder
-	install -D -m 0755 bin/irgsh-iso $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-iso
-	install -D -m 0755 bin/irgsh-cli $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-cli
+	install -D -m 0755 bin/irgsh-repo $(CURDIR)/debian/irgsh/usr/bin/irgsh-repo
+	install -D -m 0755 bin/irgsh-chief $(CURDIR)/debian/irgsh/usr/bin/irgsh-chief
+	install -D -m 0755 bin/irgsh-builder $(CURDIR)/debian/irgsh/usr/bin/irgsh-builder
+	install -D -m 0755 bin/irgsh-iso $(CURDIR)/debian/irgsh/usr/bin/irgsh-iso
+	install -D -m 0755 bin/irgsh-cli $(CURDIR)/debian/irgsh/usr/bin/irgsh-cli
 	# Install systemd service files
-	install -D -m 0644 debian/irgsh-chief.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-chief.service
-	install -D -m 0644 debian/irgsh-builder.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-builder.service
-	install -D -m 0644 debian/irgsh-repo.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-repo.service
-	install -D -m 0644 debian/irgsh-iso.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-iso.service
+	install -D -m 0644 debian/irgsh-chief.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-chief.service
+	install -D -m 0644 debian/irgsh-builder.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-builder.service
+	install -D -m 0644 debian/irgsh-repo.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-repo.service
+	install -D -m 0644 debian/irgsh-iso.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-iso.service
 	# Install configuration files
-	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh-go/etc/irgsh/config.yml
-	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh-go/usr/share/irgsh/config.yml
+	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh/etc/irgsh/config.yml
+	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh/usr/share/irgsh/config.yml
 	# Install init script
-	install -D -m 0755 utils/scripts/init.sh $(CURDIR)/debian/irgsh-go/usr/share/irgsh/init.sh
+	install -D -m 0755 utils/scripts/init.sh $(CURDIR)/debian/irgsh/usr/share/irgsh/init.sh
 	# Install reprepro template
-	mkdir -p $(CURDIR)/debian/irgsh-go/usr/share/irgsh/reprepro-template
-	cp -r utils/reprepro-template/* $(CURDIR)/debian/irgsh-go/usr/share/irgsh/reprepro-template/
+	mkdir -p $(CURDIR)/debian/irgsh/usr/share/irgsh/reprepro-template
+	cp -r utils/reprepro-template/* $(CURDIR)/debian/irgsh/usr/share/irgsh/reprepro-template/
 	# Create necessary directories
-	mkdir -p $(CURDIR)/debian/irgsh-go/var/lib/irgsh
-	mkdir -p $(CURDIR)/debian/irgsh-go/var/log/irgsh
+	mkdir -p $(CURDIR)/debian/irgsh/var/lib/irgsh
+	mkdir -p $(CURDIR)/debian/irgsh/var/log/irgsh
 
 override_dh_installsystemd:
 	# Install systemd services but don't enable them by default

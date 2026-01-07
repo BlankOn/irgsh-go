@@ -1,0 +1,18 @@
+[Unit]
+Description=irgsh-builder - IRGSH Package Builder Worker
+After=network.target redis-server.service irgsh-chief.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=irgsh
+Group=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-builder
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:/var/log/irgsh/builder.log
+StandardError=append:/var/log/irgsh/builder.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+48c42ba464c82a6864a6c5fe04b06e99  lib/systemd/system/irgsh-builder.service
+81670e9ed27becf9f909a55aef97f7d7  lib/systemd/system/irgsh-chief.service
+3613afd2fa8fb9df3b0289ea5dec8515  lib/systemd/system/irgsh-iso.service
+f4abed8afb55c9d94dc4960193f1dcbc  lib/systemd/system/irgsh-repo.service
+8a2388be9bb731e26f437e359b33abf1  usr/bin/irgsh-builder
+a8222fe3f08717f25ab93db3762ca9c1  usr/bin/irgsh-chief
+dea483a075d024f1379451340995dcd1  usr/bin/irgsh-cli
+8232ed055e01ff61105aa545722d7776  usr/bin/irgsh-iso
+d5cae443a08404451bf40b03b1a9307b  usr/bin/irgsh-repo
+3f495598c082b580016b2bdca7902160  usr/share/doc/irgsh/README.Debian
+f0212cce315a94f2442a2e09d38a947b  usr/share/doc/irgsh/changelog.Debian.gz
+80bdef5c1364df9b7250ab6f93cf21a7  usr/share/doc/irgsh/copyright
+574fe416e96cac0e21c150294c3f12ba  usr/share/irgsh/config.yml
+7a3de249c3de9429a868d1ac614395c7  usr/share/irgsh/init.sh
+d41d8cd98f00b204e9800998ecf8427e  usr/share/irgsh/reprepro-template/conf/blacklist.pkg
+3239f6033052f7d61dd6e115a773b6cc  usr/share/irgsh/reprepro-template/conf/changelogs.sh

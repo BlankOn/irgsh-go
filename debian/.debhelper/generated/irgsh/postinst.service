@@ -1,0 +1,68 @@
+# Automatically added by dh_installsystemd/13.14.1ubuntu5
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed 'irgsh-builder.service'; then
+		# The following line should be removed in trixie or trixie+1
+		deb-systemd-helper unmask 'irgsh-builder.service' >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled 'irgsh-builder.service'; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable 'irgsh-builder.service' >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state 'irgsh-builder.service' >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.14.1ubuntu5
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed 'irgsh-chief.service'; then
+		# The following line should be removed in trixie or trixie+1
+		deb-systemd-helper unmask 'irgsh-chief.service' >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled 'irgsh-chief.service'; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable 'irgsh-chief.service' >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state 'irgsh-chief.service' >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.14.1ubuntu5
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed 'irgsh-iso.service'; then
+		# The following line should be removed in trixie or trixie+1
+		deb-systemd-helper unmask 'irgsh-iso.service' >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled 'irgsh-iso.service'; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable 'irgsh-iso.service' >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state 'irgsh-iso.service' >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.14.1ubuntu5
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed 'irgsh-repo.service'; then
+		# The following line should be removed in trixie or trixie+1
+		deb-systemd-helper unmask 'irgsh-repo.service' >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled 'irgsh-repo.service'; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable 'irgsh-repo.service' >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state 'irgsh-repo.service' >/dev/null || true
+fi
+# End automatically added section
