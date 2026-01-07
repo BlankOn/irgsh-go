@@ -1,0 +1,69 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+# Enable Go modules
+export GO111MODULE = on
+export GOPROXY = https://proxy.golang.org,direct
+
+# Read version from VERSION file
+VERSION := $(shell cat VERSION)
+LDFLAGS := -X main.version=$(VERSION)
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	rm -rf bin
+	dh_auto_clean
+
+override_dh_auto_build:
+	# Download dependencies
+	go mod download
+	# Build all binaries with version info
+	mkdir -p bin
+	go build -ldflags "$(LDFLAGS)" -o bin/irgsh-repo ./cmd/repo
+	go build -ldflags "$(LDFLAGS)" -o bin/irgsh-chief ./cmd/chief
+	go build -ldflags "$(LDFLAGS)" -o bin/irgsh-builder ./cmd/builder
+	go build -ldflags "$(LDFLAGS)" -o bin/irgsh-iso ./cmd/iso
+	go build -ldflags "$(LDFLAGS)" -o bin/irgsh-cli ./cmd/cli
+
+override_dh_auto_test:
+	# Skip tests during package build
+	@echo "Skipping tests"
+
+override_dh_dwz:
+	# Skip dwz compression for Go binaries
+	@echo "Skipping dwz for Go binaries"
+
+override_dh_strip:
+	# Don't strip Go binaries to preserve panic stack traces
+	dh_strip --no-automatic-dbgsym
+
+override_dh_auto_install:
+	# Install binaries
+	install -D -m 0755 bin/irgsh-repo $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-repo
+	install -D -m 0755 bin/irgsh-chief $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-chief
+	install -D -m 0755 bin/irgsh-builder $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-builder
+	install -D -m 0755 bin/irgsh-iso $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-iso
+	install -D -m 0755 bin/irgsh-cli $(CURDIR)/debian/irgsh-go/usr/bin/irgsh-cli
+	# Install systemd service files
+	install -D -m 0644 debian/irgsh-chief.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-chief.service
+	install -D -m 0644 debian/irgsh-builder.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-builder.service
+	install -D -m 0644 debian/irgsh-repo.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-repo.service
+	install -D -m 0644 debian/irgsh-iso.service $(CURDIR)/debian/irgsh-go/lib/systemd/system/irgsh-iso.service
+	# Install configuration files
+	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh-go/etc/irgsh/config.yml
+	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh-go/usr/share/irgsh/config.yml
+	# Install init script
+	install -D -m 0755 utils/scripts/init.sh $(CURDIR)/debian/irgsh-go/usr/share/irgsh/init.sh
+	# Install reprepro template
+	mkdir -p $(CURDIR)/debian/irgsh-go/usr/share/irgsh/reprepro-template
+	cp -r utils/reprepro-template/* $(CURDIR)/debian/irgsh-go/usr/share/irgsh/reprepro-template/
+	# Create necessary directories
+	mkdir -p $(CURDIR)/debian/irgsh-go/var/lib/irgsh
+	mkdir -p $(CURDIR)/debian/irgsh-go/var/log/irgsh
+
+override_dh_installsystemd:
+	# Install systemd services but don't enable them by default
+	dh_installsystemd --no-enable --no-start
