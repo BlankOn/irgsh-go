@@ -95,3 +95,7 @@ redis:
 
 submit:
 	curl --header "Content-Type: application/json" --request POST --data '{"sourceUrl":"https://github.com/BlankOn/bromo-theme.git","packageUrl":"https://github.com/BlankOn-packages/bromo-theme.git"}' http://localhost:8080/api/v1/submit
+
+deb:
+	debuild -us -uc -b
+
