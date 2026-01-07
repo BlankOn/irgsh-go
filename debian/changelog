@@ -1,4 +1,4 @@
-irgsh-go (0.0.28-1) unstable; urgency=medium
+irgsh (0.0.28-1) unstable; urgency=medium
 
   * Initial Debian package release
   * Package all IRGSH components (chief, builder, repo, iso, cli)

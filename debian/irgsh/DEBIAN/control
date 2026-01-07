@@ -1,5 +1,4 @@
 Package: irgsh
-Source: irgsh-go
 Version: 0.0.28-1
 Architecture: amd64
 Maintainer: BlankOn Developers <blankon-dev@googlegroups.com>
