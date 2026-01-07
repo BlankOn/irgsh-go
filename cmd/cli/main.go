@@ -515,6 +515,8 @@ func main() {
 					return
 				}
 
+				// We will try to generate buildinfo without *.deb file.
+				// Example cases: bromo-theme, calamares
 				log.Println("Generate buildinfo file...")
 				// Generate the buildinfo file
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
@@ -528,12 +530,41 @@ func main() {
 				bufWriter := bufio.NewWriter(&buffer)
 				cmd.Stderr = bufWriter
 				err = cmd.Run()
+				isNeedDebuild := false
 				if err != nil && !strings.Contains(buffer.String(), ".buildinfo is meaningless") {
-					log.Printf("error: %v", err)
-					log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
-					return
+					if strings.Contains(buffer.String(), ".deb: No such file or directory") {
+						err = nil
+						isNeedDebuild = true
+					} else {
+						log.Printf("error: %v", err)
+						log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
+						return
+					}
 				}
+
 				err = nil
+
+				// Some package need to be build and have *.deb file
+				// before it could generate metadata info for reproducible build
+				// Example cases: irgsh
+				if isNeedDebuild {
+					cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
+					cmdStr += "/" + packageNameVersion + " && debuild -us -uc -b && dpkg-genbuildinfo "
+					fmt.Println(cmdStr)
+					cmd = exec.Command("bash", "-c", cmdStr)
+					// Make it interactive
+					cmd.Stdout = os.Stdout
+					cmd.Stdin = os.Stdin
+					var buffer bytes.Buffer
+					bufWriter := bufio.NewWriter(&buffer)
+					cmd.Stderr = bufWriter
+					err = cmd.Run()
+					if err != nil && !strings.Contains(buffer.String(), ".buildinfo is meaningless") {
+						log.Printf("error: %v", err)
+						log.Println("Failed to sign the package. Either you've the wrong key or you've unmeet dependencies. Please the error message(s) above..")
+						return
+					}
+				}
 
 				// Generate the changes file
 				cmdStr = "cd " + homeDir + "/.irgsh/tmp/" + tmpID
