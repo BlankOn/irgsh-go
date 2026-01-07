@@ -32,13 +32,13 @@ iso:
   variant: desktop
   archs: 'amd64'
   keyring: '/usr/share/keyrings/blankon-archive-keyring.gpg'
-  gnupg_dir: '/root/.gnupg'
+  gnupg_dir: '/root/gnupg'
   dist: 'verbeek'
   mirror: 'http://arsip-dev.blankonlinux.or.id/blankon/'
   script: './uluwatu.debootstrap'
   components: 'main restricted extras extras-restricted'
   local_repo_source_path: '`pwd`/$DIST-local-repo`'
-  local_repo_keyring_path: '`pwd`/$DIST-local-repo/.gnupg-archive/'
+  local_repo_keyring_path: '`pwd`/$DIST-local-repo/gnupg-archive/'
   local_repo_keyring: 9120A048
   packages: 'blankon-role-keyring blankon-keyring blankon-desktop plymouth-theme-blankon blankon-kernel-headers blankon-keyring aufs-tools gnome-control-center manokwari manokwari-theme-greeter openssh-client openssh-server tebu-flat-icon-theme gnome-terminal plymouth-theme-blankon sudo lsb-release midori libglib2.0-bin curl locales-all vim tempel'
   blacklist: 'gdm3 gnome-session lightdm-gtk-greeter'

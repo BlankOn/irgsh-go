@@ -228,7 +228,7 @@ func main() {
 					return
 				}
 
-				if versionResponse.Version != app.Version {
+				if versionResponse.Version != app.Version && !ignoreChecks {
 					log.Println("Target version", versionResponse.Version)
 					log.Println("Local version", app.Version)
 					err = errors.New("Client version mismatch. Please update your irgsh-cli.")
