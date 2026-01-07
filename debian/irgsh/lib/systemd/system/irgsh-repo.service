@@ -1,0 +1,18 @@
+[Unit]
+Description=irgsh-repo - IRGSH Repository Server
+After=network.target redis-server.service irgsh-chief.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=irgsh
+Group=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-repo
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:/var/log/irgsh/repo.log
+StandardError=append:/var/log/irgsh/repo.log
+
+[Install]
+WantedBy=multi-user.target

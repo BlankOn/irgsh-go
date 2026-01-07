@@ -1,0 +1,18 @@
+[Unit]
+Description=irgsh-chief - IRGSH Master Controller
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=irgsh
+Group=irgsh
+WorkingDirectory=/var/lib/irgsh
+ExecStart=/usr/bin/irgsh-chief
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:/var/log/irgsh/chief.log
+StandardError=append:/var/log/irgsh/chief.log
+
+[Install]
+WantedBy=multi-user.target
