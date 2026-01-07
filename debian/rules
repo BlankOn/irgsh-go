@@ -14,7 +14,7 @@ LDFLAGS := -X main.version=$(VERSION)
 	dh $@
 
 override_dh_auto_clean:
-	rm -rf bin
+	rm -rf bin obj-x86_64-linux-gnu cli
 	dh_auto_clean
 
 override_dh_auto_build:
