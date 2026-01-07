@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"os/user"
 	"path"
 	"strings"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 	"github.com/imroc/req"
@@ -62,6 +64,113 @@ var (
 	isExperimental       bool
 	pipelineId           string
 )
+
+// ProgressWriter tracks upload progress
+type ProgressWriter struct {
+	total      int64
+	uploaded   int64
+	onProgress func(uploaded, total int64)
+}
+
+func (pw *ProgressWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	atomic.AddInt64(&pw.uploaded, int64(n))
+	if pw.onProgress != nil {
+		pw.onProgress(atomic.LoadInt64(&pw.uploaded), pw.total)
+	}
+	return n, nil
+}
+
+// uploadWithProgress uploads a multipart form with progress tracking
+func uploadWithProgress(url, blobPath, tokenPath string) ([]byte, error) {
+	// Open the files
+	blobFile, err := os.Open(blobPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open blob file: %v", err)
+	}
+	defer blobFile.Close()
+
+	tokenFile, err := os.Open(tokenPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open token file: %v", err)
+	}
+	defer tokenFile.Close()
+
+	// Create a buffer to build the multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add blob file
+	blobPart, err := writer.CreateFormFile("blob", path.Base(blobPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blob form field: %v", err)
+	}
+	_, err = io.Copy(blobPart, blobFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy blob file: %v", err)
+	}
+
+	// Add token file
+	tokenPart, err := writer.CreateFormFile("token", path.Base(tokenPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token form field: %v", err)
+	}
+	_, err = io.Copy(tokenPart, tokenFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy token file: %v", err)
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close multipart writer: %v", err)
+	}
+
+	// Calculate total size
+	totalSize := int64(body.Len())
+
+	// Create progress writer
+	progressWriter := &ProgressWriter{
+		total: totalSize,
+		onProgress: func(uploaded, total int64) {
+			percentage := float64(uploaded) / float64(total) * 100
+			fmt.Printf("\rUploading: %.2f%% (%d/%d bytes)", percentage, uploaded, total)
+		},
+	}
+
+	// Create a reader that tracks progress
+	progressReader := io.TeeReader(body, progressWriter)
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", url, progressReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Println() // New line after progress
+
+	// Check response status
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Read response body
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	return respBody, nil
+}
 
 func checkForInitValues() (err error) {
 	dat0, _ := ioutil.ReadFile(homeDir + "/.irgsh/IRGSH_CHIEF_ADDRESS")
@@ -662,13 +771,13 @@ func main() {
 
 				// Upload
 				log.Println("Uploading blob...")
-				cmdStr = "curl -f -s --show-error -F 'blob=@" + homeDir + "/.irgsh/tmp/" + tmpID + ".tar.gz" + "' "
-				cmdStr += " -F 'token=@" + homeDir + "/.irgsh/tmp/" + tmpID + "/token.sig" + "'"
-				cmdStr += " '" + chiefAddress + "/api/v1/submission-upload' 2>&1"
-				log.Println(cmdStr)
-				output, err = exec.Command("bash", "-c", cmdStr).Output()
+				blobPath := homeDir + "/.irgsh/tmp/" + tmpID + ".tar.gz"
+				tokenPath := homeDir + "/.irgsh/tmp/" + tmpID + "/token.sig"
+				uploadURL := chiefAddress + "/api/v1/submission-upload"
+
+				output, err = uploadWithProgress(uploadURL, blobPath, tokenPath)
 				if err != nil {
-					log.Println(string(output))
+					log.Printf("Upload failed: %v", err)
 					return err
 				}
 

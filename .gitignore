@@ -8,3 +8,6 @@ repo/utils.go
 cli/utils.go
 coverage.txt
 tmp
+debian-build
+obj-x86_64-linux-gnu
+cli

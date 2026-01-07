@@ -2,11 +2,11 @@
 81670e9ed27becf9f909a55aef97f7d7  lib/systemd/system/irgsh-chief.service
 3613afd2fa8fb9df3b0289ea5dec8515  lib/systemd/system/irgsh-iso.service
 f4abed8afb55c9d94dc4960193f1dcbc  lib/systemd/system/irgsh-repo.service
-12f4f3f947dd3b66b5420eeaefaec7bd  usr/bin/irgsh-builder
-3d3de12f06b1c9386a476568e7488c0e  usr/bin/irgsh-chief
-a239a0d9db86d170fa2e87a8abd865db  usr/bin/irgsh-cli
-da5a02cc9679c26bf135b52adf843595  usr/bin/irgsh-iso
-ae17e1e2b6f3b236a4a80008ee331989  usr/bin/irgsh-repo
+2b603fb9dff38735c03609d4f21c5443  usr/bin/irgsh-builder
+693c6e843390c0ed7bc692798ea366b3  usr/bin/irgsh-chief
+a1006fecab80bae652b9594fdd52ca04  usr/bin/irgsh-cli
+6562af8340c270be773e09d9291b5b02  usr/bin/irgsh-iso
+89ac4ec3b432ede9bc7ba22e6813653c  usr/bin/irgsh-repo
 3f495598c082b580016b2bdca7902160  usr/share/doc/irgsh/README.Debian
 913b346d538c97b8d44b9f4d43d25f31  usr/share/doc/irgsh/changelog.Debian.gz
 85ed7cbb9e26f3cf95a8a38bdb16b4f6  usr/share/doc/irgsh/copyright
