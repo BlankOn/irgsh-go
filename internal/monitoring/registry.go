@@ -294,3 +294,13 @@ func (r *Registry) GetOrCreateStartTime(instanceID string) time.Time {
 	}
 	return time.Now()
 }
+
+// GetClient returns the Redis client (for job state queries)
+func (r *Registry) GetClient() *redis.Client {
+	return r.client
+}
+
+// GetContext returns the context (for job state queries)
+func (r *Registry) GetContext() context.Context {
+	return r.ctx
+}
