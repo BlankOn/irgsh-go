@@ -219,7 +219,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Populate the reprepro's updates config file with values from irgsh's config.yml",
+		"Populate the reprepro's updates config file with values from irgsh's config.yaml",
 		logPath,
 	)
 	if err != nil {
@@ -251,7 +251,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Populate the reprepro's distributions config file with values from irgsh's config.yml",
+		"Populate the reprepro's distributions config file with values from irgsh's config.yaml",
 		logPath,
 	)
 	if err != nil {
@@ -274,7 +274,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Populate the reprepro's options config file with values from irgsh's config.yml",
+		"Populate the reprepro's options config file with values from irgsh's config.yaml",
 		logPath,
 	)
 	if err != nil {
@@ -329,7 +329,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Populate the reprepro's updates config file with values from irgsh's config.yml",
+		"Populate the reprepro's updates config file with values from irgsh's config.yaml",
 		logPath,
 	)
 	if err != nil {
@@ -361,7 +361,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Populate the reprepro's distributions config file with values from irgsh's config.yml",
+		"Populate the reprepro's distributions config file with values from irgsh's config.yaml",
 		logPath,
 	)
 	if err != nil {
@@ -384,7 +384,7 @@ func InitRepo() (err error) {
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Populate the reprepro's options config file with values from irgsh's config.yml",
+		"Populate the reprepro's options config file with values from irgsh's config.yaml",
 		logPath,
 	)
 	if err != nil {

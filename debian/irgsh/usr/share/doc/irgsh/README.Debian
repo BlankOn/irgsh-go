@@ -15,7 +15,7 @@ After installation, you need to perform the following steps:
    sudo systemctl start redis-server
    sudo systemctl enable redis-server
 
-2. Configure IRGSH by editing /etc/irgsh/config.yml according to your needs.
+2. Configure IRGSH by editing /etc/irgsh/config.yaml according to your needs.
 
 3. Initialize IRGSH:
 

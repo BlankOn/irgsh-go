@@ -10,8 +10,8 @@ release:
 	mkdir -p irgsh-go/lib/systemd/system
 	mkdir -p irgsh-go/usr/share/irgsh
 	cp -rf bin/* irgsh-go/usr/bin/
-	cp -rf utils/config.yml irgsh-go/etc/irgsh/
-	cp -rf utils/config.yml irgsh-go/usr/share/irgsh/config.yml
+	cp -rf utils/config.yaml irgsh-go/etc/irgsh/
+	cp -rf utils/config.yaml irgsh-go/usr/share/irgsh/config.yaml
 	cp -rf utils/init/* irgsh-go/etc/init.d/
 	cp -rf utils/systemctl/* irgsh-go/lib/systemd/system
 	cp -rf utils/scripts/init.sh irgsh-go/usr/share/irgsh/init.sh

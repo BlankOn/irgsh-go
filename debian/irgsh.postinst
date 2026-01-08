@@ -30,9 +30,9 @@ case "$1" in
         chmod 750 /etc/irgsh
 
         # Config file should be readable by irgsh
-        if [ -f /etc/irgsh/config.yml ]; then
-            chown root:irgsh /etc/irgsh/config.yml
-            chmod 640 /etc/irgsh/config.yml
+        if [ -f /etc/irgsh/config.yaml ]; then
+            chown root:irgsh /etc/irgsh/config.yaml
+            chmod 640 /etc/irgsh/config.yaml
         fi
 
         # Add irgsh user to docker group if docker is installed

@@ -71,7 +71,7 @@ fi
 if [ $DEV_INSTALL = 1 ]; then
 	# For development/testing purpose
 	# Clean up
-	rm -rf /etc/irgsh/config.yml
+	rm -rf /etc/irgsh/config.yaml
 	rm -rf /var/lib/irgsh/chief
 	rm -rf /var/lib/irgsh/repo
 	rm -rf /var/lib/irgsh/gnupg
@@ -97,8 +97,8 @@ cp -vR $TEMP_PATH/irgsh-go/usr/share/irgsh/* /usr/share/irgsh/
 cp -v $TEMP_PATH/irgsh-go/etc/init.d/* /etc/init.d/
 systemctl daemon-reload
 # Configuration file
-if [ ! -f "/etc/irgsh/config.yml" ]; then
-	cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yml /etc/irgsh/config.yml
+if [ ! -f "/etc/irgsh/config.yaml" ]; then
+	cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yaml /etc/irgsh/config.yaml
 fi
 # irgsh user
 #groupadd irgsh || true
@@ -134,8 +134,8 @@ if [ $DEV_INSTALL = 1 ]; then
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -k > /dev/null" -s /bin/bash irgsh
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg --batch --gen-key ~/gen-key-script > /dev/null" -s /bin/bash irgsh
 	GPG_SIGN_KEY=$(su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -K | grep uid -B 1 | head -n 1 | xargs" -s /bin/bash irgsh)
-	sed -i "/dist_signing_key/c\  dist_signing_key: 'GPG_SIGN_KEY'" /etc/irgsh/config.yml
-	sed -i "s/GPG_SIGN_KEY/$GPG_SIGN_KEY/g" /etc/irgsh/config.yml
+	sed -i "/dist_signing_key/c\  dist_signing_key: 'GPG_SIGN_KEY'" /etc/irgsh/config.yaml
+	sed -i "s/GPG_SIGN_KEY/$GPG_SIGN_KEY/g" /etc/irgsh/config.yaml
 	su -c "chmod -R 700 /var/lib/irgsh/gnupg" -s /bin/bash irgsh
 	echo "Generating GPG key [OK]"
 	gpg --armor --export >/tmp/pubkey

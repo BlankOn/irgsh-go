@@ -26,7 +26,7 @@ pub   rsa4096 2020-10-17 [SC] [expires: 2021-10-17]
 uid           [ultimate] Herpiko Dwi Aguno <herpiko@gmail.com>
 sub   rsa4096 2020-10-17 [E] [expires: 2021-10-17]
 ```
-Copy the key identity (in my case, it's the `41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F` string) then paste it to replace `GPG_SIGN_KEY` in `utils/config.yml`
+Copy the key identity (in my case, it's the `41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F` string) then paste it to replace `GPG_SIGN_KEY` in `utils/config.yaml`
 
 In dev environment, this single key will acts as both repository signing key and package maintainer signing key. On prod, they will be different keys.
 
@@ -55,7 +55,7 @@ You need to set the `repo.dist_signing_key` in `./utils/config.yaml` to your GPG
 
 `make repo-init`
 
-This command will remove existing repositories if any and reinit the new one. You may be asked for your GPG key passphrase. You can tweak repository configuration in `repo` section of `utils/config.yml`
+This command will remove existing repositories if any and reinit the new one. You may be asked for your GPG key passphrase. You can tweak repository configuration in `repo` section of `utils/config.yaml`
 
 ### Redis
 

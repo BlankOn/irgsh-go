@@ -63,9 +63,9 @@ type MonitoringConfig struct {
 // LoadConfig load irgsh config from file
 func LoadConfig() (config IrgshConfig, err error) {
 	configPaths := []string{
-		"/etc/irgsh/config.yml",
-		"../../utils/config.yml",
-		"./utils/config.yml",
+		"/etc/irgsh/config.yaml",
+		"../../utils/config.yaml",
+		"./utils/config.yaml",
 	}
 	configPath := os.Getenv("IRGSH_CONFIG_PATH")
 	isDev := os.Getenv("DEV") == "1"
@@ -84,7 +84,7 @@ func LoadConfig() (config IrgshConfig, err error) {
 		}
 	}
 	if isDev {
-		yamlFile, err = ioutil.ReadFile("./utils/config.yml")
+		yamlFile, err = ioutil.ReadFile("./utils/config.yaml")
 		if err != nil {
 			return
 		}

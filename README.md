@@ -58,7 +58,7 @@ GPG signature is used as authentication bearer on any submission attempt. Hence,
 
 #### IRGSH
 
-Please refer to `/etc/irgsh/config.yml` for available preferences. Change it as you need.
+Please refer to `/etc/irgsh/config.yaml` for available preferences. Change it as you need.
 
 ```
 irgsh-init
@@ -143,7 +143,7 @@ For its portable compiled binary.
 
 ### Can I run the workers on different machines?
 
-You can. Just make sure these workers pointed out to the same Redis server (see `/etc/irgsh/config.yml`). Also please consider this, https://redis.io/topics/security.
+You can. Just make sure these workers pointed out to the same Redis server (see `/etc/irgsh/config.yaml`). Also please consider this, https://redis.io/topics/security.
 
 ### Why is Docker required?
 

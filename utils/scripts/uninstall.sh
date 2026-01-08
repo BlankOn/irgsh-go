@@ -2,7 +2,7 @@
 rm -f irgsh-go/
 rm -f irgsh-go/etc/
 rm -f irgsh-go/etc/irgsh/
-rm -f irgsh-go/etc/irgsh/config.yml
+rm -f irgsh-go/etc/irgsh/config.yaml
 rm -f irgsh-go/etc/init.d/
 rm -f irgsh-go/etc/init.d/irgsh-builder
 rm -f irgsh-go/etc/init.d/irgsh-chief
