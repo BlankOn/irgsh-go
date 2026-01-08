@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/monitoring"
 
 	artifactEndpoint "github.com/blankon/irgsh-go/internal/artifact/endpoint"
 	artifactRepo "github.com/blankon/irgsh-go/internal/artifact/repo"
@@ -27,6 +28,7 @@ var (
 	irgshConfig config.IrgshConfig
 
 	artifactHTTPEndpoint *artifactEndpoint.ArtifactHTTPEndpoint
+	monitoringRegistry   *monitoring.Registry
 )
 
 type Submission struct {
@@ -74,6 +76,19 @@ func main() {
 	artifactHTTPEndpoint = artifactEndpoint.NewArtifactHTTPEndpoint(
 		artifactService.NewArtifactService(
 			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
+
+	// Initialize monitoring registry if enabled
+	if irgshConfig.Monitoring.Enabled {
+		ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
+		monitoringRegistry, err = monitoring.NewRegistry(irgshConfig.Redis, ttl)
+		if err != nil {
+			log.Printf("Failed to initialize monitoring registry: %v\n", err)
+			log.Println("Continuing without monitoring...")
+			irgshConfig.Monitoring.Enabled = false
+		} else {
+			log.Println("Monitoring registry initialized successfully")
+		}
+	}
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -125,12 +140,34 @@ func serve() {
 	submissionFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/submissions"))
 	http.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
+	// Start monitoring cleanup job if enabled
+	if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
+		go startInstanceCleanup()
+	}
+
 	port := os.Getenv("PORT")
 	if len(port) < 1 {
 		port = "8080"
 	}
 	log.Println("irgsh-go chief now live on port " + port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+
+// startInstanceCleanup runs a background job to cleanup stale instances
+func startInstanceCleanup() {
+	interval := time.Duration(irgshConfig.Monitoring.CleanupInterval) * time.Second
+	timeout := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	log.Printf("Instance cleanup job started (interval: %v, timeout: %v)\n", interval, timeout)
+
+	for range ticker.C {
+		if err := monitoringRegistry.CleanupStaleInstances(timeout); err != nil {
+			log.Printf("Failed to cleanup stale instances: %v\n", err)
+		}
+	}
 }
 
 func Move(src, dst string) error {

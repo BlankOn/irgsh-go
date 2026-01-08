@@ -15,27 +15,294 @@ import (
 	"github.com/RichardKnop/machinery/v1/backends/result"
 	"github.com/RichardKnop/machinery/v1/tasks"
 	"github.com/google/uuid"
+
+	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	resp := "<div style=\"font-family:monospace !important\">"
-	resp += "&nbsp;_&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_<br/>"
-	resp += "(_)_ __ __ _ ___| |_<br/>"
-	resp += "| | '__/ _` / __| '_ \\<br/>"
-	resp += "| | |&nbsp;| (_| \\__ \\ | | |<br/>"
-	resp += "|_|_|&nbsp;&nbsp;\\__, |___/_| |_|<br/>"
-	resp += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|___/<br/>"
-	resp += "irgsh-chief " + app.Version
-	resp += "<br/>"
-	resp += "<br/><a href=\"/maintainers\">maintainers</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/submissions\">submissions</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/logs\">logs</a>&nbsp;|&nbsp;"
-	resp += "<a href=\"/artifacts\">artifacts</a>&nbsp;|&nbsp;"
-	resp += "<a target=\"_blank\" href=\"https://github.com/blankon/irgsh-go\">about</a>"
-	resp += "</div>"
-	fmt.Fprintf(w, resp)
+
+	html := `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="10">
+    <title>IRGSH Chief</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: #333;
+            color: #fff;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .logo {
+            font-size: 14px;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+        .nav {
+            margin-top: 10px;
+        }
+        .nav a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .summary {
+            background: #fff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4CAF50;
+        }
+        .summary-item {
+            display: inline-block;
+            margin-right: 30px;
+            font-size: 14px;
+        }
+        .summary-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th {
+            background: #333;
+            color: #fff;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+            font-size: 11px;
+        }
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+        .status-online {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .status-offline {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .badge-builder {
+            background: #2196F3;
+            color: white;
+        }
+        .badge-repo {
+            background: #FF9800;
+            color: white;
+        }
+        .badge-iso {
+            background: #9C27B0;
+            color: white;
+        }
+        .metric {
+            font-size: 11px;
+            color: #666;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 20px 0 10px 0;
+            color: #333;
+        }
+        .refresh-info {
+            color: #666;
+            font-size: 11px;
+            margin-top: 20px;
+        }
+        .empty-state {
+            background: #fff;
+            padding: 40px;
+            text-align: center;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>irgsh-chief ` + app.Version + `</div>
+        <div class="nav">
+            <a href="/maintainers">maintainers</a> |
+            <a href="/submissions">submissions</a> |
+            <a href="/logs">logs</a> |
+            <a href="/artifacts">artifacts</a> |
+            <a target="_blank" href="https://github.com/blankon/irgsh-go">about</a>
+        </div>
+    </div>
+`
+
+	// Add monitoring section if enabled
+	if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
+		// Get all instances
+		instances, err := monitoringRegistry.ListInstances("", "")
+		if err != nil {
+			log.Printf("Failed to list instances: %v\n", err)
+		} else {
+			// Get summary
+			summary, err := monitoringRegistry.GetSummary()
+			if err != nil {
+				log.Printf("Failed to get summary: %v\n", err)
+			}
+
+			html += `<div class="section-title">Workers</div>`
+
+			// Summary section
+			html += fmt.Sprintf(`
+    <div class="summary">
+        <div class="summary-item">
+            <div class="summary-number">%d</div>
+            <div>Total Instances</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number" style="color: #4CAF50;">%d</div>
+            <div>Online</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number" style="color: #f44336;">%d</div>
+            <div>Offline</div>
+        </div>
+`, summary.Total, summary.Online, summary.Offline)
+
+			// Add type breakdown
+			for typeName, count := range summary.ByType {
+				html += fmt.Sprintf(`
+        <div class="summary-item">
+            <div class="summary-number" style="color: #2196F3;">%d</div>
+            <div>%s</div>
+        </div>
+`, count, typeName)
+			}
+
+			html += `
+    </div>
+`
+
+			// Instances table
+			if len(instances) == 0 {
+				html += `
+    <div class="empty-state">
+        <h2>No instances found</h2>
+        <p>Waiting for builders and workers to connect...</p>
+    </div>
+`
+			} else {
+				html += `
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Active Tasks</th>
+                <th>CPU</th>
+                <th>Memory</th>
+                <th>Disk</th>
+                <th>Uptime</th>
+                <th>Last Heartbeat</th>
+            </tr>
+        </thead>
+        <tbody>
+`
+
+				for _, instance := range instances {
+					// Determine badge class
+					badgeClass := "badge-builder"
+					switch instance.InstanceType {
+					case monitoring.InstanceTypeRepo:
+						badgeClass = "badge-repo"
+					case monitoring.InstanceTypeISO:
+						badgeClass = "badge-iso"
+					}
+
+					// Status class
+					statusClass := "status-offline"
+					if instance.Status == monitoring.StatusOnline {
+						statusClass = "status-online"
+					}
+
+					// Calculate uptime
+					uptime := time.Since(instance.StartTime)
+					uptimeStr := formatDuration(uptime)
+
+					// Format last heartbeat
+					lastHeartbeat := time.Since(instance.LastHeartbeat)
+					heartbeatStr := formatDuration(lastHeartbeat) + " ago"
+
+					// Format metrics
+					cpuStr := fmt.Sprintf("%.1f", instance.CPUUsage)
+
+					// Format memory as "used / total"
+					memStr := monitoring.FormatBytes(instance.MemoryUsage)
+					if instance.MemoryTotal > 0 {
+						memStr += " / " + monitoring.FormatBytes(instance.MemoryTotal)
+					}
+
+					// Format disk as "used / total"
+					diskStr := monitoring.FormatBytes(instance.DiskUsage)
+					if instance.DiskTotal > 0 {
+						diskStr += " / " + monitoring.FormatBytes(instance.DiskTotal)
+					}
+
+					html += fmt.Sprintf(`
+            <tr>
+                <td><span class="badge %s">%s</span></td>
+                <td>%s<br/><span class="metric">PID: %d</span></td>
+                <td class="%s">%s</td>
+                <td>%d / %d</td>
+                <td>%s / 100</td>
+                <td>%s</td>
+                <td>%s</td>
+                <td>%s</td>
+                <td>%s</td>
+            </tr>
+`, badgeClass, instance.InstanceType, instance.Hostname, instance.PID,
+						statusClass, instance.Status,
+						instance.ActiveTasks, instance.Concurrency,
+						cpuStr, memStr, diskStr, uptimeStr, heartbeatStr)
+				}
+
+				html += `
+        </tbody>
+    </table>
+`
+			}
+		}
+	}
+
+	html += `
+    <div class="refresh-info">
+        Page auto-refreshes every 10 seconds
+    </div>
+</body>
+</html>
+`
+
+	fmt.Fprintf(w, html)
 }
 
 func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
@@ -466,4 +733,18 @@ func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
 
 func VersionHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "{\"version\":\""+app.Version+"\"}")
+}
+
+// formatDuration formats a duration into human-readable string
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+	return fmt.Sprintf("%dd %dh", int(d.Hours())/24, int(d.Hours())%24)
 }

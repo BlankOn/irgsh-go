@@ -11,13 +11,14 @@ import (
 )
 
 type IrgshConfig struct {
-	Redis   string        `json:"redis"`
-	Chief   ChiefConfig   `json:"chief"`
-	Builder BuilderConfig `json:"builder"`
-	ISO     ISOConfig     `json:"iso"`
-	Repo    RepoConfig    `json:"repo"`
-	IsTest  bool          `json:"is_test"`
-	IsDev   bool          `json:"is_dev"`
+	Redis      string           `json:"redis"`
+	Chief      ChiefConfig      `json:"chief"`
+	Builder    BuilderConfig    `json:"builder"`
+	ISO        ISOConfig        `json:"iso"`
+	Repo       RepoConfig       `json:"repo"`
+	Monitoring MonitoringConfig `json:"monitoring"`
+	IsTest     bool             `json:"is_test"`
+	IsDev      bool             `json:"is_dev"`
 }
 
 type ChiefConfig struct {
@@ -50,6 +51,13 @@ type RepoConfig struct {
 	UpstreamDistUrl            string `json:"upstream_dist_url" validate:"required"`            // http://kartolo.sby.datautama.net.id/debian
 	UpstreamDistComponents     string `json:"upstream_dist_components" validate:"required"`     // main non-free>restricted contrib>extras
 	GnupgDir                   string `json:"gnupg_dir" validate:"required"`                    // GNUPG dir path
+}
+
+type MonitoringConfig struct {
+	Enabled           bool `json:"enabled"`             // Enable/disable monitoring
+	HeartbeatInterval int  `json:"heartbeat_interval"`  // Worker heartbeat frequency in seconds (default: 30)
+	InstanceTimeout   int  `json:"instance_timeout"`    // Mark offline after this duration in seconds (default: 90)
+	CleanupInterval   int  `json:"cleanup_interval"`    // Cleanup check frequency in seconds (default: 3600). Instances removed after 24h of no heartbeat.
 }
 
 // LoadConfig load irgsh config from file
@@ -99,6 +107,18 @@ func LoadConfig() (config IrgshConfig, err error) {
 		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
 	}
 	config.IsDev = isDev
+
+	// Set monitoring defaults
+	if config.Monitoring.HeartbeatInterval == 0 {
+		config.Monitoring.HeartbeatInterval = 30
+	}
+	if config.Monitoring.InstanceTimeout == 0 {
+		config.Monitoring.InstanceTimeout = 90
+	}
+	if config.Monitoring.CleanupInterval == 0 {
+		config.Monitoring.CleanupInterval = 3600 // 1 hour
+	}
+
 	validate := validator.New()
 	err = validate.Struct(config)
 
