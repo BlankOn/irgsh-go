@@ -19,6 +19,97 @@ import (
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
+// Maintainer represents a GPG key maintainer
+type Maintainer struct {
+	KeyID string
+	Name  string
+	Email string
+}
+
+// getMaintainers parses GPG keys and returns a list of maintainers
+func getMaintainers() []Maintainer {
+	gnupgDir := "GNUPGHOME=" + irgshConfig.Chief.GnupgDir
+	if irgshConfig.IsDev {
+		gnupgDir = ""
+	}
+
+	// Use --with-colons for easier parsing
+	cmdStr := gnupgDir + " gpg --list-keys --with-colons"
+
+	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	if err != nil {
+		log.Printf("Failed to list GPG keys: %v\n", err)
+		return []Maintainer{}
+	}
+
+	return parseGPGKeys(string(output))
+}
+
+// parseGPGKeys parses GPG --with-colons output
+func parseGPGKeys(output string) []Maintainer {
+	var maintainers []Maintainer
+	var currentKey *Maintainer
+
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Split(line, ":")
+		if len(fields) < 2 {
+			continue
+		}
+
+		recordType := fields[0]
+
+		switch recordType {
+		case "pub": // Public key
+			if currentKey != nil {
+				// Save previous key if we have one
+				maintainers = append(maintainers, *currentKey)
+			}
+			// Start new key
+			currentKey = &Maintainer{
+				KeyID: "",
+				Name:  "",
+				Email: "",
+			}
+
+			// Key ID is in field 4 (short key ID, last 8 chars of field 4)
+			if len(fields) > 4 && len(fields[4]) >= 8 {
+				currentKey.KeyID = fields[4][len(fields[4])-16:] // Last 16 chars (short key ID)
+			}
+
+		case "uid": // User ID
+			if currentKey != nil && len(fields) > 9 {
+				// Parse "Name <email>" format from field 9
+				uid := fields[9]
+
+				// Extract name and email
+				if strings.Contains(uid, "<") && strings.Contains(uid, ">") {
+					parts := strings.SplitN(uid, "<", 2)
+					currentKey.Name = strings.TrimSpace(parts[0])
+					if len(parts) > 1 {
+						emailPart := strings.SplitN(parts[1], ">", 2)
+						currentKey.Email = strings.TrimSpace(emailPart[0])
+					}
+				} else {
+					// No email, just name
+					currentKey.Name = uid
+				}
+			}
+		}
+	}
+
+	// Don't forget the last key
+	if currentKey != nil {
+		maintainers = append(maintainers, *currentKey)
+	}
+
+	return maintainers
+}
+
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
@@ -61,11 +152,13 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
             padding: 15px;
             margin-bottom: 20px;
             border-left: 4px solid #4CAF50;
+            display: inline-block;
         }
         .summary-item {
             display: inline-block;
             margin-right: 30px;
             font-size: 14px;
+            vertical-align: top;
         }
         .summary-number {
             font-size: 24px;
@@ -99,6 +192,10 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
         }
         .status-offline {
             color: #f44336;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: #ff9800;
             font-weight: bold;
         }
         .badge {
@@ -146,19 +243,48 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 <body>
     <div class="header">
         <div>irgsh-chief ` + app.Version + `</div>
-        <div class="nav">
-            <a href="/maintainers">maintainers</a> |
-            <a href="/submissions">submissions</a> |
-            <a href="/logs">logs</a> |
-            <a href="/artifacts">artifacts</a> |
-            <a target="_blank" href="https://github.com/blankon/irgsh-go">about</a>
-        </div>
     </div>
 `
 
+	// Add Package Maintainers section first
+	html += `<div class="section-title">Package Maintainers</div>`
+
+	maintainers := getMaintainers()
+	if len(maintainers) > 0 {
+		html += `
+		<table>
+			<thead>
+				<tr>
+					<th>GPG Key</th>
+					<th>Name</th>
+					<th>Email</th>
+				</tr>
+			</thead>
+			<tbody>`
+
+		for _, m := range maintainers {
+			html += fmt.Sprintf(`
+				<tr>
+					<td style="font-family: monospace;">%s</td>
+					<td>%s</td>
+					<td>%s</td>
+				</tr>`,
+				m.KeyID,
+				m.Name,
+				m.Email,
+			)
+		}
+
+		html += `
+			</tbody>
+		</table>`
+	} else {
+		html += `<div class="empty-state">No maintainers found</div>`
+	}
+
 	// Add monitoring section if enabled
 	if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
-		// Get all instances
+		// Get all instances first (Workers section)
 		instances, err := monitoringRegistry.ListInstances("", "")
 		if err != nil {
 			log.Printf("Failed to list instances: %v\n", err)
@@ -202,41 +328,33 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
     </div>
 `
 
-			// Instances table
-			if len(instances) == 0 {
-				html += `
-    <div class="empty-state">
-        <h2>No instances found</h2>
-        <p>Waiting for builders and workers to connect...</p>
-    </div>
-`
-			} else {
+			// Instance table
+			if len(instances) > 0 {
 				html += `
     <table>
         <thead>
             <tr>
+                <th>Instance</th>
                 <th>Type</th>
                 <th>Hostname</th>
                 <th>Status</th>
-                <th>Active Tasks</th>
+                <th>Uptime</th>
+                <th>Tasks</th>
                 <th>CPU</th>
                 <th>Memory</th>
                 <th>Disk</th>
-                <th>Uptime</th>
-                <th>Last Heartbeat</th>
             </tr>
         </thead>
-        <tbody>
-`
+        <tbody>`
 
 				for _, instance := range instances {
-					// Determine badge class
-					badgeClass := "badge-builder"
+					// Type badge
+					badgeClass := "badge badge-builder"
 					switch instance.InstanceType {
 					case monitoring.InstanceTypeRepo:
-						badgeClass = "badge-repo"
+						badgeClass = "badge badge-repo"
 					case monitoring.InstanceTypeISO:
-						badgeClass = "badge-iso"
+						badgeClass = "badge badge-iso"
 					}
 
 					// Status class
@@ -249,20 +367,16 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					uptime := time.Since(instance.StartTime)
 					uptimeStr := formatDuration(uptime)
 
-					// Format last heartbeat
-					lastHeartbeat := time.Since(instance.LastHeartbeat)
-					heartbeatStr := formatDuration(lastHeartbeat) + " ago"
-
-					// Format metrics
+					// Format CPU
 					cpuStr := fmt.Sprintf("%.1f", instance.CPUUsage)
 
-					// Format memory as "used / total"
+					// Format memory
 					memStr := monitoring.FormatBytes(instance.MemoryUsage)
 					if instance.MemoryTotal > 0 {
 						memStr += " / " + monitoring.FormatBytes(instance.MemoryTotal)
 					}
 
-					// Format disk as "used / total"
+					// Format disk
 					diskStr := monitoring.FormatBytes(instance.DiskUsage)
 					if instance.DiskTotal > 0 {
 						diskStr += " / " + monitoring.FormatBytes(instance.DiskTotal)
@@ -270,27 +384,173 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 					html += fmt.Sprintf(`
             <tr>
-                <td><span class="badge %s">%s</span></td>
-                <td>%s<br/><span class="metric">PID: %d</span></td>
-                <td class="%s">%s</td>
+                <td style="font-family: monospace; font-size: 0.85em;">%s</td>
+                <td><span class="%s">%s</span></td>
+                <td>%s</td>
+                <td><span class="%s">%s</span></td>
+                <td>%s</td>
                 <td>%d / %d</td>
-                <td>%s / 100</td>
-                <td>%s</td>
-                <td>%s</td>
-                <td>%s</td>
-                <td>%s</td>
-            </tr>
-`, badgeClass, instance.InstanceType, instance.Hostname, instance.PID,
-						statusClass, instance.Status,
-						instance.ActiveTasks, instance.Concurrency,
-						cpuStr, memStr, diskStr, uptimeStr, heartbeatStr)
+                <td class="metric">%s / 100</td>
+                <td class="metric">%s</td>
+                <td class="metric">%s</td>
+            </tr>`,
+						instance.InstanceID,
+						badgeClass,
+						instance.InstanceType,
+						instance.Hostname,
+						statusClass,
+						instance.Status,
+						uptimeStr,
+						instance.ActiveTasks,
+						instance.Concurrency,
+						cpuStr,
+						memStr,
+						diskStr,
+					)
 				}
 
 				html += `
         </tbody>
     </table>
 `
+			} else {
+				html += `<div class="empty-state">No worker instances found</div>`
 			}
+		}
+
+		// Get recent jobs (Recent Jobs section)
+		jobs, err := monitoringRegistry.GetRecentJobs(10)
+		if err != nil {
+			log.Printf("Failed to list jobs: %v\n", err)
+		} else if len(jobs) > 0 {
+			html += `<div class="section-title">Recent Jobs</div>`
+			html += `
+			<table>
+				<thead>
+					<tr>
+						<th>Timestamp</th>
+						<th>Package</th>
+						<th>Version</th>
+						<th>Maintainer</th>
+						<th>Component</th>
+						<th>Status</th>
+						<th>Logs</th>
+						<th>UUID</th>
+					</tr>
+				</thead>
+				<tbody>`
+
+			// Get actual task states from machinery
+			for _, job := range jobs {
+				// Query both build and repo task states
+				buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
+					monitoringRegistry.GetContext(),
+					monitoringRegistry.GetClient(),
+					job.TaskUUID,
+				)
+
+				// Update job with stage information
+				job.BuildState = buildState
+				job.RepoState = repoState
+				job.CurrentStage = currentStage
+
+				// Determine overall state
+				overallState := "PENDING"
+				if buildState == "FAILURE" {
+					overallState = "FAILURE"
+				} else if repoState == "FAILURE" {
+					overallState = "FAILURE"
+				} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
+					overallState = "SUCCESS"
+				} else if buildState == "STARTED" || repoState == "STARTED" {
+					overallState = "STARTED"
+				}
+
+				job.State = overallState
+
+				// Determine status color and text
+				statusClass := ""
+				statusText := overallState
+				switch overallState {
+				case "SUCCESS":
+					statusClass = "status-online"
+				case "FAILURE":
+					statusClass = "status-offline"
+					// Show which stage failed
+					if buildState == "FAILURE" {
+						statusText = "FAILURE (build)"
+					} else if repoState == "FAILURE" {
+						statusText = "FAILURE (repo)"
+					}
+				case "STARTED":
+					statusClass = "status-warning"
+					// Show which stage is running
+					statusText = "STARTED (" + currentStage + ")"
+				default:
+					statusText = "PENDING"
+				}
+
+				// Format timestamp in RFC3339
+				timeStr := job.SubmittedAt.Format(time.RFC3339)
+
+				expTag := ""
+				if job.IsExperimental {
+					expTag = " <span style=\"color: #ff9800; font-weight: bold;\">[experimental]</span>"
+				}
+
+				// Build package cell with git repository links if available
+				packageCell := job.PackageName + expTag
+				var repoLinks []string
+				if job.SourceURL != "" {
+					branchText := job.SourceBranch
+					if branchText == "" {
+						branchText = "default"
+					}
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, job.SourceURL, branchText))
+				}
+				if job.PackageURL != "" {
+					branchText := job.PackageBranch
+					if branchText == "" {
+						branchText = "default"
+					}
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, job.PackageURL, branchText))
+				}
+				if len(repoLinks) > 0 {
+					packageCell += fmt.Sprintf(`<br><span style="font-size: 0.85em; color: #666;">%s</span>`,
+						strings.Join(repoLinks, ", "))
+				}
+
+				html += fmt.Sprintf(`
+					<tr>
+						<td>%s</td>
+						<td>%s</td>
+						<td>%s</td>
+						<td>%s</td>
+						<td>%s</td>
+						<td><span class="%s">%s</span></td>
+						<td>
+							<a href="/logs/%s.build.log" target="_blank">build.log</a> |
+							<a href="/logs/%s.repo.log" target="_blank">repo.log</a>
+						</td>
+						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
+					</tr>`,
+					timeStr,
+					packageCell,
+					job.PackageVersion,
+					job.Maintainer,
+					job.Component,
+					statusClass,
+					statusText,
+					job.TaskUUID,
+					job.TaskUUID,
+					job.TaskUUID,
+				)
+			}
+
+			html += `
+				</tbody>
+			</table>
+			`
 		}
 	}
 
@@ -404,6 +664,27 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	_, err = server.SendChain(chain)
 	if err != nil {
 		fmt.Println("Could not send chain : " + err.Error())
+	}
+
+	// Record job in monitoring system
+	if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
+		job := monitoring.JobInfo{
+			TaskUUID:       submission.TaskUUID,
+			PackageName:    submission.PackageName,
+			PackageVersion: submission.PackageVersion,
+			Maintainer:     submission.Maintainer,
+			Component:      submission.Component,
+			IsExperimental: submission.IsExperimental,
+			SubmittedAt:    submission.Timestamp,
+			State:          "PENDING",
+			PackageURL:     submission.PackageURL,
+			SourceURL:      submission.SourceURL,
+			PackageBranch:  submission.PackageBranch,
+			SourceBranch:   submission.SourceBranch,
+		}
+		if err := monitoringRegistry.RecordJob(job); err != nil {
+			log.Printf("Failed to record job: %v\n", err)
+		}
 	}
 
 	payload := SubmitPayloadResponse{PipelineId: submission.TaskUUID}
