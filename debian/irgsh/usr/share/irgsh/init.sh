@@ -14,11 +14,11 @@ OVERWRITE_BASE_TGZ=0
 OVERWRITE_PBUILDER=0
 OVERWRITE_REPO=0
 
-if [ ! -f "/etc/irgsh/config.yml" ]; then
-	cp -v /usr/share/irgsh/config.yml /etc/irgsh/config.yml
+if [ ! -f "/etc/irgsh/config.yaml" ]; then
+	cp -v /usr/share/irgsh/config.yaml /etc/irgsh/config.yaml
 fi
 
-echo "Before continue, please consider to review your onfiguration file (/etc/irgsh/config.yml)"
+echo "Before continue, please consider to review your onfiguration file (/etc/irgsh/config.yaml)"
 read -p "Do you want to continue? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -139,8 +139,8 @@ if [ $OVERWRITE_GPG = 1 ]; then
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -k > /dev/null" -s /bin/bash irgsh
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg --batch --gen-key ~/gen-key-script > /dev/null" -s /bin/bash irgsh
 	GPG_SIGN_KEY=$(su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -K | grep uid -B 1 | head -n 1 | xargs" -s /bin/bash irgsh)
-	sed -i "/dist_signing_key/c\  dist_signing_key: 'GPG_SIGN_KEY'" /etc/irgsh/config.yml
-	sed -i "s/GPG_SIGN_KEY/$GPG_SIGN_KEY/g" /etc/irgsh/config.yml
+	sed -i "/dist_signing_key/c\  dist_signing_key: 'GPG_SIGN_KEY'" /etc/irgsh/config.yaml
+	sed -i "s/GPG_SIGN_KEY/$GPG_SIGN_KEY/g" /etc/irgsh/config.yaml
 	su -c "chmod -R 700 /var/lib/irgsh/gnupg" -s /bin/bash irgsh
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg -K" -s /bin/bash irgsh
 	echo "Generating GPG key [OK]"

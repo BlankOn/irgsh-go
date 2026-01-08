@@ -53,8 +53,8 @@ override_dh_auto_install:
 	install -D -m 0644 debian/irgsh-repo.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-repo.service
 	install -D -m 0644 debian/irgsh-iso.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-iso.service
 	# Install configuration files
-	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh/etc/irgsh/config.yml
-	install -D -m 0644 utils/config.yml $(CURDIR)/debian/irgsh/usr/share/irgsh/config.yml
+	install -D -m 0644 utils/config.yaml $(CURDIR)/debian/irgsh/etc/irgsh/config.yaml
+	install -D -m 0644 utils/config.yaml $(CURDIR)/debian/irgsh/usr/share/irgsh/config.yaml
 	# Install init script
 	install -D -m 0755 utils/scripts/init.sh $(CURDIR)/debian/irgsh/usr/share/irgsh/init.sh
 	# Install reprepro template
