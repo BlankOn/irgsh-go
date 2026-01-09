@@ -1,4 +1,7 @@
 bin
+chief
+repo
+builder
 latest
 tmp
 target

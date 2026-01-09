@@ -1,8 +1,8 @@
 Package: irgsh
-Version: 0.0.28-1
+Version: 1.0.0-1
 Architecture: amd64
 Maintainer: BlankOn Developers <blankon-dev@googlegroups.com>
-Installed-Size: 69598
+Installed-Size: 76690
 Depends: libc6 (>= 2.34), adduser
 Recommends: gpg, devscripts, redis-server | redis
 Suggests: pbuilder, debootstrap, reprepro, dh-make, docker.io | docker-ce
