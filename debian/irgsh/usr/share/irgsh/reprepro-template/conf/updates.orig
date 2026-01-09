@@ -1,0 +1,9 @@
+Name: UPSTREAM_NAME
+Suite: UPSTREAM_DIST_CODENAME
+VerifyRelease: blindtrust	
+Method: UPSTREAM_DIST_URL
+Architectures: DIST_SUPPORTED_ARCHITECTURES
+# This will redirect non-free to restricted and contrib to extras.
+Components: UPSTREAM_DIST_COMPONENTS
+# Enable this blacklist when we want to put our own packages into the repository
+FilterList: install blacklist.pkg

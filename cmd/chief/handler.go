@@ -198,10 +198,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
             color: #ff9800;
             font-weight: bold;
         }
-        .status-stalled {
-            color: #e91e63;
-            font-weight: bold;
-        }
         .badge {
             display: inline-block;
             padding: 3px 8px;
@@ -338,7 +334,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
     <table>
         <thead>
             <tr>
-                <th>Instance</th>
                 <th>Type</th>
                 <th>Hostname</th>
                 <th>Status</th>
@@ -388,7 +383,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 					html += fmt.Sprintf(`
             <tr>
-                <td style="font-family: monospace; font-size: 0.85em;">%s</td>
                 <td><span class="%s">%s</span></td>
                 <td>%s</td>
                 <td><span class="%s">%s</span></td>
@@ -398,7 +392,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
                 <td class="metric">%s</td>
                 <td class="metric">%s</td>
             </tr>`,
-						instance.InstanceID,
 						badgeClass,
 						instance.InstanceType,
 						instance.Hostname,
@@ -422,26 +415,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Check if builder and repo instances are online (for stalled job detection)
-		hasOnlineBuilder := false
-		hasOnlineRepo := false
-		for _, instance := range instances {
-			if instance.Status == monitoring.StatusOnline {
-				if instance.InstanceType == monitoring.InstanceTypeBuilder {
-					hasOnlineBuilder = true
-				} else if instance.InstanceType == monitoring.InstanceTypeRepo {
-					hasOnlineRepo = true
-				}
-			}
-		}
-		workersOnline := hasOnlineBuilder && hasOnlineRepo
-
 		// Get recent jobs (Recent Jobs section)
 		jobs, err := monitoringRegistry.GetRecentJobs(10)
 		if err != nil {
 			log.Printf("Failed to list jobs: %v\n", err)
 		} else if len(jobs) > 0 {
-			html += `<div class="section-title">Recent Jobs</div>`
+			html += `<div class="section-title">Recent Packaging Jobs</div>`
 			html += `
 			<table>
 				<thead>
@@ -460,10 +439,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 			// Get actual task states from machinery
 			for _, job := range jobs {
-				// Query both build and repo task states
+				// Query both build and repo task states using machinery backend
 				buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
-					monitoringRegistry.GetContext(),
-					monitoringRegistry.GetClient(),
+					server.GetBackend(),
 					job.TaskUUID,
 				)
 
@@ -472,16 +450,20 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				job.RepoState = repoState
 				job.CurrentStage = currentStage
 
-				// Determine overall state
-				overallState := "PENDING"
+				// Determine overall state using same logic as BuildStatusHandler
+				var overallState string
 				if buildState == "FAILURE" {
-					overallState = "FAILURE"
-				} else if repoState == "FAILURE" {
-					overallState = "FAILURE"
+					overallState = "FAILED"
 				} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
-					overallState = "SUCCESS"
-				} else if buildState == "STARTED" || repoState == "STARTED" {
-					overallState = "STARTED"
+					overallState = "DONE"
+				} else if buildState == "SUCCESS" && repoState == "FAILURE" {
+					overallState = "FAILED"
+				} else if buildState == "SUCCESS" && (repoState == "PENDING" || repoState == "RECEIVED" || repoState == "STARTED") {
+					overallState = "REPO"
+				} else if buildState != "" {
+					overallState = buildState
+				} else {
+					overallState = "PENDING"
 				}
 
 				job.State = overallState
@@ -490,28 +472,25 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				statusClass := ""
 				statusText := overallState
 				switch overallState {
-				case "SUCCESS":
+				case "DONE":
 					statusClass = "status-online"
-				case "FAILURE":
+				case "FAILED":
 					statusClass = "status-offline"
 					// Show which stage failed
 					if buildState == "FAILURE" {
-						statusText = "FAILURE (build)"
+						statusText = "FAILED (build)"
 					} else if repoState == "FAILURE" {
-						statusText = "FAILURE (repo)"
+						statusText = "FAILED (repo)"
 					}
+				case "REPO":
+					statusClass = "status-warning"
+					statusText = "REPO"
 				case "STARTED":
 					statusClass = "status-warning"
 					// Show which stage is running
 					statusText = "STARTED (" + currentStage + ")"
 				default:
-					// Check if job is stalled (PENDING for > 5 minutes while workers are online)
-					if workersOnline && time.Since(job.SubmittedAt) > 5*time.Minute {
-						statusClass = "status-stalled"
-						statusText = "STALLED"
-					} else {
-						statusText = "PENDING"
-					}
+					statusText = "PENDING"
 				}
 
 				// Format timestamp in RFC3339

@@ -1,0 +1,5 @@
+ask-passphrase
+basedir IRGSH_REPO_WORKDIR
+confdir IRGSH_REPO_WORKDIR/conf
+dbdir IRGSH_REPO_WORKDIR/db
+outdir IRGSH_REPO_WORKDIR/www
