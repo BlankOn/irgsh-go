@@ -198,6 +198,10 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
             color: #ff9800;
             font-weight: bold;
         }
+        .status-stalled {
+            color: #e91e63;
+            font-weight: bold;
+        }
         .badge {
             display: inline-block;
             padding: 3px 8px;
@@ -418,6 +422,20 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Check if builder and repo instances are online (for stalled job detection)
+		hasOnlineBuilder := false
+		hasOnlineRepo := false
+		for _, instance := range instances {
+			if instance.Status == monitoring.StatusOnline {
+				if instance.InstanceType == monitoring.InstanceTypeBuilder {
+					hasOnlineBuilder = true
+				} else if instance.InstanceType == monitoring.InstanceTypeRepo {
+					hasOnlineRepo = true
+				}
+			}
+		}
+		workersOnline := hasOnlineBuilder && hasOnlineRepo
+
 		// Get recent jobs (Recent Jobs section)
 		jobs, err := monitoringRegistry.GetRecentJobs(10)
 		if err != nil {
@@ -487,7 +505,13 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					// Show which stage is running
 					statusText = "STARTED (" + currentStage + ")"
 				default:
-					statusText = "PENDING"
+					// Check if job is stalled (PENDING for > 5 minutes while workers are online)
+					if workersOnline && time.Since(job.SubmittedAt) > 5*time.Minute {
+						statusClass = "status-stalled"
+						statusText = "STALLED"
+					} else {
+						statusText = "PENDING"
+					}
 				}
 
 				// Format timestamp in RFC3339
@@ -719,6 +743,90 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	taskState := car.GetState()
 	res := fmt.Sprintf("{ \"pipelineId\": \"" + taskState.TaskUUID + "\", \"state\": \"" + taskState.State + "\" }")
 	fmt.Fprintf(w, res)
+}
+
+func RetryHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["uuid"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error": "uuid parameter is required"}`)
+		return
+	}
+	taskUUID := keys[0]
+
+	// Check if monitoring is enabled
+	if !irgshConfig.Monitoring.Enabled || monitoringRegistry == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, `{"error": "monitoring is not enabled, retry requires job tracking"}`)
+		return
+	}
+
+	// Get job info from monitoring registry
+	job, err := monitoringRegistry.GetJob(taskUUID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintf(w, `{"error": "job not found: %s"}`, taskUUID)
+		return
+	}
+
+	// Build the submission object from job info
+	submission := Submission{
+		TaskUUID:       job.TaskUUID,
+		Timestamp:      time.Now(),
+		PackageName:    job.PackageName,
+		PackageVersion: job.PackageVersion,
+		PackageURL:     job.PackageURL,
+		SourceURL:      job.SourceURL,
+		Maintainer:     job.Maintainer,
+		Component:      job.Component,
+		IsExperimental: job.IsExperimental,
+		PackageBranch:  job.PackageBranch,
+		SourceBranch:   job.SourceBranch,
+	}
+
+	jsonStr, err := json.Marshal(submission)
+	if err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error": "failed to marshal submission"}`)
+		return
+	}
+
+	buildSignature := tasks.Signature{
+		Name: "build",
+		UUID: submission.TaskUUID,
+		Args: []tasks.Arg{
+			{
+				Type:  "string",
+				Value: string(jsonStr),
+			},
+		},
+	}
+
+	repoSignature := tasks.Signature{
+		Name: "repo",
+		UUID: submission.TaskUUID,
+	}
+
+	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
+	_, err = server.SendChain(chain)
+	if err != nil {
+		log.Println("Could not send chain : " + err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error": "failed to queue retry task: %s"}`, err.Error())
+		return
+	}
+
+	// Update job state to PENDING
+	if err := monitoringRegistry.UpdateJobState(taskUUID, "PENDING"); err != nil {
+		log.Printf("Failed to update job state: %v\n", err)
+	}
+
+	log.Printf("Job %s retried successfully\n", taskUUID)
+
+	payload := SubmitPayloadResponse{PipelineId: submission.TaskUUID}
+	jsonStr, _ = json.Marshal(payload)
+	fmt.Fprintf(w, string(jsonStr))
 }
 
 func artifactUploadHandler() http.HandlerFunc {
