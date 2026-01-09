@@ -303,7 +303,7 @@ func main() {
 				},
 				cli.BoolFlag{
 					Name:  "ignore-checks",
-					Usage: "Ignoring value checks",
+					Usage: "Ignore all validation check and restriction",
 				},
 			},
 			Action: func(ctx *cli.Context) (err error) {
