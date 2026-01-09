@@ -1,6 +1,12 @@
 ---
 redis: 'redis://localhost:6379'
 
+monitoring:
+  enabled: true
+  heartbeat_interval: 30       # Heartbeat every 30 seconds
+  instance_timeout: 90          # Mark offline after 90 seconds
+  cleanup_interval: 3600        # Cleanup every hour (instances removed after 24h)
+
 chief:
   address: 'http://localhost:8080'
   workdir: '/var/lib/irgsh/chief'

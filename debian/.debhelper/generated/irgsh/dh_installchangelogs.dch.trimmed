@@ -1,3 +1,14 @@
+irgsh (1.0.0-1) unstable; urgency=medium
+
+  * Major release: Version 1.0.0
+  * Migrate all .yml extensions to .yaml for consistency
+  * Update all configuration file references from .yml to .yaml
+  * Add git repository links to job monitoring dashboard
+  * Implement stage-level failure detection (build vs repo)
+  * Improve monitoring dashboard UI and layout
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Wed, 08 Jan 2026 16:00:00 +0700
+
 irgsh (0.0.28-1) unstable; urgency=medium
 
   * Initial Debian package release
