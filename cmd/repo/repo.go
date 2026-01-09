@@ -64,9 +64,11 @@ func Repo(payload string) (err error) {
 	}
 	if raw["isExperimental"].(bool) {
 		// Ignore version conflict
-		cmdStr = fmt.Sprintf(`cd %s/%s/ && \
+		cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
 		%s reprepro -v -v -v --nothingiserror remove %s \
 		$(cat %s/artifacts/%s/*.dsc | grep 'Source:' | cut -d ' ' -f 2)`,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
 			irgshConfig.Repo.Workdir,
 			irgshConfig.Repo.DistCodename+experimentalSuffix,
 			gnupgDir,
@@ -91,8 +93,10 @@ func Repo(payload string) (err error) {
 		ignoreDistribution = "--ignore=wrongdistribution"
 	}
 
-	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
+	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
 	%s reprepro -v -v -v --nothingiserror --ignore=missingfile %s --component %s include %s %s/artifacts/%s/*source.changes`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		gnupgDir,
@@ -115,8 +119,10 @@ func Repo(payload string) (err error) {
 	}
 
 	// Injecting the package
-	cmdStr = fmt.Sprintf(`cd %s/%s/ && \
+	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
 	%s reprepro -v -v -v --nothingiserror --component %s includedeb %s %s/artifacts/%s/*.deb`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		gnupgDir,
@@ -137,7 +143,9 @@ func Repo(payload string) (err error) {
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
+	cmdStr = fmt.Sprintf("mkdir -p %s/%s && cd %s/%s/ && reprepro -v -v -v export",
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
 	)
@@ -203,12 +211,14 @@ func InitRepo() (err error) {
 		return
 	}
 
-	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat updates.orig | 
+	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/conf && cat updates.orig | 
 		sed 's/UPSTREAM_NAME/%s/g' | 
 		sed 's/UPSTREAM_DIST_CODENAME/%s/g' | 
 		sed 's/UPSTREAM_DIST_URL/%s/g' | 
 		sed 's/DIST_SUPPORTED_ARCHITECTURES/%s/g' | 
 		sed 's/UPSTREAM_DIST_COMPONENTS/%s/g' > updates && rm updates.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.UpstreamName,
@@ -227,7 +237,7 @@ func InitRepo() (err error) {
 		return
 	}
 
-	cmdStr = fmt.Sprintf(`cd %s/%s/conf && cat distributions.orig |
+	cmdStr = fmt.Sprintf(`mkdir -p %s/%s/conf && cd %s/%s/conf && cat distributions.orig |
 		sed 's/DIST_NAME/%s/g' |
 		sed 's/DIST_LABEL/%s/g' |
 		sed 's/DIST_CODENAME/%s/g' |
@@ -237,6 +247,8 @@ func InitRepo() (err error) {
 		sed 's/DIST_VERSION/%s/g' |
 		sed 's/DIST_SIGNING_KEY/%s/g' |
 		sed 's/UPSTREAM_NAME/%s/g'> distributions && rm distributions.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.DistName,
@@ -265,9 +277,11 @@ func InitRepo() (err error) {
 		"\\/",
 		-1,
 	)
-	cmdStr = fmt.Sprintf(`cd %s/%s/conf && \
+	cmdStr = fmt.Sprintf(`mkdir -p %s/%s/conf && cd %s/%s/conf && \
 	cat options.orig | sed 's/IRGSH_REPO_WORKDIR/%s/g' > options && \
 	rm options.orig`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
 		repositoryPath,

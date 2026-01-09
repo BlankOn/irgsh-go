@@ -1,3 +1,26 @@
+irgsh (1.1.2-1) unstable; urgency=medium
+
+  * Use machinery backend for job status queries
+  * Remove STALLED status from frontend
+  * Rename Recent Jobs to Recent Packaging Jobs
+  * Remove Instance column from Workers table
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 09 Jan 2026 16:00:00 +0700
+
+irgsh (1.1.1-1) unstable; urgency=medium
+
+  * Fix retry endpoint error handling in CLI
+  * Fix HTTP router prioritization in chief
+  * Fix pipeline status to show DONE when repo job completes
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 09 Jan 2026 14:00:00 +0700
+
+irgsh (1.1.0-1) unstable; urgency=medium
+
+  * Add STALLED status for jobs pending > 5 minutes while workers are online
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 09 Jan 2026 12:00:00 +0700
+
 irgsh (1.0.0-1) unstable; urgency=medium
 
   * Major release: Version 1.0.0

@@ -118,8 +118,6 @@ func main() {
 }
 
 func serve() {
-	http.HandleFunc("/", indexHandler)
-
 	// APIs
 	http.HandleFunc("/api/v1/artifacts", artifactHTTPEndpoint.GetArtifactListHandler)
 	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
@@ -133,6 +131,9 @@ func serve() {
 
 	// Pages
 	http.HandleFunc("/maintainers", MaintainersHandler)
+
+	// Index handler (catch-all, must be registered last)
+	http.HandleFunc("/", indexHandler)
 	// Static file routes
 	artifactFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
 	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))

@@ -14,3 +14,9 @@ tmp
 debian-build
 obj-x86_64-linux-gnu
 cli
+debian/irgsh/usr/share/irgsh/reprepro-template/conf/distributions.orig
+debian/irgsh/usr/share/irgsh/reprepro-template/conf/options.orig
+debian/irgsh/usr/share/irgsh/reprepro-template/conf/updates.orig
+utils/reprepro-template/conf/distributions.orig
+utils/reprepro-template/conf/options.orig
+utils/reprepro-template/conf/updates.orig

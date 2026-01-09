@@ -1,11 +1,13 @@
 package monitoring
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/RichardKnop/machinery/v1/backends/iface"
+	"github.com/RichardKnop/machinery/v1/backends/result"
+	"github.com/RichardKnop/machinery/v1/tasks"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -152,46 +154,33 @@ func (r *Registry) UpdateJobState(taskUUID string, state string) error {
 	return r.client.Set(r.ctx, jobKey, updatedData, ttl).Err()
 }
 
-// GetJobStateFromMachinery queries machinery backend for actual task state
-func GetJobStateFromMachinery(ctx context.Context, client *redis.Client, taskUUID string) string {
-	// Machinery stores task states with multiple possible key patterns, try them all
-	possibleKeys := []string{
-		"machinery_task_state_" + taskUUID,
-		taskUUID,
-		"machinery:task:state:" + taskUUID,
+// GetJobStagesFromMachinery queries both build and repo task states using machinery backend
+func GetJobStagesFromMachinery(backend iface.Backend, taskUUID string) (buildState, repoState, currentStage string) {
+	// Query build task state using machinery API
+	buildSignature := tasks.Signature{
+		Name: "build",
+		UUID: taskUUID,
+		Args: []tasks.Arg{
+			{
+				Type:  "string",
+				Value: "xyz",
+			},
+		},
 	}
+	buildResult := result.NewAsyncResult(&buildSignature, backend)
+	buildResult.Touch()
+	buildTaskState := buildResult.GetState()
+	buildState = buildTaskState.State
 
-	for _, stateKey := range possibleKeys {
-		data, err := client.Get(ctx, stateKey).Result()
-		if err != nil {
-			continue // Try next key pattern
-		}
-
-		// Parse the state JSON
-		var stateData map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &stateData); err != nil {
-			continue
-		}
-
-		// Try to extract state from various possible field names
-		for _, fieldName := range []string{"State", "state", "status"} {
-			if state, ok := stateData[fieldName].(string); ok && state != "" {
-				return state
-			}
-		}
+	// Query repo task state using machinery API
+	repoSignature := tasks.Signature{
+		Name: "repo",
+		UUID: taskUUID,
 	}
-
-	// If no machinery state found, return UNKNOWN (will use cached state)
-	return "UNKNOWN"
-}
-
-// GetJobStagesFromMachinery queries both build and repo task states
-func GetJobStagesFromMachinery(ctx context.Context, client *redis.Client, taskUUID string) (buildState, repoState, currentStage string) {
-	// Query build task state
-	buildState = getTaskStateFromMachinery(ctx, client, taskUUID, "build")
-
-	// Query repo task state
-	repoState = getTaskStateFromMachinery(ctx, client, taskUUID, "repo")
+	repoResult := result.NewAsyncResult(&repoSignature, backend)
+	repoResult.Touch()
+	repoTaskState := repoResult.GetState()
+	repoState = repoTaskState.State
 
 	// Determine current stage based on states
 	if buildState == "FAILURE" {
@@ -213,43 +202,4 @@ func GetJobStagesFromMachinery(ctx context.Context, client *redis.Client, taskUU
 	}
 
 	return buildState, repoState, currentStage
-}
-
-// getTaskStateFromMachinery queries a specific task state (build or repo)
-func getTaskStateFromMachinery(ctx context.Context, client *redis.Client, taskUUID, taskName string) string {
-	// Try different key patterns that machinery might use
-	possibleKeys := []string{
-		"machinery_task_state_" + taskUUID + "_" + taskName,
-		"machinery_task_state_" + taskUUID,
-		taskUUID + "_" + taskName,
-		taskUUID,
-	}
-
-	for _, stateKey := range possibleKeys {
-		data, err := client.Get(ctx, stateKey).Result()
-		if err != nil {
-			continue
-		}
-
-		var stateData map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &stateData); err != nil {
-			continue
-		}
-
-		// Check if this state belongs to the task we're looking for
-		if taskNameField, ok := stateData["TaskName"].(string); ok {
-			if taskNameField != taskName {
-				continue // Wrong task
-			}
-		}
-
-		// Extract state
-		for _, fieldName := range []string{"State", "state", "status"} {
-			if state, ok := stateData[fieldName].(string); ok && state != "" {
-				return state
-			}
-		}
-	}
-
-	return "PENDING"
 }
