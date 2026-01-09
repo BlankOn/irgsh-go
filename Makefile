@@ -78,6 +78,9 @@ builder-init:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && sudo DEV=1 ./bin/irgsh-builder init-base
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder init-builder
 
+builder-init-builder:
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder init-builder
+
 builder:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder
 

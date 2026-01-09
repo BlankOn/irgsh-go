@@ -1,3 +1,15 @@
+irgsh (1.1.4-1) unstable; urgency=medium
+
+  * Update --ignore-checks help text
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 10 Jan 2026 10:00:00 +0700
+
+irgsh (1.1.3-1) unstable; urgency=medium
+
+  * Release 1.1.3
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 09 Jan 2026 18:00:00 +0700
+
 irgsh (1.1.2-1) unstable; urgency=medium
 
   * Use machinery backend for job status queries

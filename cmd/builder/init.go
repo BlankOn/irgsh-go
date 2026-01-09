@@ -179,6 +179,14 @@ func InitBuilder() (err error) {
     echo 'RUN echo "BINDMOUNTS=\"/etc/resolv.conf\"" >> /root/.pbuilderrc' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN echo "USENETWORK=yes"' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'COPY base.tgz /var/cache/pbuilder/' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
+    echo 'RUN mkdir -p /var/cache/pbuilder/hooks'
+    echo 'RUN echo '\''#!/bin/bash\n\
+    cp /etc/resolv.conf /etc/resolv.conf.bak 2>/dev/null || true\n\
+    cat > /etc/resolv.conf << RESOLV\n\
+    nameserver 1.1.1.1\n\
+    nameserver 8.8.8.8\n\
+    RESOLV'\'' > /var/cache/pbuilder/hooks/G01resolvconf && \
+        chmod +x /var/cache/pbuilder/hooks/G01resolvconf'
     echo 'RUN echo "pbuilder --build /tmp/build/*.dsc \n cp -vR /var/cache/pbuilder/result/*.deb /tmp/build/ \n cp -vR /var/cache/pbuilder/result/*.buildinfo /tmp/build/ || true" > /build.sh && chmod a+x /build.sh' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile`
 	_, err = systemutil.CmdExec(
 		cmdStr,
