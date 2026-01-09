@@ -727,6 +727,7 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	var UUID string
 	UUID = keys[0]
 
+	// Check build task state
 	buildSignature := tasks.Signature{
 		Name: "build",
 		UUID: UUID,
@@ -737,11 +738,34 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	// Recreate the AsyncResult instance using the signature and server.backend
-	car := result.NewAsyncResult(&buildSignature, server.GetBackend())
-	car.Touch()
-	taskState := car.GetState()
-	res := fmt.Sprintf("{ \"pipelineId\": \"" + taskState.TaskUUID + "\", \"state\": \"" + taskState.State + "\" }")
+	buildResult := result.NewAsyncResult(&buildSignature, server.GetBackend())
+	buildResult.Touch()
+	buildState := buildResult.GetState()
+
+	// Check repo task state
+	repoSignature := tasks.Signature{
+		Name: "repo",
+		UUID: UUID,
+	}
+	repoResult := result.NewAsyncResult(&repoSignature, server.GetBackend())
+	repoResult.Touch()
+	repoState := repoResult.GetState()
+
+	// Determine overall pipeline state
+	var pipelineState string
+	if buildState.State == "FAILURE" {
+		pipelineState = "FAILED"
+	} else if buildState.State == "SUCCESS" && repoState.State == "SUCCESS" {
+		pipelineState = "DONE"
+	} else if buildState.State == "SUCCESS" && repoState.State == "FAILURE" {
+		pipelineState = "FAILED"
+	} else if buildState.State == "SUCCESS" && (repoState.State == "PENDING" || repoState.State == "RECEIVED" || repoState.State == "STARTED") {
+		pipelineState = "REPO"
+	} else {
+		pipelineState = buildState.State
+	}
+
+	res := fmt.Sprintf("{ \"pipelineId\": \"%s\", \"state\": \"%s\" }", UUID, pipelineState)
 	fmt.Fprintf(w, res)
 }
 

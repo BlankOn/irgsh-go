@@ -968,7 +968,9 @@ func main() {
 				responseJson := RetryResponse{}
 				err = json.Unmarshal([]byte(responseStr), &responseJson)
 				if err != nil {
-					return
+					fmt.Println("Failed to parse response from server. The server may have returned an error page.")
+					fmt.Println("Response: " + responseStr)
+					return errors.New("invalid response from server")
 				}
 				if responseJson.Error != "" {
 					fmt.Println("Retry failed: " + responseJson.Error)
