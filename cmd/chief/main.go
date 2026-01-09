@@ -124,6 +124,7 @@ func serve() {
 	http.HandleFunc("/api/v1/artifacts", artifactHTTPEndpoint.GetArtifactListHandler)
 	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
+	http.HandleFunc("/api/v1/retry", RetryHandler)
 	http.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
 	http.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())

@@ -937,6 +937,49 @@ func main() {
 			},
 		},
 		{
+			Name:  "retry",
+			Usage: "Retry a failed pipeline",
+			Action: func(c *cli.Context) (err error) {
+				pipelineId = c.Args().First()
+				err = checkForInitValues()
+				if err != nil {
+					os.Exit(1)
+				}
+				if len(pipelineId) < 1 {
+					dat, _ := ioutil.ReadFile(homeDir + "/.irgsh/LAST_PIPELINE_ID")
+					pipelineId = string(dat)
+					if len(pipelineId) < 1 {
+						err = errors.New("pipeline ID should not be empty")
+						return
+					}
+				}
+				fmt.Println("Retrying pipeline " + pipelineId + " ...")
+				req.SetFlags(req.LrespBody)
+				result, err := req.Get(chiefAddress+"/api/v1/retry?uuid="+pipelineId, nil)
+				if err != nil {
+					return err
+				}
+
+				responseStr := fmt.Sprintf("%+v", result)
+				type RetryResponse struct {
+					PipelineID string `json:"pipelineId"`
+					Error      string `json:"error"`
+				}
+				responseJson := RetryResponse{}
+				err = json.Unmarshal([]byte(responseStr), &responseJson)
+				if err != nil {
+					return
+				}
+				if responseJson.Error != "" {
+					fmt.Println("Retry failed: " + responseJson.Error)
+					return errors.New(responseJson.Error)
+				}
+				fmt.Println("Pipeline " + responseJson.PipelineID + " has been queued for retry")
+
+				return
+			},
+		},
+		{
 			Name:  "update",
 			Usage: "Update the irgsh-cli tool",
 			Action: func(c *cli.Context) (err error) {
