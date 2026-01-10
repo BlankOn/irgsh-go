@@ -1,5 +1,21 @@
 LDFLAGS := "-X main.version=$$(cat ./VERSION)"
 
+# Load GPG_KEY from .env and update config.yaml
+load-gpg:
+	@if [ -f .env ]; then \
+		GPG_KEY=$$(grep '^GPG_KEY=' .env | cut -d'=' -f2); \
+		if [ -n "$$GPG_KEY" ]; then \
+			sed -i "s/dist_signing_key: '.*'/dist_signing_key: '$$GPG_KEY'/" utils/config.yaml; \
+			echo "Loaded GPG_KEY: $$GPG_KEY"; \
+		else \
+			echo "GPG_KEY not found in .env"; \
+			exit 1; \
+		fi \
+	else \
+		echo ".env file not found"; \
+		exit 1; \
+	fi
+
 release:
 	# Build
 	make build
@@ -68,10 +84,11 @@ test:
 coverage:test
 	go tool cover -html=coverage.txt
 
-client:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-cli ./cmd/cli
+client: load-gpg
+	@GPG_KEY=$$(grep '^GPG_KEY=' .env | cut -d'=' -f2); \
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-cli ./cmd/cli && DEV=1 ./bin/irgsh-cli config --chief http://localhost:8080 --key $$GPG_KEY
 
-chief:
+chief: load-gpg
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && DEV=1 ./bin/irgsh-chief
 
 builder-init:
@@ -88,10 +105,10 @@ iso:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-iso ./cmd/iso && DEV=1 ./bin/irgsh-iso
 
 repo-init:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && DEV=1 ./bin/irgsh-repo init
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && DEV=1 ./bin/irgsh-repo --config ./utils/config.yaml init
 
-repo:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && DEV=1 ./bin/irgsh-repo
+repo: load-gpg
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-repo ./cmd/repo && DEV=1 ./bin/irgsh-repo --config ./utils/config.yaml
 
 redis:
 	docker run -d --network host redis

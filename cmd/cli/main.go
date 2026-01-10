@@ -96,6 +96,13 @@ func uploadWithProgress(url, blobPath, tokenPath string) ([]byte, error) {
 	}
 	defer tokenFile.Close()
 
+	// Debug: check token file size
+	tokenStat, err := tokenFile.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat token file: %v", err)
+	}
+	log.Printf("Token file: %s, size: %d bytes", tokenPath, tokenStat.Size())
+
 	// Create a buffer to build the multipart form
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -115,10 +122,11 @@ func uploadWithProgress(url, blobPath, tokenPath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token form field: %v", err)
 	}
-	_, err = io.Copy(tokenPart, tokenFile)
+	tokenBytes, err := io.Copy(tokenPart, tokenFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy token file: %v", err)
 	}
+	log.Printf("Token bytes written to multipart: %d", tokenBytes)
 
 	err = writer.Close()
 	if err != nil {
@@ -127,6 +135,8 @@ func uploadWithProgress(url, blobPath, tokenPath string) ([]byte, error) {
 
 	// Calculate total size
 	totalSize := int64(body.Len())
+	log.Printf("Total multipart body size: %d bytes", totalSize)
+	log.Printf("Content-Type: %s", writer.FormDataContentType())
 
 	// Create progress writer
 	progressWriter := &ProgressWriter{
@@ -146,6 +156,7 @@ func uploadWithProgress(url, blobPath, tokenPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.ContentLength = totalSize
 
 	// Send request
 	client := &http.Client{}
