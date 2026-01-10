@@ -1,3 +1,11 @@
+irgsh (1.2.1-1) unstable; urgency=medium
+
+  * Add notification webhook support for build and repo job completion
+  * Require explicit config path for irgsh-repo via -c/--config flag
+  * Add LoadConfigFromPath function for explicit config loading
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 10 Jan 2026 19:00:00 +0700
+
 irgsh (1.1.5-1) unstable; urgency=medium
 
   * Allow --ignore-checks without --experimental flag

@@ -1007,11 +1007,24 @@ func submissionUploadHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
+		// Debug: log request details
+		log.Printf("Request Method: %s", r.Method)
+		log.Printf("Content-Type: %s", r.Header.Get("Content-Type"))
+		log.Printf("Content-Length: %d", r.ContentLength)
+
 		targetPath := irgshConfig.Chief.Workdir + "/submissions"
 		err = os.MkdirAll(targetPath, 0755)
 		if err != nil {
 			log.Println(err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Parse multipart form with 512MB max memory
+		err = r.ParseMultipartForm(512 << 20)
+		if err != nil {
+			log.Printf("ParseMultipartForm error: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 

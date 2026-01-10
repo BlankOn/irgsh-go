@@ -26,7 +26,14 @@ pub   rsa4096 2020-10-17 [SC] [expires: 2021-10-17]
 uid           [ultimate] Herpiko Dwi Aguno <herpiko@gmail.com>
 sub   rsa4096 2020-10-17 [E] [expires: 2021-10-17]
 ```
-Copy the key identity (in my case, it's the `41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F` string) then paste it to replace `GPG_SIGN_KEY` in `utils/config.yaml`
+Copy the key identity (in my case, it's the `41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F` string) to a new `.env` file, put it like this:
+
+```
+GPG_KEY=41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F
+```
+
+The Makefile will automatically loaded this later.
+
 
 In dev environment, this single key will acts as both repository signing key and package maintainer signing key. On prod, they will be different keys.
 

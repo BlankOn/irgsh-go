@@ -21,28 +21,12 @@ var (
 	server     *machinery.Server
 	version    string
 
-	irgshConfig = config.IrgshConfig{}
+	irgshConfig     = config.IrgshConfig{}
 	activeTasks int = 0
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	var err error
-	irgshConfig, err = config.LoadConfig()
-	if err != nil {
-		log.Fatalln("couldn't load config : ", err)
-	}
-	// Prepare workdir
-	err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -50,6 +34,40 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = version
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:        "config, c",
+			Usage:       "Path to config file (required)",
+			Destination: &configPath,
+		},
+	}
+
+	app.Before = func(c *cli.Context) error {
+
+		// Config path is required for irgsh-repo for two reasons:
+		// 1. We will let multiple irgsh-repo instances to be run in a single machine
+		//    to handle multiple architectures
+		// 2. Because of the nature of multiple configurations, it's a bit dangerous to mix them.
+		//    So each instance will have its own configuration.
+		if configPath == "" {
+			return cli.NewExitError("Error: config path is required. Use -c or --config to specify the config file path.\n\nExample: irgsh-repo -c /path/to/config.yaml", 1)
+		}
+
+		var err error
+		irgshConfig, err = config.LoadConfigFromPath(configPath)
+		if err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
+		}
+
+		// Prepare workdir
+		err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
+		if err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
+		}
+
+		return nil
+	}
 
 	app.Commands = []cli.Command{
 		{

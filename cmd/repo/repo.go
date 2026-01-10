@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 	"github.com/manifoldco/promptui"
 )
@@ -23,6 +24,16 @@ func uploadLog(logPath string, id string) {
 	if err != nil {
 		fmt.Println(err.Error())
 	}
+}
+
+func sendRepoNotification(taskUUID, status, details string) {
+	notification.SendJobNotification(
+		irgshConfig.Notification.WebhookURL,
+		"Repo",
+		taskUUID,
+		status,
+		details,
+	)
 }
 
 // Main task wrapper
@@ -55,6 +66,7 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		uploadLog(logPath, raw["taskUUID"].(string))
+		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to download artifact: %v", err))
 		return
 	}
 
@@ -115,6 +127,7 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		uploadLog(logPath, raw["taskUUID"].(string))
+		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject changes file: %v", err))
 		return
 	}
 
@@ -140,6 +153,7 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		uploadLog(logPath, raw["taskUUID"].(string))
+		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject deb files: %v", err))
 		return
 	}
 
@@ -156,10 +170,12 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
+		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to export repository: %v", err))
 		return
 	}
 
 	uploadLog(logPath, raw["taskUUID"].(string))
+	sendRepoNotification(raw["taskUUID"].(string), "SUCCESS", "Package successfully submitted to repository")
 	fmt.Println("[ BUILD DONE ]")
 	return
 }
