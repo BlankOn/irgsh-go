@@ -7,6 +7,9 @@ monitoring:
   instance_timeout: 90          # Mark offline after 90 seconds
   cleanup_interval: 3600        # Cleanup every hour (instances removed after 24h)
 
+notification:
+  webhook_url: ''              # Webhook URL for job notifications (leave empty to disable)
+
 chief:
   address: 'http://localhost:8080'
   workdir: '/var/lib/irgsh/chief'
@@ -25,7 +28,7 @@ repo:
   dist_supported_architectures: 'amd64 source'
   dist_version: '12.0'
   dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
-  dist_signing_key: 'GPG_SIGN_KEY'
+  dist_signing_key: 'GPG_KEY'
   upstream_name: 'merge.sid'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'

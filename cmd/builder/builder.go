@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
@@ -23,37 +24,52 @@ func uploadLog(logPath string, id string) {
 	}
 }
 
+func sendBuildNotification(taskUUID, status, details string) {
+	notification.SendJobNotification(
+		irgshConfig.Notification.WebhookURL,
+		"Build",
+		taskUUID,
+		status,
+		details,
+	)
+}
+
 // Main task wrapper
 func Build(payload string) (next string, err error) {
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	fmt.Println("Processing pipeline :" + raw["taskUUID"].(string))
+	taskUUID := raw["taskUUID"].(string)
+	fmt.Println("Processing pipeline :" + taskUUID)
 
-	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/build.log"
+	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + taskUUID + "/build.log"
 	go systemutil.StreamLog(logPath)
 
 	next, err = BuildPreparation(payload)
 	if err != nil {
-		uploadLog(logPath, raw["taskUUID"].(string))
+		uploadLog(logPath, taskUUID)
+		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Build preparation failed: %v", err))
 		return
 	}
 
 	next, err = BuildPackage(payload)
 	if err != nil {
-		uploadLog(logPath, raw["taskUUID"].(string))
+		uploadLog(logPath, taskUUID)
+		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Package build failed: %v", err))
 		return
 	}
 
 	next, err = StorePackage(payload)
 
 	if err != nil {
-		uploadLog(logPath, raw["taskUUID"].(string))
+		uploadLog(logPath, taskUUID)
+		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Package storage failed: %v", err))
 		return
 	}
 
-	uploadLog(logPath, raw["taskUUID"].(string))
+	uploadLog(logPath, taskUUID)
+	sendBuildNotification(taskUUID, "SUCCESS", "Package built successfully")
 
 	fmt.Println("Done.")
 

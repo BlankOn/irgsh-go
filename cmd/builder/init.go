@@ -176,7 +176,6 @@ func InitBuilder() (err error) {
     echo 'RUN echo "MIRRORSITE=` + irgshConfig.Builder.UpstreamDistUrl + `" > /root/.pbuilderrc' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN echo "BUILDUSERID=0" >> /root/.pbuilderrc' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN echo "BUILDUSERNAME=root" >> /root/.pbuilderrc' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
-    echo 'RUN echo "BINDMOUNTS=\"/etc/resolv.conf\"" >> /root/.pbuilderrc' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN echo "USENETWORK=yes"' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'COPY base.tgz /var/cache/pbuilder/' >> ` + irgshConfig.Builder.Workdir + `/pbocker/Dockerfile && \
     echo 'RUN mkdir -p /var/cache/pbuilder/hooks'
