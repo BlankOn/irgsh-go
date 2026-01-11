@@ -416,7 +416,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get recent jobs (Recent Jobs section)
-		jobs, err := monitoringRegistry.GetRecentJobs(10)
+		jobs, err := monitoringRegistry.GetRecentJobs(50)
 		if err != nil {
 			log.Printf("Failed to list jobs: %v\n", err)
 		} else if len(jobs) > 0 {
@@ -493,8 +493,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					statusText = "PENDING"
 				}
 
-				// Format timestamp in RFC3339
-				timeStr := job.SubmittedAt.Format(time.RFC3339)
+				// Format timestamp in Asia/Jakarta timezone with relative time
+				jakartaLoc, _ := time.LoadLocation("Asia/Jakarta")
+				jakartaTime := job.SubmittedAt.In(jakartaLoc)
+				timeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
+					jakartaTime.Format("2006-01-02 15:04:05 MST"),
+					formatRelativeTime(job.SubmittedAt))
 
 				expTag := ""
 				if job.IsExperimental {
@@ -802,7 +806,7 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Copy the tarball
-	cmdStr := fmt.Sprintf("cp '%s' '%s'", oldTarball, newTarball)
+	cmdStr := fmt.Sprintf("sudo cp '%s' '%s'", oldTarball, newTarball)
 	log.Printf("Executing: %s\n", cmdStr)
 	if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
 		log.Printf("Failed to copy submission tarball: %v\n", err)
@@ -813,7 +817,7 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Copy the submission directory if it exists
 	if _, err := os.Stat(oldDir); err == nil {
-		cmdStr = fmt.Sprintf("cp -r '%s' '%s'", oldDir, newDir)
+		cmdStr = fmt.Sprintf("sudo cp -r '%s' '%s'", oldDir, newDir)
 		log.Printf("Executing: %s\n", cmdStr)
 		if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
 			log.Printf("Failed to copy submission directory: %v\n", err)
@@ -821,6 +825,19 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, `{"error": "failed to copy submission directory for retry: %s"}`, err.Error())
 			return
 		}
+	}
+
+	// Change ownership of copied files to irgsh user
+	cmdStr = fmt.Sprintf("sudo chown irgsh:irgsh '%s'", newTarball)
+	log.Printf("Executing: %s\n", cmdStr)
+	if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
+		log.Printf("Failed to chown tarball: %v\n", err)
+	}
+
+	cmdStr = fmt.Sprintf("sudo chown -R irgsh:irgsh '%s'", newDir)
+	log.Printf("Executing: %s\n", cmdStr)
+	if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
+		log.Printf("Failed to chown submission directory: %v\n", err)
 	}
 
 	log.Printf("Retry: submission files copied successfully\n")
@@ -1220,4 +1237,38 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
 	}
 	return fmt.Sprintf("%dd %dh", int(d.Hours())/24, int(d.Hours())%24)
+}
+
+// formatRelativeTime formats a time as relative to now (e.g., "5 minutes ago")
+func formatRelativeTime(t time.Time) string {
+	d := time.Since(t)
+	if d < 0 {
+		return "just now"
+	}
+	seconds := int(d.Seconds())
+	if seconds < 60 {
+		if seconds == 1 {
+			return "1 second ago"
+		}
+		return fmt.Sprintf("%d seconds ago", seconds)
+	}
+	minutes := int(d.Minutes())
+	if minutes < 60 {
+		if minutes == 1 {
+			return "1 minute ago"
+		}
+		return fmt.Sprintf("%d minutes ago", minutes)
+	}
+	hours := int(d.Hours())
+	if hours < 24 {
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	}
+	days := hours / 24
+	if days == 1 {
+		return "1 day ago"
+	}
+	return fmt.Sprintf("%d days ago", days)
 }

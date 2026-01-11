@@ -1,3 +1,10 @@
+irgsh (1.2.3-1) unstable; urgency=medium
+
+  * Fix retry permission issue by using sudo for copy operations
+  * Restore ownership to irgsh user after copying submission files
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Sat, 11 Jan 2026 18:00:00 +0700
+
 irgsh (1.2.2-1) unstable; urgency=medium
 
   * Retry creates new pipeline with new job ID and timestamp
