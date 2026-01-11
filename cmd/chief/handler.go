@@ -755,7 +755,7 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"error": "uuid parameter is required"}`)
 		return
 	}
-	taskUUID := keys[0]
+	oldTaskUUID := keys[0]
 
 	// Check if monitoring is enabled
 	if !irgshConfig.Monitoring.Enabled || monitoringRegistry == nil {
@@ -765,26 +765,80 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get job info from monitoring registry
-	job, err := monitoringRegistry.GetJob(taskUUID)
+	job, err := monitoringRegistry.GetJob(oldTaskUUID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, `{"error": "job not found: %s"}`, taskUUID)
+		fmt.Fprintf(w, `{"error": "job not found: %s"}`, oldTaskUUID)
 		return
 	}
 
-	// Build the submission object from job info
+	// Extract MaintainerFingerprint from the original TaskUUID
+	// Format: timestamp_uuid_fingerprint_packagename
+	parts := strings.Split(oldTaskUUID, "_")
+	var maintainerFingerprint string
+	if len(parts) >= 3 {
+		maintainerFingerprint = parts[2]
+	}
+
+	// Generate new timestamp and UUID for the retry pipeline
+	newTimestamp := time.Now()
+	newTaskUUID := newTimestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + maintainerFingerprint + "_" + job.PackageName
+
+	// Copy submission files from old UUID to new UUID
+	submissionsDir := irgshConfig.Chief.Workdir + "/submissions/"
+	oldTarball := submissionsDir + oldTaskUUID + ".tar.gz"
+	newTarball := submissionsDir + newTaskUUID + ".tar.gz"
+	oldDir := submissionsDir + oldTaskUUID
+	newDir := submissionsDir + newTaskUUID
+
+	log.Printf("Retry: copying submission files from %s to %s\n", oldTaskUUID, newTaskUUID)
+
+	// Check if old tarball exists
+	if _, err := os.Stat(oldTarball); os.IsNotExist(err) {
+		log.Printf("Original submission tarball not found: %s\n", oldTarball)
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintf(w, `{"error": "original submission tarball not found, cannot retry"}`)
+		return
+	}
+
+	// Copy the tarball
+	cmdStr := fmt.Sprintf("cp '%s' '%s'", oldTarball, newTarball)
+	log.Printf("Executing: %s\n", cmdStr)
+	if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
+		log.Printf("Failed to copy submission tarball: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error": "failed to copy submission files for retry: %s"}`, err.Error())
+		return
+	}
+
+	// Copy the submission directory if it exists
+	if _, err := os.Stat(oldDir); err == nil {
+		cmdStr = fmt.Sprintf("cp -r '%s' '%s'", oldDir, newDir)
+		log.Printf("Executing: %s\n", cmdStr)
+		if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
+			log.Printf("Failed to copy submission directory: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, `{"error": "failed to copy submission directory for retry: %s"}`, err.Error())
+			return
+		}
+	}
+
+	log.Printf("Retry: submission files copied successfully\n")
+
+	// Build the submission object from job info with new TaskUUID and timestamp
 	submission := Submission{
-		TaskUUID:       job.TaskUUID,
-		Timestamp:      time.Now(),
-		PackageName:    job.PackageName,
-		PackageVersion: job.PackageVersion,
-		PackageURL:     job.PackageURL,
-		SourceURL:      job.SourceURL,
-		Maintainer:     job.Maintainer,
-		Component:      job.Component,
-		IsExperimental: job.IsExperimental,
-		PackageBranch:  job.PackageBranch,
-		SourceBranch:   job.SourceBranch,
+		TaskUUID:              newTaskUUID,
+		Timestamp:             newTimestamp,
+		PackageName:           job.PackageName,
+		PackageVersion:        job.PackageVersion,
+		PackageURL:            job.PackageURL,
+		SourceURL:             job.SourceURL,
+		Maintainer:            job.Maintainer,
+		MaintainerFingerprint: maintainerFingerprint,
+		Component:             job.Component,
+		IsExperimental:        job.IsExperimental,
+		PackageBranch:         job.PackageBranch,
+		SourceBranch:          job.SourceBranch,
 	}
 
 	jsonStr, err := json.Marshal(submission)
@@ -820,14 +874,28 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update job state to PENDING
-	if err := monitoringRegistry.UpdateJobState(taskUUID, "PENDING"); err != nil {
-		log.Printf("Failed to update job state: %v\n", err)
+	// Record the new job in monitoring registry
+	newJob := monitoring.JobInfo{
+		TaskUUID:       newTaskUUID,
+		PackageName:    job.PackageName,
+		PackageVersion: job.PackageVersion,
+		Maintainer:     job.Maintainer,
+		Component:      job.Component,
+		IsExperimental: job.IsExperimental,
+		SubmittedAt:    newTimestamp,
+		State:          "PENDING",
+		PackageURL:     job.PackageURL,
+		SourceURL:      job.SourceURL,
+		PackageBranch:  job.PackageBranch,
+		SourceBranch:   job.SourceBranch,
+	}
+	if err := monitoringRegistry.RecordJob(newJob); err != nil {
+		log.Printf("Failed to record retry job: %v\n", err)
 	}
 
-	log.Printf("Job %s retried successfully\n", taskUUID)
+	log.Printf("Job %s retried as new pipeline %s\n", oldTaskUUID, newTaskUUID)
 
-	payload := SubmitPayloadResponse{PipelineId: submission.TaskUUID}
+	payload := SubmitPayloadResponse{PipelineId: newTaskUUID}
 	jsonStr, _ = json.Marshal(payload)
 	fmt.Fprintf(w, string(jsonStr))
 }
