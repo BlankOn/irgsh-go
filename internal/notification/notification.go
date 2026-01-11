@@ -60,7 +60,17 @@ func SendWebhook(webhookURL, title, message string) error {
 // SendJobNotification sends a job completion notification
 func SendJobNotification(webhookURL, jobType, taskUUID, status, details string) {
 	title := fmt.Sprintf("IRGSH %s Job %s", jobType, status)
-	message := fmt.Sprintf("Job ID: %s\nStatus: %s\n%s", taskUUID, status, details)
+
+	// Add emoji prefix based on status
+	var emoji string
+	switch status {
+	case "SUCCESS", "DONE":
+		emoji = "✅ "
+	case "FAILED":
+		emoji = "❌ "
+	}
+
+	message := fmt.Sprintf("%sJob ID: %s\nStatus: %s\n%s", emoji, taskUUID, status, details)
 
 	if err := SendWebhook(webhookURL, title, message); err != nil {
 		log.Printf("Failed to send job notification: %v", err)
