@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -489,6 +490,14 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					statusClass = "status-warning"
 					// Show which stage is running
 					statusText = "STARTED (" + currentStage + ")"
+				case "PENDING":
+					// Check if PENDING for more than 24 hours
+					if time.Since(job.SubmittedAt) > 24*time.Hour {
+						statusClass = "status-offline"
+						statusText = "STALLED"
+					} else {
+						statusText = "PENDING"
+					}
 				default:
 					statusText = "PENDING"
 				}
@@ -1167,24 +1176,10 @@ func submissionUploadHandler() http.HandlerFunc {
 			return
 		}
 		defer file.Close()
-		fileBytes, err = ioutil.ReadAll(file)
-		if err != nil {
-			log.Println(err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
 
-		// check file type, detectcontenttype only needs the first 512 bytes
-		filetype := strings.Split(http.DetectContentType(fileBytes), ";")[0]
-		log.Println(filetype)
-		if !strings.Contains(filetype, "gzip") {
-			log.Println("File upload rejected: should be a tar.gz file.")
-			w.WriteHeader(http.StatusBadRequest)
-		}
+		// Create output file for streaming
 		fileName = id + ".tar.gz"
 		newPath = filepath.Join(targetPath, fileName)
-
-		// write file
 		newFile, err = os.Create(newPath)
 		if err != nil {
 			log.Println(err.Error())
@@ -1192,7 +1187,36 @@ func submissionUploadHandler() http.HandlerFunc {
 			return
 		}
 		defer newFile.Close()
-		if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
+
+		// Read first 512 bytes for content type detection
+		header := make([]byte, 512)
+		n, err := file.Read(header)
+		if err != nil && err != io.EOF {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		header = header[:n]
+
+		// Check file type
+		filetype := strings.Split(http.DetectContentType(header), ";")[0]
+		log.Println(filetype)
+		if !strings.Contains(filetype, "gzip") {
+			log.Println("File upload rejected: should be a tar.gz file.")
+			os.Remove(newPath)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// Write header bytes first, then stream the rest
+		if _, err := newFile.Write(header); err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Stream the rest of the file directly to disk
+		if _, err := io.Copy(newFile, file); err != nil {
 			log.Println(err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
