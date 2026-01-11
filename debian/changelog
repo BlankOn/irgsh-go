@@ -1,3 +1,13 @@
+irgsh (1.2.4-1) unstable; urgency=medium
+
+  * Show 50 jobs on front page instead of 10
+  * Display timestamps in Asia/Jakarta timezone with relative time
+  * Add STALLED status for jobs pending more than 24 hours
+  * Simplify notification message format
+  * Fix OOM issue when uploading large tarballs by streaming to disk
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Sat, 11 Jan 2026 19:00:00 +0700
+
 irgsh (1.2.3-1) unstable; urgency=medium
 
   * Fix retry permission issue by using sudo for copy operations
