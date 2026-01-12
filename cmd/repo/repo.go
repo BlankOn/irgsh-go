@@ -65,6 +65,7 @@ func Repo(payload string) (err error) {
 	_, err = systemutil.CmdExec(cmdStr, "Downloading the artifact", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact: "+err.Error())
 		uploadLog(logPath, raw["taskUUID"].(string))
 		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to download artifact: %v", err))
 		return
@@ -99,6 +100,41 @@ func Repo(payload string) (err error) {
 		}
 	}
 
+	// Handle force version - remove specific version before injecting
+	forceVersion, ok := raw["forceVersion"].(bool)
+	if ok && forceVersion && !raw["isExperimental"].(bool) {
+		// Construct the full version string
+		packageName := raw["packageName"].(string)
+		packageVersion := raw["packageVersion"].(string)
+		packageExtendedVersion, _ := raw["packageExtendedVersion"].(string)
+		fullVersion := packageVersion
+		if packageExtendedVersion != "" {
+			fullVersion = packageVersion + "-" + packageExtendedVersion
+		}
+
+		// Remove the specific source version from the repository
+		cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
+		%s reprepro -v -v -v --nothingiserror removesrc %s %s %s`,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			gnupgDir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			packageName,
+			fullVersion,
+		)
+		_, err := systemutil.CmdExec(
+			cmdStr,
+			fmt.Sprintf("Force version: removing existing source package %s version %s", packageName, fullVersion),
+			logPath,
+		)
+		if err != nil {
+			// Ignore err - package might not exist yet
+			fmt.Printf("error (ignored): %v\n", err)
+		}
+	}
+
 	// Injecting changes
 	ignoreDistribution := ""
 	if raw["isExperimental"].(bool) {
@@ -126,6 +162,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject changes file: "+err.Error())
 		uploadLog(logPath, raw["taskUUID"].(string))
 		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject changes file: %v", err))
 		return
@@ -152,6 +189,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+err.Error())
 		uploadLog(logPath, raw["taskUUID"].(string))
 		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject deb files: %v", err))
 		return
@@ -170,13 +208,16 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+err.Error())
+		uploadLog(logPath, raw["taskUUID"].(string))
 		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to export repository: %v", err))
 		return
 	}
 
+	systemutil.WriteLog(logPath, "[ REPO DONE ]")
 	uploadLog(logPath, raw["taskUUID"].(string))
 	sendRepoNotification(raw["taskUUID"].(string), "SUCCESS", "Package successfully submitted to repository")
-	fmt.Println("[ BUILD DONE ]")
+
 	return
 }
 

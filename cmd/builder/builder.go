@@ -48,6 +48,7 @@ func Build(payload string) (next string, err error) {
 
 	next, err = BuildPreparation(payload)
 	if err != nil {
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+err.Error())
 		uploadLog(logPath, taskUUID)
 		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Build preparation failed: %v", err))
 		return
@@ -55,6 +56,7 @@ func Build(payload string) (next string, err error) {
 
 	next, err = BuildPackage(payload)
 	if err != nil {
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+err.Error())
 		uploadLog(logPath, taskUUID)
 		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Package build failed: %v", err))
 		return
@@ -63,11 +65,13 @@ func Build(payload string) (next string, err error) {
 	next, err = StorePackage(payload)
 
 	if err != nil {
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+err.Error())
 		uploadLog(logPath, taskUUID)
 		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Package storage failed: %v", err))
 		return
 	}
 
+	systemutil.WriteLog(logPath, "[ BUILD DONE ]")
 	uploadLog(logPath, taskUUID)
 	sendBuildNotification(taskUUID, "SUCCESS", "Package built successfully")
 

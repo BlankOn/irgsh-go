@@ -37,6 +37,7 @@ type Submission struct {
 	MaintainerFingerprint  string `json:"maintainerFingerprint"`
 	Component              string `json:"component"`
 	IsExperimental         bool   `json:"isExperimental"`
+	ForceVersion           bool   `json:"forceVersion"`
 	Tarball                string `json:"tarball"`
 	PackageBranch          string `json:"packageBranch"`
 	SourceBranch           string `json:"sourceBranch"`
@@ -316,10 +317,15 @@ func main() {
 					Name:  "ignore-checks",
 					Usage: "Ignore all validation check and restriction",
 				},
+				cli.BoolFlag{
+					Name:  "force-version",
+					Usage: "Force overwrite existing package version in repository",
+				},
 			},
 			Action: func(ctx *cli.Context) (err error) {
 
 				ignoreChecks := ctx.Bool("ignore-checks")
+				forceVersion := ctx.Bool("force-version")
 
 				err = checkForInitValues()
 				if err != nil {
@@ -758,6 +764,7 @@ func main() {
 					MaintainerFingerprint:  maintainerSigningKey,
 					Component:              component,
 					IsExperimental:         isExperimental,
+					ForceVersion:           forceVersion,
 					PackageBranch:          packageBranch,
 					SourceBranch:           sourceBranch,
 				}
