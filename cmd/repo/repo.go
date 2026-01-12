@@ -135,6 +135,33 @@ func Repo(payload string) (err error) {
 		}
 	}
 
+	// Injecting the package
+	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
+	%s reprepro -v -v -v --nothingiserror --component %s includedeb %s %s/artifacts/%s/*.deb`,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		gnupgDir,
+		raw["component"],
+		irgshConfig.Repo.DistCodename+experimentalSuffix,
+		irgshConfig.Repo.Workdir,
+		raw["taskUUID"],
+	)
+
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		"Injecting the deb files from artifact to the repository",
+		logPath,
+	)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+err.Error())
+		uploadLog(logPath, raw["taskUUID"].(string))
+		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject deb files: %v", err))
+		return
+	}
+
 	// Injecting changes
 	ignoreDistribution := ""
 	if raw["isExperimental"].(bool) {
@@ -165,33 +192,6 @@ func Repo(payload string) (err error) {
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject changes file: "+err.Error())
 		uploadLog(logPath, raw["taskUUID"].(string))
 		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject changes file: %v", err))
-		return
-	}
-
-	// Injecting the package
-	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
-	%s reprepro -v -v -v --nothingiserror --component %s includedeb %s %s/artifacts/%s/*.deb`,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.DistCodename+experimentalSuffix,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.DistCodename+experimentalSuffix,
-		gnupgDir,
-		raw["component"],
-		irgshConfig.Repo.DistCodename+experimentalSuffix,
-		irgshConfig.Repo.Workdir,
-		raw["taskUUID"],
-	)
-
-	_, err = systemutil.CmdExec(
-		cmdStr,
-		"Injecting the deb files from artifact to the repository",
-		logPath,
-	)
-	if err != nil {
-		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+err.Error())
-		uploadLog(logPath, raw["taskUUID"].(string))
-		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject deb files: %v", err))
 		return
 	}
 
