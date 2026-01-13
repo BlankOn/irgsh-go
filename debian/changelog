@@ -1,3 +1,12 @@
+irgsh (1.3.3-1) unstable; urgency=medium
+
+  * Improve notification message format with package details
+  * Show username/repo and branch info in notifications
+  * Always log notification message for inspection
+  * Use defer to ensure notifications are always sent
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Mon, 13 Jan 2026 10:00:00 +0700
+
 irgsh (1.3.2-1) unstable; urgency=medium
 
   * Ignore reprepro "Skipping ... as it has already" messages during deb injection

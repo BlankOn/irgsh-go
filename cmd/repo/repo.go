@@ -26,13 +26,13 @@ func uploadLog(logPath string, id string) {
 	}
 }
 
-func sendRepoNotification(taskUUID, status, details string) {
+func sendRepoNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
 		"Repo",
 		taskUUID,
 		status,
-		details,
+		jobInfo,
 	)
 }
 
@@ -43,14 +43,45 @@ func Repo(payload string) (err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
+	taskUUID := raw["taskUUID"].(string)
+
 	experimentalSuffix := "-experimental"
 	if !raw["isExperimental"].(bool) {
 		experimentalSuffix = ""
 	}
 
+	// Extract job info for notifications
+	jobInfo := notification.JobNotificationInfo{
+		PackageName:    raw["packageName"].(string),
+		PackageVersion: raw["packageVersion"].(string),
+		Maintainer:     raw["maintainer"].(string),
+		IsExperimental: raw["isExperimental"].(bool),
+	}
+	if sourceURL, ok := raw["sourceUrl"].(string); ok {
+		jobInfo.SourceURL = sourceURL
+	}
+	if sourceBranch, ok := raw["sourceBranch"].(string); ok {
+		jobInfo.SourceBranch = sourceBranch
+	}
+	if packageURL, ok := raw["packageUrl"].(string); ok {
+		jobInfo.PackageURL = packageURL
+	}
+	if packageBranch, ok := raw["packageBranch"].(string); ok {
+		jobInfo.PackageBranch = packageBranch
+	}
+
 	logPath := irgshConfig.Repo.Workdir + "/artifacts/"
-	logPath += raw["taskUUID"].(string) + "/repo.log"
+	logPath += taskUUID + "/repo.log"
 	go systemutil.StreamLog(logPath)
+
+	// Ensure notification is always sent on completion
+	defer func() {
+		if err != nil {
+			sendRepoNotification(taskUUID, "FAILED", jobInfo)
+		} else {
+			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
+		}
+	}()
 
 	cmdStr := fmt.Sprintf(`mkdir -p %s/artifacts && \
 	cd %s/artifacts/ && \
@@ -59,15 +90,14 @@ func Repo(payload string) (err error) {
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Chief.Address,
-		raw["taskUUID"].(string),
-		raw["taskUUID"].(string),
+		taskUUID,
+		taskUUID,
 	)
 	_, err = systemutil.CmdExec(cmdStr, "Downloading the artifact", logPath)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact: "+err.Error())
-		uploadLog(logPath, raw["taskUUID"].(string))
-		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to download artifact: %v", err))
+		uploadLog(logPath, taskUUID)
 		return
 	}
 
@@ -87,16 +117,16 @@ func Repo(payload string) (err error) {
 			gnupgDir,
 			irgshConfig.Repo.DistCodename+experimentalSuffix,
 			irgshConfig.Repo.Workdir,
-			raw["taskUUID"],
+			taskUUID,
 		)
-		_, err := systemutil.CmdExec(
+		_, errExp := systemutil.CmdExec(
 			cmdStr,
 			"This is experimental package, remove any existing package.",
 			logPath,
 		)
-		if err != nil {
+		if errExp != nil {
 			// Ignore err
-			fmt.Printf("error: %v\n", err)
+			fmt.Printf("error: %v\n", errExp)
 		}
 	}
 
@@ -124,14 +154,14 @@ func Repo(payload string) (err error) {
 			packageName,
 			fullVersion,
 		)
-		_, err := systemutil.CmdExec(
+		_, errForce := systemutil.CmdExec(
 			cmdStr,
 			fmt.Sprintf("Force version: removing existing source package %s version %s", packageName, fullVersion),
 			logPath,
 		)
-		if err != nil {
+		if errForce != nil {
 			// Ignore err - package might not exist yet
-			fmt.Printf("error (ignored): %v\n", err)
+			fmt.Printf("error (ignored): %v\n", errForce)
 		}
 	}
 
@@ -146,7 +176,7 @@ func Repo(payload string) (err error) {
 		raw["component"],
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
-		raw["taskUUID"],
+		taskUUID,
 	)
 
 	_, err = systemutil.CmdExec(
@@ -157,8 +187,7 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+err.Error())
-		uploadLog(logPath, raw["taskUUID"].(string))
-		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject deb files: %v", err))
+		uploadLog(logPath, taskUUID)
 		return
 	}
 
@@ -179,7 +208,7 @@ func Repo(payload string) (err error) {
 		raw["component"],
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
-		raw["taskUUID"],
+		taskUUID,
 	)
 
 	_, err = systemutil.CmdExec(
@@ -190,8 +219,7 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject changes file: "+err.Error())
-		uploadLog(logPath, raw["taskUUID"].(string))
-		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to inject changes file: %v", err))
+		uploadLog(logPath, taskUUID)
 		return
 	}
 
@@ -209,14 +237,12 @@ func Repo(payload string) (err error) {
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+err.Error())
-		uploadLog(logPath, raw["taskUUID"].(string))
-		sendRepoNotification(raw["taskUUID"].(string), "FAILED", fmt.Sprintf("Failed to export repository: %v", err))
+		uploadLog(logPath, taskUUID)
 		return
 	}
 
 	systemutil.WriteLog(logPath, "[ REPO DONE ]")
-	uploadLog(logPath, raw["taskUUID"].(string))
-	sendRepoNotification(raw["taskUUID"].(string), "SUCCESS", "Package successfully submitted to repository")
+	uploadLog(logPath, taskUUID)
 
 	return
 }
