@@ -24,13 +24,13 @@ func uploadLog(logPath string, id string) {
 	}
 }
 
-func sendBuildNotification(taskUUID, status, details string) {
+func sendBuildNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
 		"Build",
 		taskUUID,
 		status,
-		details,
+		jobInfo,
 	)
 }
 
@@ -43,14 +43,42 @@ func Build(payload string) (next string, err error) {
 	taskUUID := raw["taskUUID"].(string)
 	fmt.Println("Processing pipeline :" + taskUUID)
 
+	// Extract job info for notifications
+	jobInfo := notification.JobNotificationInfo{
+		PackageName:    raw["packageName"].(string),
+		PackageVersion: raw["packageVersion"].(string),
+		Maintainer:     raw["maintainer"].(string),
+		IsExperimental: raw["isExperimental"].(bool),
+	}
+	if sourceURL, ok := raw["sourceUrl"].(string); ok {
+		jobInfo.SourceURL = sourceURL
+	}
+	if sourceBranch, ok := raw["sourceBranch"].(string); ok {
+		jobInfo.SourceBranch = sourceBranch
+	}
+	if packageURL, ok := raw["packageUrl"].(string); ok {
+		jobInfo.PackageURL = packageURL
+	}
+	if packageBranch, ok := raw["packageBranch"].(string); ok {
+		jobInfo.PackageBranch = packageBranch
+	}
+
 	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + taskUUID + "/build.log"
 	go systemutil.StreamLog(logPath)
+
+	// Ensure notification is always sent on completion
+	defer func() {
+		if err != nil {
+			sendBuildNotification(taskUUID, "FAILED", jobInfo)
+		} else {
+			sendBuildNotification(taskUUID, "SUCCESS", jobInfo)
+		}
+	}()
 
 	next, err = BuildPreparation(payload)
 	if err != nil {
 		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+err.Error())
 		uploadLog(logPath, taskUUID)
-		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Build preparation failed: %v", err))
 		return
 	}
 
@@ -58,7 +86,6 @@ func Build(payload string) (next string, err error) {
 	if err != nil {
 		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+err.Error())
 		uploadLog(logPath, taskUUID)
-		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Package build failed: %v", err))
 		return
 	}
 
@@ -67,13 +94,11 @@ func Build(payload string) (next string, err error) {
 	if err != nil {
 		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+err.Error())
 		uploadLog(logPath, taskUUID)
-		sendBuildNotification(taskUUID, "FAILED", fmt.Sprintf("Package storage failed: %v", err))
 		return
 	}
 
 	systemutil.WriteLog(logPath, "[ BUILD DONE ]")
 	uploadLog(logPath, taskUUID)
-	sendBuildNotification(taskUUID, "SUCCESS", "Package built successfully")
 
 	fmt.Println("Done.")
 
