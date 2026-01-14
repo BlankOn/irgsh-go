@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
@@ -206,6 +207,16 @@ func BuildPackage(payload string) (next string, err error) {
 		log.Println(err.Error())
 		return
 	}
+
+	// Check if .deb files were created
+	debPattern := irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/*.deb"
+	debFiles, _ := filepath.Glob(debPattern)
+	if len(debFiles) == 0 {
+		err = fmt.Errorf("no .deb files were created after build")
+		log.Println(err.Error())
+		return
+	}
+	log.Printf("Found %d .deb file(s): %v\n", len(debFiles), debFiles)
 
 	// Use the generated files from maintainer
 	if len(raw["sourceUrl"].(string)) > 0 {
