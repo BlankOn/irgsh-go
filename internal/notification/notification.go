@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+// LogBaseURL is the base URL for accessing build/repo logs
+// Change this constant if the IRGSH server URL changes
+const LogBaseURL = "http://irgsh.blankonlinux.id"
+
 // WebhookPayload represents the notification payload sent to webhook
 type WebhookPayload struct {
 	Title   string `json:"title"`
@@ -144,8 +148,20 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 		repoLinks = fmt.Sprintf(", %s", packageInfo)
 	}
 
-	// Format: 📦 bromo-theme_1.0.0 [experimental] by Herpiko, herpiko/source (branch), herpiko/package (branch) ✅
-	message := fmt.Sprintf("📦 %s_%s [%s] by %s%s %s",
+	// Determine component prefix based on job type
+	var componentPrefix string
+	switch jobType {
+	case "Build":
+		componentPrefix = "📦 irgsh-builder: "
+	case "Repo":
+		componentPrefix = "📦 irgsh-repo: "
+	default:
+		componentPrefix = "📦 "
+	}
+
+	// Format: 📦 irgsh-builder: bromo-theme_1.0.0 [experimental] by Herpiko, herpiko/source (branch), herpiko/package (branch) ✅
+	message := fmt.Sprintf("%s%s_%s [%s] by %s%s %s",
+		componentPrefix,
 		jobInfo.PackageName,
 		jobInfo.PackageVersion,
 		targetRepo,
@@ -153,6 +169,21 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 		repoLinks,
 		emoji,
 	)
+
+	// Append log URL on failure
+	if status == "FAILED" {
+		var logType string
+		switch jobType {
+		case "Build":
+			logType = "build"
+		case "Repo":
+			logType = "repo"
+		}
+		if logType != "" {
+			logURL := fmt.Sprintf("%s/logs/%s.%s.log", LogBaseURL, taskUUID, logType)
+			message = fmt.Sprintf("%s\n%s", message, logURL)
+		}
+	}
 
 	// Always log the notification message for inspection
 	log.Printf("Notification: %s - %s", title, message)
