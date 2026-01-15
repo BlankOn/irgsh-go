@@ -1,4 +1,4 @@
-irgsh (1.3.6-1) unstable; urgency=medium
+irgsh (1.3.7-1) unstable; urgency=medium
 
   * Fix incorrect STALLED status for old completed jobs
   * Workers now report build/repo state to chief via API
