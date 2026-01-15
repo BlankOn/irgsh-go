@@ -34,6 +34,7 @@ type JobNotificationInfo struct {
 }
 
 // SendWebhook sends a notification to the configured webhook URL
+// It retries up to 3 times with a 2-minute timeout per attempt
 func SendWebhook(webhookURL, title, message string) error {
 	if webhookURL == "" {
 		log.Println("Notification webhook URL not configured, skipping notification")
@@ -51,28 +52,46 @@ func SendWebhook(webhookURL, title, message string) error {
 	}
 
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 2 * time.Minute,
 	}
 
-	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create notification request: %v", err)
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(jsonData))
+		if err != nil {
+			return fmt.Errorf("failed to create notification request: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to send notification (attempt %d/%d): %v", attempt, maxRetries, err)
+			log.Printf("%v", lastErr)
+			if attempt < maxRetries {
+				time.Sleep(5 * time.Second) // Wait 5 seconds before retry
+			}
+			continue
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("notification webhook returned non-success status (attempt %d/%d): %d", attempt, maxRetries, resp.StatusCode)
+			log.Printf("%v", lastErr)
+			if attempt < maxRetries {
+				time.Sleep(5 * time.Second) // Wait 5 seconds before retry
+			}
+			continue
+		}
+
+		resp.Body.Close()
+		log.Printf("Notification sent successfully: %s", title)
+		return nil
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send notification: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("notification webhook returned non-success status: %d", resp.StatusCode)
-	}
-
-	log.Printf("Notification sent successfully: %s", title)
-	return nil
+	return lastErr
 }
 
 // extractRepoName extracts username/repo from a git URL
