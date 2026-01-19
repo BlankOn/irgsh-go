@@ -13,10 +13,9 @@ import (
 
 const (
 	// Redis key for job tracking
-	jobsIndexKey    = "irgsh:jobs:index"       // Sorted set of job IDs (sorted by timestamp)
-	jobKeyPrefix    = "irgsh:jobs:"            // Job metadata
-	jobRetentionTTL = 7 * 24 * time.Hour      // Keep job data for 7 days
-	maxJobsInIndex  = 100                      // Keep latest 100 jobs in index
+	jobsIndexKey   = "irgsh:jobs:index" // Sorted set of job IDs (sorted by timestamp)
+	jobKeyPrefix   = "irgsh:jobs:"      // Job metadata
+	maxJobsInIndex = 100                // Keep latest 100 jobs in index
 )
 
 // JobInfo contains metadata about a build job
@@ -51,8 +50,8 @@ func (r *Registry) RecordJob(job JobInfo) error {
 	// Use pipeline for atomic operations
 	pipe := r.client.Pipeline()
 
-	// Store job data with 7 day TTL
-	pipe.Set(r.ctx, jobKey, data, jobRetentionTTL)
+	// Store job data persistently (no expiry)
+	pipe.Set(r.ctx, jobKey, data, 0)
 
 	// Add to sorted set (score = unix timestamp for chronological ordering)
 	score := float64(job.SubmittedAt.Unix())
@@ -78,18 +77,25 @@ func (r *Registry) GetRecentJobs(limit int) ([]*JobInfo, error) {
 		limit = 10
 	}
 
-	// Get job IDs from sorted set (most recent first)
-	jobIDs, err := r.client.ZRevRange(r.ctx, jobsIndexKey, 0, int64(limit-1)).Result()
+	// Get job IDs with scores from sorted set (most recent first)
+	jobIDsWithScores, err := r.client.ZRevRangeWithScores(r.ctx, jobsIndexKey, 0, int64(limit-1)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list jobs: %w", err)
 	}
 
-	jobs := make([]*JobInfo, 0, len(jobIDs))
-	for _, id := range jobIDs {
+	jobs := make([]*JobInfo, 0, len(jobIDsWithScores))
+	for _, z := range jobIDsWithScores {
+		id := z.Member.(string)
 		job, err := r.GetJob(id)
 		if err != nil {
-			// Job might have expired, skip it
-			continue
+			// Job data might have expired, create a placeholder with UNKNOWN state
+			// Use the score (unix timestamp) to reconstruct SubmittedAt
+			submittedAt := time.Unix(int64(z.Score), 0)
+			job = &JobInfo{
+				TaskUUID:    id,
+				SubmittedAt: submittedAt,
+				State:       "UNKNOWN",
+			}
 		}
 		jobs = append(jobs, job)
 	}
@@ -145,13 +151,8 @@ func (r *Registry) UpdateJobState(taskUUID string, state string) error {
 		return err
 	}
 
-	// Keep existing TTL
-	ttl, _ := r.client.TTL(r.ctx, jobKey).Result()
-	if ttl < 0 {
-		ttl = jobRetentionTTL
-	}
-
-	return r.client.Set(r.ctx, jobKey, updatedData, ttl).Err()
+	// Store persistently (no expiry)
+	return r.client.Set(r.ctx, jobKey, updatedData, 0).Err()
 }
 
 // GetJobStagesFromMachinery queries both build and repo task states using machinery backend

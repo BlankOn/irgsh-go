@@ -438,8 +438,13 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				</thead>
 				<tbody>`
 
-			// Get actual task states from machinery
+			// Get actual task states from machinery (only for jobs with known data)
 			for _, job := range jobs {
+				// Skip machinery query if job data is already missing (UNKNOWN state)
+				if job.State == "UNKNOWN" {
+					continue
+				}
+
 				// Query both build and repo task states using machinery backend
 				buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
 					server.GetBackend(),
@@ -453,7 +458,10 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 				// Determine overall state using same logic as BuildStatusHandler
 				var overallState string
-				if buildState == "FAILURE" {
+				// If machinery returns empty states for both, mark as UNKNOWN
+				if buildState == "" && repoState == "" {
+					overallState = "UNKNOWN"
+				} else if buildState == "FAILURE" {
 					overallState = "FAILED"
 				} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
 					overallState = "DONE"
@@ -468,19 +476,22 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				job.State = overallState
+			}
 
+			// Render all jobs (including UNKNOWN ones)
+			for _, job := range jobs {
 				// Determine status color and text
 				statusClass := ""
-				statusText := overallState
-				switch overallState {
+				statusText := job.State
+				switch job.State {
 				case "DONE":
 					statusClass = "status-online"
 				case "FAILED":
 					statusClass = "status-offline"
 					// Show which stage failed
-					if buildState == "FAILURE" {
+					if job.BuildState == "FAILURE" {
 						statusText = "FAILED (build)"
-					} else if repoState == "FAILURE" {
+					} else if job.RepoState == "FAILURE" {
 						statusText = "FAILED (repo)"
 					}
 				case "REPO":
@@ -489,7 +500,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				case "STARTED":
 					statusClass = "status-warning"
 					// Show which stage is running
-					statusText = "STARTED (" + currentStage + ")"
+					statusText = "STARTED (" + job.CurrentStage + ")"
 				case "PENDING":
 					// Check if PENDING for more than 24 hours
 					if time.Since(job.SubmittedAt) > 24*time.Hour {
@@ -498,6 +509,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					} else {
 						statusText = "PENDING"
 					}
+				case "UNKNOWN":
+					statusClass = "status-offline"
+					statusText = "UNKNOWN"
 				default:
 					statusText = "PENDING"
 				}
