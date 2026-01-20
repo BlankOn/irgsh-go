@@ -757,21 +757,31 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	repoResult.Touch()
 	repoState := repoResult.GetState()
 
-	// Determine overall pipeline state
-	var pipelineState string
-	if buildState.State == "FAILURE" {
-		pipelineState = "FAILED"
-	} else if buildState.State == "SUCCESS" && repoState.State == "SUCCESS" {
-		pipelineState = "DONE"
-	} else if buildState.State == "SUCCESS" && repoState.State == "FAILURE" {
-		pipelineState = "FAILED"
-	} else if buildState.State == "SUCCESS" && (repoState.State == "PENDING" || repoState.State == "RECEIVED" || repoState.State == "STARTED") {
-		pipelineState = "REPO"
+	// Get individual task states
+	buildStatusStr := buildState.State
+	repoStatusStr := repoState.State
+
+	// Determine overall job status
+	// Job is DONE only if both build and repo are SUCCESS
+	var jobStatus string
+	if buildStatusStr == "FAILURE" {
+		jobStatus = "FAILED"
+	} else if buildStatusStr == "SUCCESS" && repoStatusStr == "SUCCESS" {
+		jobStatus = "DONE"
+	} else if buildStatusStr == "SUCCESS" && repoStatusStr == "FAILURE" {
+		jobStatus = "FAILED"
+	} else if buildStatusStr == "SUCCESS" && (repoStatusStr == "PENDING" || repoStatusStr == "RECEIVED" || repoStatusStr == "STARTED") {
+		jobStatus = "BUILDING"
+	} else if buildStatusStr == "PENDING" || buildStatusStr == "RECEIVED" || buildStatusStr == "STARTED" {
+		jobStatus = "BUILDING"
+	} else if buildStatusStr == "" && repoStatusStr == "" {
+		jobStatus = "UNKNOWN"
 	} else {
-		pipelineState = buildState.State
+		jobStatus = "PENDING"
 	}
 
-	res := fmt.Sprintf("{ \"pipelineId\": \"%s\", \"state\": \"%s\" }", UUID, pipelineState)
+	res := fmt.Sprintf(`{"pipelineId": "%s", "jobStatus": "%s", "buildStatus": "%s", "repoStatus": "%s", "state": "%s"}`,
+		UUID, jobStatus, buildStatusStr, repoStatusStr, jobStatus)
 	fmt.Fprintf(w, res)
 }
 

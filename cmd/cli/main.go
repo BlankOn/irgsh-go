@@ -874,16 +874,21 @@ func main() {
 				}
 
 				responseStr := fmt.Sprintf("%+v", result)
-				type SubmitResponse struct {
-					PipelineID string `json:"pipelineId"`
-					State      string `json:"state"`
+				type StatusResponse struct {
+					PipelineID  string `json:"pipelineId"`
+					JobStatus   string `json:"jobStatus"`
+					BuildStatus string `json:"buildStatus"`
+					RepoStatus  string `json:"repoStatus"`
+					State       string `json:"state"`
 				}
-				responseJson := SubmitResponse{}
+				responseJson := StatusResponse{}
 				err = json.Unmarshal([]byte(responseStr), &responseJson)
 				if err != nil {
 					return
 				}
-				fmt.Println(responseJson.State)
+				fmt.Printf("Job Status:   %s\n", responseJson.JobStatus)
+				fmt.Printf("Build Status: %s\n", responseJson.BuildStatus)
+				fmt.Printf("Repo Status:  %s\n", responseJson.RepoStatus)
 
 				return
 			},
