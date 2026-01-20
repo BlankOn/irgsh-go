@@ -582,6 +582,102 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 			</table>
 			`
 		}
+
+		// Get recent ISO jobs (Recent ISO Jobs section)
+		isoJobs, err := monitoringRegistry.GetRecentISOJobs(20)
+		if err != nil {
+			log.Printf("Failed to list ISO jobs: %v\n", err)
+		} else if len(isoJobs) > 0 {
+			html += `<div class="section-title">Recent ISO Build Jobs</div>`
+			html += `
+			<table>
+				<thead>
+					<tr>
+						<th>Timestamp</th>
+						<th>Repository</th>
+						<th>Branch</th>
+						<th>Status</th>
+						<th>Logs</th>
+						<th>UUID</th>
+					</tr>
+				</thead>
+				<tbody>`
+
+			// Get actual task states from machinery
+			for _, job := range isoJobs {
+				// Skip machinery query if job data is already missing (UNKNOWN state)
+				if job.State != "UNKNOWN" {
+					// Query ISO task state using machinery backend
+					isoState := monitoring.GetISOJobStateFromMachinery(server.GetBackend(), job.TaskUUID)
+					if isoState != "" {
+						if isoState == "SUCCESS" {
+							job.State = "DONE"
+						} else if isoState == "FAILURE" {
+							job.State = "FAILED"
+						} else {
+							job.State = isoState
+						}
+					}
+				}
+
+				// Determine status color and text
+				statusClass := ""
+				statusText := job.State
+				switch job.State {
+				case "DONE", "SUCCESS":
+					statusClass = "status-online"
+					statusText = "DONE"
+				case "FAILED", "FAILURE":
+					statusClass = "status-offline"
+					statusText = "FAILED"
+				case "STARTED":
+					statusClass = "status-warning"
+				case "PENDING":
+					// Check if PENDING for more than 24 hours
+					if time.Since(job.SubmittedAt) > 24*time.Hour {
+						statusClass = "status-offline"
+						statusText = "STALLED"
+					}
+				case "UNKNOWN":
+					statusClass = "status-offline"
+				}
+
+				// Format timestamp in Asia/Jakarta timezone with relative time
+				jakartaLoc, _ := time.LoadLocation("Asia/Jakarta")
+				jakartaTime := job.SubmittedAt.In(jakartaLoc)
+				timeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
+					jakartaTime.Format("2006-01-02 15:04:05 MST"),
+					formatRelativeTime(job.SubmittedAt))
+
+				// Build repository cell with git link
+				repoCell := fmt.Sprintf(`<a href="%s" target="_blank">%s</a>`, job.RepoURL, job.RepoURL)
+
+				html += fmt.Sprintf(`
+					<tr>
+						<td>%s</td>
+						<td>%s</td>
+						<td>%s</td>
+						<td><span class="%s">%s</span></td>
+						<td>
+							<a href="/logs/%s.iso.log" target="_blank">iso.log</a>
+						</td>
+						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
+					</tr>`,
+					timeStr,
+					repoCell,
+					job.Branch,
+					statusClass,
+					statusText,
+					job.TaskUUID,
+					job.TaskUUID,
+				)
+			}
+
+			html += `
+				</tbody>
+			</table>
+			`
+		}
 	}
 
 	html += `
@@ -1114,27 +1210,134 @@ func logUploadHandler() http.HandlerFunc {
 	})
 }
 
-func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("iso")
-	signature := tasks.Signature{
+// ISOSubmission represents the payload for ISO build
+type ISOSubmission struct {
+	TaskUUID  string    `json:"taskUUID"`
+	RepoURL   string    `json:"repoUrl"`
+	Branch    string    `json:"branch"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["uuid"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "403")
+		return
+	}
+	var UUID string
+	UUID = keys[0]
+
+	// Check ISO task state
+	isoSignature := tasks.Signature{
 		Name: "iso",
-		UUID: uuid.New().String(),
+		UUID: UUID,
 		Args: []tasks.Arg{
 			{
 				Type:  "string",
-				Value: "iso-specific-value",
+				Value: "xyz",
 			},
 		},
 	}
-	// TODO grab the asyncResult here
-	_, err := server.SendTask(&signature)
+	isoResult := result.NewAsyncResult(&isoSignature, server.GetBackend())
+	isoResult.Touch()
+	isoState := isoResult.GetState()
+
+	// Get ISO task state
+	isoStatusStr := isoState.State
+
+	// Determine overall job status
+	var jobStatus string
+	if isoStatusStr == "FAILURE" {
+		jobStatus = "FAILED"
+	} else if isoStatusStr == "SUCCESS" {
+		jobStatus = "DONE"
+	} else if isoStatusStr == "PENDING" || isoStatusStr == "RECEIVED" || isoStatusStr == "STARTED" {
+		jobStatus = "BUILDING"
+	} else if isoStatusStr == "" {
+		jobStatus = "UNKNOWN"
+	} else {
+		jobStatus = isoStatusStr
+	}
+
+	res := fmt.Sprintf(`{"pipelineId": "%s", "jobStatus": "%s", "isoStatus": "%s", "state": "%s"}`,
+		UUID, jobStatus, isoStatusStr, jobStatus)
+	fmt.Fprintf(w, res)
+}
+
+func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
+	var submission ISOSubmission
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&submission)
+	if err != nil {
+		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error": "invalid request body"}`)
+		return
+	}
+
+	// Validate required fields
+	if submission.RepoURL == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error": "repoUrl is required"}`)
+		return
+	}
+	if submission.Branch == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error": "branch is required"}`)
+		return
+	}
+
+	submission.Timestamp = time.Now()
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_iso"
+
+	log.Printf("ISO build submitted: %s (repo: %s, branch: %s)\n", submission.TaskUUID, submission.RepoURL, submission.Branch)
+
+	jsonStr, err := json.Marshal(submission)
+	if err != nil {
+		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error": "failed to marshal submission"}`)
+		return
+	}
+
+	signature := tasks.Signature{
+		Name: "iso",
+		UUID: submission.TaskUUID,
+		Args: []tasks.Arg{
+			{
+				Type:  "string",
+				Value: string(jsonStr),
+			},
+		},
+	}
+
+	_, err = server.SendTask(&signature)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Println("Could not send task : " + err.Error())
-		fmt.Fprintf(w, "500")
+		fmt.Fprintf(w, `{"error": "failed to queue ISO build task"}`)
+		return
 	}
-	// TODO should be in JSON string
-	w.WriteHeader(http.StatusOK)
+
+	// Record ISO job in monitoring system
+	if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
+		isoJob := monitoring.ISOJobInfo{
+			TaskUUID:    submission.TaskUUID,
+			RepoURL:     submission.RepoURL,
+			Branch:      submission.Branch,
+			SubmittedAt: submission.Timestamp,
+			State:       "PENDING",
+		}
+		if err := monitoringRegistry.RecordISOJob(isoJob); err != nil {
+			log.Printf("Failed to record ISO job: %v\n", err)
+		}
+	}
+
+	payload := SubmitPayloadResponse{PipelineId: submission.TaskUUID}
+	jsonStr, _ = json.Marshal(payload)
+	fmt.Fprintf(w, string(jsonStr))
 }
 
 func submissionUploadHandler() http.HandlerFunc {

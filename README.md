@@ -109,25 +109,47 @@ Their logs are available at `/var/log/irgsh/`. After these three services are up
 
 #### CLI
 
-Submit a package,
+Submit a package build job,
 
 ```
-irgsh-cli submit --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
+irgsh-cli package submit --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
 ```
 
-Check the status of a pipeline,
+Check the status of a package build pipeline,
 
 ```
-irgsh-cli status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
+irgsh-cli package status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 ```
 
-Inspect the log of a pipeline,
+Inspect the log of a package build pipeline,
 
 ```
-irgsh-cli log  2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
+irgsh-cli package log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 ```
 
-Running `irgsh-cli status` and `irgsh-cli log` without argument will referenced to the latest submitted pipeline ID.
+Running `irgsh-cli package status` and `irgsh-cli package log` without argument will reference the latest submitted package build pipeline ID.
+
+#### ISO Build (livebuild)
+
+Submit an ISO build job,
+
+```
+irgsh-cli livebuild submit --lb-url https://github.com/AcarKaan/blankon-live-build-config.git --lb-branch main
+```
+
+Check the status of an ISO build pipeline,
+
+```
+irgsh-cli livebuild status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_iso
+```
+
+Inspect the log of an ISO build pipeline,
+
+```
+irgsh-cli livebuild log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_iso
+```
+
+Running `irgsh-cli livebuild status` and `irgsh-cli livebuild log` without argument will reference the latest submitted ISO build pipeline ID.
 
 ## FAQ
 

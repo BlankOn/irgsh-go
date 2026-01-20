@@ -35,7 +35,8 @@ type BuilderConfig struct {
 }
 
 type ISOConfig struct {
-	Workdir string `json:"workdir" validate:"required"`
+	Workdir   string `json:"workdir" validate:"required"`
+	Outputdir string `json:"outputdir" validate:"required"`
 }
 
 type RepoConfig struct {
@@ -95,6 +96,7 @@ func LoadConfigFromPath(configPath string) (config IrgshConfig, err error) {
 		config.Chief.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
 		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
 		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
+		config.ISO.Workdir = strings.ReplaceAll(config.ISO.Workdir, "/var/lib/", tmpDir)
 	}
 	config.IsDev = isDev
 
@@ -160,6 +162,7 @@ func LoadConfig() (config IrgshConfig, err error) {
 		config.Chief.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
 		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
 		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
+		config.ISO.Workdir = strings.ReplaceAll(config.ISO.Workdir, "/var/lib/", tmpDir)
 	}
 	config.IsDev = isDev
 

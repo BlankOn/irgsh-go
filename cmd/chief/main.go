@@ -128,6 +128,7 @@ func serve() {
 	http.HandleFunc("/api/v1/log-upload", logUploadHandler())
 	http.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())
 	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
+	http.HandleFunc("/api/v1/iso-status", ISOStatusHandler)
 	http.HandleFunc("/api/v1/version", VersionHandler)
 
 	// Pages
