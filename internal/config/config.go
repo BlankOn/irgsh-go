@@ -30,8 +30,9 @@ type ChiefConfig struct {
 }
 
 type BuilderConfig struct {
-	Workdir         string `json:"workdir" validate:"required"`
-	UpstreamDistUrl string `json:"upstream_dist_url" validate:"required"` // http://kartolo.sby.datautama.net.id/debian
+	Workdir              string `json:"workdir" validate:"required"`
+	UpstreamDistCodename string `json:"upstream_dist_codename" validate:"required"` // sid
+	UpstreamDistUrl      string `json:"upstream_dist_url" validate:"required"`      // http://kartolo.sby.datautama.net.id/debian
 }
 
 type ISOConfig struct {
@@ -57,10 +58,10 @@ type RepoConfig struct {
 }
 
 type MonitoringConfig struct {
-	Enabled           bool `json:"enabled"`             // Enable/disable monitoring
-	HeartbeatInterval int  `json:"heartbeat_interval"`  // Worker heartbeat frequency in seconds (default: 30)
-	InstanceTimeout   int  `json:"instance_timeout"`    // Mark offline after this duration in seconds (default: 90)
-	CleanupInterval   int  `json:"cleanup_interval"`    // Cleanup check frequency in seconds (default: 3600). Instances removed after 24h of no heartbeat.
+	Enabled           bool `json:"enabled"`            // Enable/disable monitoring
+	HeartbeatInterval int  `json:"heartbeat_interval"` // Worker heartbeat frequency in seconds (default: 30)
+	InstanceTimeout   int  `json:"instance_timeout"`   // Mark offline after this duration in seconds (default: 90)
+	CleanupInterval   int  `json:"cleanup_interval"`   // Cleanup check frequency in seconds (default: 3600). Instances removed after 24h of no heartbeat.
 }
 
 type NotificationConfig struct {
