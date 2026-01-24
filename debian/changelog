@@ -1,3 +1,10 @@
+irgsh (1.3.9-1) unstable; urgency=medium
+
+  * Generate /root/.pbuilderrc from builder config before pbuilder create
+  * Use UpstreamDistUrl and UpstreamDistCodename for deterministic pbuilder setup
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 24 Jan 2026 12:00:00 +0700
+
 irgsh (1.3.8-1) unstable; urgency=medium
 
   * Show UNKNOWN status for jobs with missing or expired data
