@@ -17,6 +17,7 @@ chief:
 
 builder:
   workdir: '/var/lib/irgsh/builder'
+  upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
 
 repo:
@@ -24,15 +25,15 @@ repo:
   dist_name: 'BlankOn'
   dist_label: 'BlankOn'
   dist_codename: 'verbeek'
-  dist_components: 'main restricted extras extras-restricted'
+  dist_components: 'main restricted extras restricted-firmware'
   dist_supported_architectures: 'amd64 source'
   dist_version: '12.0'
   dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
-  dist_signing_key: 'DCE16C7A2805D4F8FCFF2C40FDF9557305CC097B'
+  dist_signing_key: 'GPG_KEY'
   upstream_name: 'merge.sid'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
-  upstream_dist_components: 'main non-free>restricted contrib>extras'
+  upstream_dist_components: 'main non-free>restricted contrib>extras non-free-firmware>restricted-firmware'
   gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:
