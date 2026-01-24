@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -59,7 +60,7 @@ BUILDPLACE="/var/cache/pbuilder/build/"
 USENETWORK=yes
 `, irgshConfig.Builder.UpstreamDistUrl, irgshConfig.Builder.UpstreamDistCodename)
 
-	err = os.WriteFile("/root/.pbuilderrc", []byte(pbuilderrcContent), 0644)
+	err = ioutil.WriteFile("/root/.pbuilderrc", []byte(pbuilderrcContent), 0644)
 	if err != nil {
 		fmt.Printf("error creating /root/.pbuilderrc: %v\n", err)
 		return
