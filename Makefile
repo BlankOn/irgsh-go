@@ -31,6 +31,7 @@ release:
 	cp -rf utils/init/* irgsh-go/etc/init.d/
 	cp -rf utils/systemctl/* irgsh-go/lib/systemd/system
 	cp -rf utils/scripts/init.sh irgsh-go/usr/share/irgsh/init.sh
+	cp -rf utils/scripts/iso-build.sh irgsh-go/usr/share/irgsh/iso-build.sh
 	cp -rf -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
 	mkdir -p target
@@ -102,6 +103,8 @@ builder:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder
 
 iso:
+	sudo mkdir -p /usr/share/irgsh
+	sudo cp -f utils/scripts/iso-build.sh /usr/share/irgsh/iso-build.sh
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-iso ./cmd/iso && DEV=1 ./bin/irgsh-iso
 
 repo-init:

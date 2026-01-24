@@ -62,9 +62,9 @@ Configure the CLI tool to point to your IRGSH chief instance:
 
    irgsh-cli config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
 
-Submit a package:
+Submit a package build job:
 
-   irgsh-cli submit --source SOURCE_URL --package PACKAGE_URL
+   irgsh-cli package submit --source SOURCE_URL --package PACKAGE_URL
 
 For more information, visit:
 https://github.com/BlankOn/irgsh-go
