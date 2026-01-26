@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,4 +37,21 @@ func TestResponseJSON(t *testing.T) {
 	assert.Equal(t, body, []byte(`{"message":"Not OK"}`))
 	assert.Equal(t, w.Header(), http.Header(http.Header{"Content-Type": []string{"application/json"}}))
 	assert.Equal(t, w.Code, 500)
+}
+
+func TestDecodeJSON(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	var result payload
+	err := DecodeJSON(strings.NewReader(`{"name":"irgsh"}`), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, "irgsh", result.Name)
+
+	err = DecodeJSON(strings.NewReader(`{"name":"irgsh","extra":"oops"}`), &result)
+	assert.Error(t, err)
+
+	err = DecodeJSON(strings.NewReader(`{"name":"irgsh"}`), nil)
+	assert.NoError(t, err)
 }
