@@ -14,7 +14,8 @@ coverage.txt
 tmp
 debian-build
 obj-x86_64-linux-gnu
-cli
+cli/
+!internal/cli/
 debian/irgsh/usr/share/irgsh/reprepro-template/conf/distributions.orig
 debian/irgsh/usr/share/irgsh/reprepro-template/conf/options.orig
 debian/irgsh/usr/share/irgsh/reprepro-template/conf/updates.orig
