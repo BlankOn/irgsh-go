@@ -163,6 +163,27 @@ func Repo(payload string) (err error) {
 			// Ignore err - package might not exist yet
 			fmt.Printf("error (ignored): %v\n", errForce)
 		}
+
+		// Remove the binary packages as well
+		cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
+		%s reprepro -v -v -v --nothingiserror remove %s %s`,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			gnupgDir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			packageName,
+		)
+		_, errForce = systemutil.CmdExec(
+			cmdStr,
+			fmt.Sprintf("Force version: removing existing binary packages for %s", packageName),
+			logPath,
+		)
+		if errForce != nil {
+			// Ignore err - package might not exist yet
+			fmt.Printf("error (ignored): %v\n", errForce)
+		}
 	}
 
 	// Injecting the package
