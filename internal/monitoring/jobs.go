@@ -1,161 +1,58 @@
 package monitoring
 
 import (
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/RichardKnop/machinery/v1/backends/iface"
 	"github.com/RichardKnop/machinery/v1/backends/result"
 	"github.com/RichardKnop/machinery/v1/tasks"
-	"github.com/go-redis/redis/v8"
+	"github.com/blankon/irgsh-go/internal/storage"
 )
 
-const (
-	// Redis key for job tracking
-	jobsIndexKey      = "irgsh:jobs:index"     // Sorted set of job IDs (sorted by timestamp)
-	jobKeyPrefix      = "irgsh:jobs:"          // Job metadata
-	isoJobsIndexKey   = "irgsh:isojobs:index"  // Sorted set of ISO job IDs (sorted by timestamp)
-	isoJobKeyPrefix   = "irgsh:isojobs:"       // ISO Job metadata
-	maxJobsInIndex    = 100                    // Keep latest 100 jobs in index
-	maxISOJobsInIndex = 50                     // Keep latest 50 ISO jobs in index
-)
+// Note: Job data is now stored in SQLite for persistence.
+// Redis is still used for machinery task queue and instance heartbeats.
 
-// JobInfo contains metadata about a build job
-type JobInfo struct {
-	TaskUUID       string    `json:"task_uuid"`
-	PackageName    string    `json:"package_name"`
-	PackageVersion string    `json:"package_version"`
-	Maintainer     string    `json:"maintainer"`
-	Component      string    `json:"component"`
-	IsExperimental bool      `json:"is_experimental"`
-	SubmittedAt    time.Time `json:"submitted_at"`
-	State          string    `json:"state"`          // PENDING, STARTED, SUCCESS, FAILURE
-	CurrentStage   string    `json:"current_stage"`  // build, repo, completed
-	BuildState     string    `json:"build_state"`    // State of build task
-	RepoState      string    `json:"repo_state"`     // State of repo task
-	PackageURL     string    `json:"package_url"`    // Git repository URL for package
-	SourceURL      string    `json:"source_url"`     // Git repository URL for source
-	PackageBranch  string    `json:"package_branch"` // Branch name for package
-	SourceBranch   string    `json:"source_branch"`  // Branch name for source
-}
+// JobInfo is an alias to storage.JobInfo for backward compatibility
+type JobInfo = storage.JobInfo
 
-// RecordJob stores job metadata in Redis
+// RecordJob stores job metadata in SQLite
 func (r *Registry) RecordJob(job JobInfo) error {
-	jobKey := jobKeyPrefix + job.TaskUUID
-
-	// Serialize to JSON
-	data, err := json.Marshal(job)
-	if err != nil {
-		return fmt.Errorf("failed to marshal job info: %w", err)
+	if r.jobStore == nil {
+		return fmt.Errorf("job store not initialized")
 	}
-
-	// Use pipeline for atomic operations
-	pipe := r.client.Pipeline()
-
-	// Store job data persistently (no expiry)
-	pipe.Set(r.ctx, jobKey, data, 0)
-
-	// Add to sorted set (score = unix timestamp for chronological ordering)
-	score := float64(job.SubmittedAt.Unix())
-	pipe.ZAdd(r.ctx, jobsIndexKey, &redis.Z{
-		Score:  score,
-		Member: job.TaskUUID,
-	})
-
-	// Keep only the latest N jobs in the index
-	pipe.ZRemRangeByRank(r.ctx, jobsIndexKey, 0, -maxJobsInIndex-1)
-
-	_, err = pipe.Exec(r.ctx)
-	if err != nil {
-		return fmt.Errorf("failed to record job: %w", err)
-	}
-
-	return nil
+	return r.jobStore.RecordJob(job)
 }
 
-// GetRecentJobs retrieves the N most recent jobs
+// GetRecentJobs retrieves the N most recent jobs from SQLite
 func (r *Registry) GetRecentJobs(limit int) ([]*JobInfo, error) {
-	if limit <= 0 {
-		limit = 10
+	if r.jobStore == nil {
+		return nil, fmt.Errorf("job store not initialized")
 	}
-
-	// Get job IDs with scores from sorted set (most recent first)
-	jobIDsWithScores, err := r.client.ZRevRangeWithScores(r.ctx, jobsIndexKey, 0, int64(limit-1)).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list jobs: %w", err)
-	}
-
-	jobs := make([]*JobInfo, 0, len(jobIDsWithScores))
-	for _, z := range jobIDsWithScores {
-		id := z.Member.(string)
-		job, err := r.GetJob(id)
-		if err != nil {
-			// Job data might have expired, create a placeholder with UNKNOWN state
-			// Use the score (unix timestamp) to reconstruct SubmittedAt
-			submittedAt := time.Unix(int64(z.Score), 0)
-			job = &JobInfo{
-				TaskUUID:    id,
-				SubmittedAt: submittedAt,
-				State:       "UNKNOWN",
-			}
-		}
-		jobs = append(jobs, job)
-	}
-
-	return jobs, nil
+	return r.jobStore.GetRecentJobs(limit)
 }
 
-// GetJob retrieves a job by UUID
+// GetJob retrieves a job by UUID from SQLite
 func (r *Registry) GetJob(taskUUID string) (*JobInfo, error) {
-	jobKey := jobKeyPrefix + taskUUID
-
-	data, err := r.client.Get(r.ctx, jobKey).Result()
-	if err == redis.Nil {
-		return nil, fmt.Errorf("job not found: %s", taskUUID)
+	if r.jobStore == nil {
+		return nil, fmt.Errorf("job store not initialized")
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get job: %w", err)
-	}
-
-	var job JobInfo
-	if err := json.Unmarshal([]byte(data), &job); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal job info: %w", err)
-	}
-
-	return &job, nil
+	return r.jobStore.GetJob(taskUUID)
 }
 
-// UpdateJobState updates the state of a job
+// UpdateJobState updates the state of a job in SQLite
 func (r *Registry) UpdateJobState(taskUUID string, state string) error {
-	jobKey := jobKeyPrefix + taskUUID
-
-	// Get existing job
-	data, err := r.client.Get(r.ctx, jobKey).Result()
-	if err == redis.Nil {
-		// Job not found, might be too old
-		return nil
+	if r.jobStore == nil {
+		return fmt.Errorf("job store not initialized")
 	}
-	if err != nil {
-		return fmt.Errorf("failed to get job: %w", err)
+	return r.jobStore.UpdateJobState(taskUUID, state)
+}
+
+// UpdateJobStages updates the build and repo states of a job in SQLite
+func (r *Registry) UpdateJobStages(taskUUID, buildState, repoState, currentStage string) error {
+	if r.jobStore == nil {
+		return fmt.Errorf("job store not initialized")
 	}
-
-	var job JobInfo
-	if err := json.Unmarshal([]byte(data), &job); err != nil {
-		return err
-	}
-
-	// Update state
-	job.State = state
-
-	// Store updated job
-	updatedData, err := json.Marshal(job)
-	if err != nil {
-		return err
-	}
-
-	// Store persistently (no expiry)
-	return r.client.Set(r.ctx, jobKey, updatedData, 0).Err()
+	return r.jobStore.UpdateJobStages(taskUUID, buildState, repoState, currentStage)
 }
 
 // GetJobStagesFromMachinery queries both build and repo task states using machinery backend
@@ -208,98 +105,31 @@ func GetJobStagesFromMachinery(backend iface.Backend, taskUUID string) (buildSta
 	return buildState, repoState, currentStage
 }
 
-// ISOJobInfo contains metadata about an ISO build job
-type ISOJobInfo struct {
-	TaskUUID    string    `json:"task_uuid"`
-	RepoURL     string    `json:"repo_url"`
-	Branch      string    `json:"branch"`
-	SubmittedAt time.Time `json:"submitted_at"`
-	State       string    `json:"state"` // PENDING, STARTED, SUCCESS, FAILURE
-}
+// ISOJobInfo is an alias to storage.ISOJobInfo for backward compatibility
+type ISOJobInfo = storage.ISOJobInfo
 
-// RecordISOJob stores ISO job metadata in Redis
+// RecordISOJob stores ISO job metadata in SQLite
 func (r *Registry) RecordISOJob(job ISOJobInfo) error {
-	jobKey := isoJobKeyPrefix + job.TaskUUID
-
-	// Serialize to JSON
-	data, err := json.Marshal(job)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ISO job info: %w", err)
+	if r.isoJobStore == nil {
+		return fmt.Errorf("ISO job store not initialized")
 	}
-
-	// Use pipeline for atomic operations
-	pipe := r.client.Pipeline()
-
-	// Store job data persistently (no expiry)
-	pipe.Set(r.ctx, jobKey, data, 0)
-
-	// Add to sorted set (score = unix timestamp for chronological ordering)
-	score := float64(job.SubmittedAt.Unix())
-	pipe.ZAdd(r.ctx, isoJobsIndexKey, &redis.Z{
-		Score:  score,
-		Member: job.TaskUUID,
-	})
-
-	// Keep only the latest N jobs in the index
-	pipe.ZRemRangeByRank(r.ctx, isoJobsIndexKey, 0, -maxISOJobsInIndex-1)
-
-	_, err = pipe.Exec(r.ctx)
-	if err != nil {
-		return fmt.Errorf("failed to record ISO job: %w", err)
-	}
-
-	return nil
+	return r.isoJobStore.RecordISOJob(job)
 }
 
-// GetRecentISOJobs retrieves the N most recent ISO jobs
+// GetRecentISOJobs retrieves the N most recent ISO jobs from SQLite
 func (r *Registry) GetRecentISOJobs(limit int) ([]*ISOJobInfo, error) {
-	if limit <= 0 {
-		limit = 10
+	if r.isoJobStore == nil {
+		return nil, fmt.Errorf("ISO job store not initialized")
 	}
-
-	// Get job IDs with scores from sorted set (most recent first)
-	jobIDsWithScores, err := r.client.ZRevRangeWithScores(r.ctx, isoJobsIndexKey, 0, int64(limit-1)).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ISO jobs: %w", err)
-	}
-
-	jobs := make([]*ISOJobInfo, 0, len(jobIDsWithScores))
-	for _, z := range jobIDsWithScores {
-		id := z.Member.(string)
-		job, err := r.GetISOJob(id)
-		if err != nil {
-			// Job data might have expired, create a placeholder with UNKNOWN state
-			submittedAt := time.Unix(int64(z.Score), 0)
-			job = &ISOJobInfo{
-				TaskUUID:    id,
-				SubmittedAt: submittedAt,
-				State:       "UNKNOWN",
-			}
-		}
-		jobs = append(jobs, job)
-	}
-
-	return jobs, nil
+	return r.isoJobStore.GetRecentISOJobs(limit)
 }
 
-// GetISOJob retrieves an ISO job by UUID
+// GetISOJob retrieves an ISO job by UUID from SQLite
 func (r *Registry) GetISOJob(taskUUID string) (*ISOJobInfo, error) {
-	jobKey := isoJobKeyPrefix + taskUUID
-
-	data, err := r.client.Get(r.ctx, jobKey).Result()
-	if err == redis.Nil {
-		return nil, fmt.Errorf("ISO job not found: %s", taskUUID)
+	if r.isoJobStore == nil {
+		return nil, fmt.Errorf("ISO job store not initialized")
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ISO job: %w", err)
-	}
-
-	var job ISOJobInfo
-	if err := json.Unmarshal([]byte(data), &job); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ISO job info: %w", err)
-	}
-
-	return &job, nil
+	return r.isoJobStore.GetISOJob(taskUUID)
 }
 
 // GetISOJobStateFromMachinery queries ISO task state using machinery backend
