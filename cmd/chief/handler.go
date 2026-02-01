@@ -7,13 +7,14 @@ import (
 	"net/http"
 
 	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 func writeUsecaseError(w http.ResponseWriter, err error) {
 	if err == nil {
 		return
 	}
-	if useErr, ok := err.(chiefusecase.UsecaseError); ok {
+	if useErr, ok := err.(httputil.HTTPError); ok {
 		w.WriteHeader(useErr.Code)
 		if useErr.Message != "" {
 			fmt.Fprintf(w, useErr.Message)

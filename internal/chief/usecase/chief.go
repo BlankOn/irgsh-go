@@ -17,29 +17,30 @@ import (
 	"github.com/RichardKnop/machinery/v1/tasks"
 	"github.com/google/uuid"
 
-	chiefrepo "github.com/blankon/irgsh-go/internal/chief/repo"
+	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
-type Service struct {
+type ChiefUsecase struct {
 	Config             config.IrgshConfig
 	Server             *machinery.Server
 	MonitoringRegistry *monitoring.Registry
-	Storage            *chiefrepo.Storage
-	GPG                *chiefrepo.GPG
+	Storage            *chiefrepository.Storage
+	GPG                *chiefrepository.GPG
 	Version            string
 }
 
-func NewService(
+func NewChiefUsecase(
 	cfg config.IrgshConfig,
 	server *machinery.Server,
 	registry *monitoring.Registry,
-	storage *chiefrepo.Storage,
-	gpg *chiefrepo.GPG,
+	storage *chiefrepository.Storage,
+	gpg *chiefrepository.GPG,
 	version string,
-) *Service {
-	return &Service{
+) *ChiefUsecase {
+	return &ChiefUsecase{
 		Config:             cfg,
 		Server:             server,
 		MonitoringRegistry: registry,
@@ -49,11 +50,7 @@ func NewService(
 	}
 }
 
-func newUsecaseError(code int, message string) error {
-	return UsecaseError{Code: code, Message: message}
-}
-
-func (s *Service) GetMaintainers() []Maintainer {
+func (s *ChiefUsecase) GetMaintainers() []Maintainer {
 	output, err := s.GPG.ListKeysWithColons()
 	if err != nil {
 		log.Printf("Failed to list GPG keys: %v\n", err)
@@ -119,7 +116,7 @@ func parseGPGKeys(output string) []Maintainer {
 	return maintainers
 }
 
-func (s *Service) RenderIndexHTML() (string, error) {
+func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 	html := `<!DOCTYPE html>
 <html>
 <head>
@@ -563,43 +560,43 @@ func (s *Service) RenderIndexHTML() (string, error) {
 	return html, nil
 }
 
-func (s *Service) SubmitPackage(submission Submission) (SubmitPayloadResponse, error) {
+func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadResponse, error) {
 	submission.Timestamp = time.Now()
 	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + submission.MaintainerFingerprint + "_" + submission.PackageName
 
 	if err := s.Storage.EnsureDir(filepath.Join(s.Storage.SubmissionsDir(), submission.TaskUUID)); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, "500")
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	src := filepath.Join(s.Storage.SubmissionsDir(), submission.Tarball+".tar.gz")
 	path := s.Storage.SubmissionTarballPath(submission.TaskUUID)
 	if err := s.Storage.MoveFile(src, path); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, "500")
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if err := s.Storage.ExtractSubmission(submission.TaskUUID); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, "500")
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	src = filepath.Join(s.Storage.SubmissionsDir(), submission.Tarball+".token")
 	path = s.Storage.SubmissionSignaturePath(submission.TaskUUID)
 	if err := s.Storage.MoveFile(src, path); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, "500")
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if err := s.GPG.VerifySignedSubmission(s.Storage.SubmissionDirPath(submission.TaskUUID)); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusUnauthorized, "401 Unauthorized")
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusUnauthorized, "401 Unauthorized")
 	}
 
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
 		fmt.Println(err.Error())
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusBadRequest, "400")
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
 	buildSignature := tasks.Signature{
@@ -647,7 +644,7 @@ func (s *Service) SubmitPackage(submission Submission) (SubmitPayloadResponse, e
 	return SubmitPayloadResponse{PipelineId: submission.TaskUUID}, nil
 }
 
-func (s *Service) BuildStatus(UUID string) (string, error) {
+func (s *ChiefUsecase) BuildStatus(UUID string) (string, error) {
 	buildSignature := tasks.Signature{
 		Name: "build",
 		UUID: UUID,
@@ -686,14 +683,14 @@ func (s *Service) BuildStatus(UUID string) (string, error) {
 	return pipelineState, nil
 }
 
-func (s *Service) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, error) {
+func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, error) {
 	if !s.Config.Monitoring.Enabled || s.MonitoringRegistry == nil {
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusServiceUnavailable, `{"error": "monitoring is not enabled, retry requires job tracking"}`)
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusServiceUnavailable, `{"error": "monitoring is not enabled, retry requires job tracking"}`)
 	}
 
 	job, err := s.MonitoringRegistry.GetJob(oldTaskUUID)
 	if err != nil {
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusNotFound, fmt.Sprintf(`{"error": "job not found: %s"}`, oldTaskUUID))
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, fmt.Sprintf(`{"error": "job not found: %s"}`, oldTaskUUID))
 	}
 
 	parts := strings.Split(oldTaskUUID, "_")
@@ -715,18 +712,18 @@ func (s *Service) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, erro
 
 	if _, err := os.Stat(oldTarball); os.IsNotExist(err) {
 		log.Printf("Original submission tarball not found: %s\n", oldTarball)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusNotFound, `{"error": "original submission tarball not found, cannot retry"}`)
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "original submission tarball not found, cannot retry"}`)
 	}
 
 	if err := s.Storage.CopyFileWithSudo(oldTarball, newTarball); err != nil {
 		log.Printf("Failed to copy submission tarball: %v\n", err)
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to copy submission files for retry: %s"}`, err.Error()))
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to copy submission files for retry: %s"}`, err.Error()))
 	}
 
 	if _, err := os.Stat(oldDir); err == nil {
 		if err := s.Storage.CopyDirWithSudo(oldDir, newDir); err != nil {
 			log.Printf("Failed to copy submission directory: %v\n", err)
-			return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to copy submission directory for retry: %s"}`, err.Error()))
+			return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to copy submission directory for retry: %s"}`, err.Error()))
 		}
 	}
 
@@ -758,7 +755,7 @@ func (s *Service) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, erro
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
 		log.Println(err.Error())
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
 	}
 
 	buildSignature := tasks.Signature{
@@ -781,7 +778,7 @@ func (s *Service) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, erro
 	_, err = s.Server.SendChain(chain)
 	if err != nil {
 		log.Println("Could not send chain : " + err.Error())
-		return SubmitPayloadResponse{}, newUsecaseError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to queue retry task: %s"}`, err.Error()))
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to queue retry task: %s"}`, err.Error()))
 	}
 
 	newJob := monitoring.JobInfo{
@@ -807,11 +804,11 @@ func (s *Service) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, erro
 	return SubmitPayloadResponse{PipelineId: newTaskUUID}, nil
 }
 
-func (s *Service) UploadArtifact(id string, file io.Reader) error {
+func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
 	targetPath := s.Storage.ArtifactsDir()
 	if err := s.Storage.EnsureDir(targetPath); err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	fileName := id + ".tar.gz"
@@ -820,7 +817,7 @@ func (s *Service) UploadArtifact(id string, file io.Reader) error {
 	newFile, err := os.Create(newPath)
 	if err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 	defer newFile.Close()
 
@@ -829,7 +826,7 @@ func (s *Service) UploadArtifact(id string, file io.Reader) error {
 	if err != nil && err != io.EOF {
 		log.Println(err.Error())
 		os.Remove(newPath)
-		return newUsecaseError(http.StatusBadRequest, "")
+		return httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 	header = header[:n]
 
@@ -839,33 +836,33 @@ func (s *Service) UploadArtifact(id string, file io.Reader) error {
 	default:
 		log.Println("File upload rejected: should be a compressed tar.gz file.")
 		os.Remove(newPath)
-		return newUsecaseError(http.StatusBadRequest, "")
+		return httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
 	if _, err := newFile.Write(header); err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if _, err := io.Copy(newFile, file); err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	return nil
 }
 
-func (s *Service) UploadLog(id string, logType string, file io.Reader) error {
+func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) error {
 	targetPath := s.Storage.LogsDir()
 	if err := s.Storage.EnsureDir(targetPath); err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	fileBytes, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusBadRequest, "")
+		return httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
 	filetype := strings.Split(http.DetectContentType(fileBytes), ";")[0]
@@ -883,23 +880,23 @@ func (s *Service) UploadLog(id string, logType string, file io.Reader) error {
 	newFile, err := os.Create(newPath)
 	if err != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 	defer newFile.Close()
 
 	if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
 		log.Println(err.Error())
-		return newUsecaseError(http.StatusInternalServerError, "")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if invalidType {
-		return newUsecaseError(http.StatusBadRequest, "")
+		return httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
 	return nil
 }
 
-func (s *Service) BuildISO() error {
+func (s *ChiefUsecase) BuildISO() error {
 	signature := tasks.Signature{
 		Name: "iso",
 		UUID: uuid.New().String(),
@@ -911,34 +908,34 @@ func (s *Service) BuildISO() error {
 		},
 	}
 	if _, err := s.Server.SendTask(&signature); err != nil {
-		return newUsecaseError(http.StatusInternalServerError, "500")
+		return httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 	return nil
 }
 
-func (s *Service) UploadSubmission(r *http.Request) (string, error) {
+func (s *ChiefUsecase) UploadSubmission(r *http.Request) (string, error) {
 	targetPath := s.Storage.SubmissionsDir()
 	if err := s.Storage.EnsureDir(targetPath); err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusInternalServerError, "")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if err := r.ParseMultipartForm(512 << 20); err != nil {
 		log.Printf("ParseMultipartForm error: %v", err)
-		return "", newUsecaseError(http.StatusBadRequest, "")
+		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
 	file, _, err := r.FormFile("token")
 	if err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusBadRequest, "")
+		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 	defer file.Close()
 
 	fileBytes, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusBadRequest, "")
+		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
 	id := uuid.New().String()
@@ -947,23 +944,23 @@ func (s *Service) UploadSubmission(r *http.Request) (string, error) {
 	newFile, err := os.Create(newPath)
 	if err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusInternalServerError, "")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 	defer newFile.Close()
 	if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusInternalServerError, "")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if err := s.GPG.VerifyFile(newPath); err != nil {
 		log.Println(err)
-		return "", newUsecaseError(http.StatusUnauthorized, "401 Unauthorized")
+		return "", httputil.NewHTTPError(http.StatusUnauthorized, "401 Unauthorized")
 	}
 
 	file, _, err = r.FormFile("blob")
 	if err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusBadRequest, "")
+		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 	defer file.Close()
 
@@ -972,7 +969,7 @@ func (s *Service) UploadSubmission(r *http.Request) (string, error) {
 	newFile, err = os.Create(newPath)
 	if err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusInternalServerError, "")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 	defer newFile.Close()
 
@@ -980,7 +977,7 @@ func (s *Service) UploadSubmission(r *http.Request) (string, error) {
 	n, err := file.Read(header)
 	if err != nil && err != io.EOF {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusBadRequest, "")
+		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 	header = header[:n]
 
@@ -989,27 +986,27 @@ func (s *Service) UploadSubmission(r *http.Request) (string, error) {
 	if !strings.Contains(filetype, "gzip") {
 		log.Println("File upload rejected: should be a tar.gz file.")
 		os.Remove(newPath)
-		return "", newUsecaseError(http.StatusBadRequest, "")
+		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
 	if _, err := newFile.Write(header); err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusInternalServerError, "")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if _, err := io.Copy(newFile, file); err != nil {
 		log.Println(err.Error())
-		return "", newUsecaseError(http.StatusInternalServerError, "")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	return id, nil
 }
 
-func (s *Service) ListMaintainersRaw() (string, error) {
+func (s *ChiefUsecase) ListMaintainersRaw() (string, error) {
 	output, err := s.GPG.ListKeys()
 	if err != nil {
 		log.Println(err)
-		return "", newUsecaseError(http.StatusInternalServerError, "500")
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 	return output, nil
 }

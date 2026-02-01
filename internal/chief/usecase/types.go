@@ -30,12 +30,3 @@ type SubmitPayloadResponse struct {
 	PipelineId string   `json:"pipelineId"`
 	Jobs       []string `json:"jobs,omitempty"`
 }
-
-type UsecaseError struct {
-	Code    int
-	Message string
-}
-
-func (e UsecaseError) Error() string {
-	return e.Message
-}

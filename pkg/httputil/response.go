@@ -11,7 +11,7 @@ type StandardError struct {
 	Message string `json:"message"`
 }
 
-//ResponseJSON response http request with application/json
+// ResponseJSON response http request with application/json
 func ResponseJSON(data interface{}, status int, writer http.ResponseWriter) (err error) {
 	writer.Header().Set("Content-type", "application/json")
 	writer.WriteHeader(status)
@@ -30,4 +30,17 @@ func ResponseJSON(data interface{}, status int, writer http.ResponseWriter) (err
 // ResponseError response http request with standard error
 func ResponseError(message string, status int, writer http.ResponseWriter) (err error) {
 	return ResponseJSON(StandardError{Message: message}, status, writer)
+}
+
+type HTTPError struct {
+	Code    int
+	Message string
+}
+
+func (e HTTPError) Error() string {
+	return e.Message
+}
+
+func NewHTTPError(code int, message string) error {
+	return HTTPError{Code: code, Message: message}
 }

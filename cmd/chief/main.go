@@ -14,7 +14,7 @@ import (
 	artifactEndpoint "github.com/blankon/irgsh-go/internal/artifact/endpoint"
 	artifactRepo "github.com/blankon/irgsh-go/internal/artifact/repo"
 	artifactService "github.com/blankon/irgsh-go/internal/artifact/service"
-	chiefrepo "github.com/blankon/irgsh-go/internal/chief/repo"
+	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/monitoring"
@@ -30,9 +30,9 @@ var (
 	artifactHTTPEndpoint *artifactEndpoint.ArtifactHTTPEndpoint
 	monitoringRegistry   *monitoring.Registry
 
-	chiefService *chiefusecase.Service
-	chiefStorage *chiefrepo.Storage
-	chiefGPG     *chiefrepo.GPG
+	chiefService *chiefusecase.ChiefUsecase
+	chiefStorage *chiefrepository.Storage
+	chiefGPG     *chiefrepository.GPG
 )
 
 func main() {
@@ -66,8 +66,8 @@ func main() {
 		}
 	}
 
-	chiefStorage = chiefrepo.NewStorage(irgshConfig.Chief.Workdir)
-	chiefGPG = chiefrepo.NewGPG(irgshConfig.Chief.GnupgDir, irgshConfig.IsDev)
+	chiefStorage = chiefrepository.NewStorage(irgshConfig.Chief.Workdir)
+	chiefGPG = chiefrepository.NewGPG(irgshConfig.Chief.GnupgDir, irgshConfig.IsDev)
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -88,7 +88,7 @@ func main() {
 			fmt.Println("Could not create server : " + err.Error())
 		}
 
-		chiefService = chiefusecase.NewService(
+		chiefService = chiefusecase.NewChiefUsecase(
 			irgshConfig,
 			server,
 			monitoringRegistry,
