@@ -1,3 +1,12 @@
+irgsh (1.3.13-1) unstable; urgency=medium
+
+  * Show build and repo state columns in dashboard
+  * Fix build/repo task UUID collision in machinery
+  * Append /tree/branch to git repository links
+  * Add status filter dropdown for packaging jobs table
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 12 Feb 2026 12:00:00 +0700
+
 irgsh (1.3.12-1) unstable; urgency=medium
 
   * Fix force-version to also remove binary packages before re-injecting

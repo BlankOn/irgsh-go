@@ -45,7 +45,8 @@ The system follows a microservices architecture with Redis as the central messag
 ├── config/       # Configuration management and validation
 ├── monitoring/   # Worker health tracking, metrics, job history
 ├── notification/ # Webhook notifications for job events
-└── artifact/     # Artifact storage (repo/service/endpoint pattern)
+├── artifact/     # Artifact storage (repo/service/endpoint pattern)
+└── storage/      # SQLite database for persistent job data
 
 /pkg/
 ├── httputil/   # JSON response helpers
@@ -87,6 +88,7 @@ Configuration file: `/etc/irgsh/config.yaml` (or `./utils/config.yaml` for devel
 
 Key sections:
 - `redis`: Connection string for Redis broker
+- `storage`: SQLite database path for persistent job data
 - `monitoring`: Worker heartbeat and cleanup settings
 - `notification`: Webhook URL for job notifications
 - `chief/builder/repo/iso`: Component-specific settings
@@ -181,3 +183,4 @@ Key libraries:
 3. **GPG keys**: Chief and Repo require GPG keys for signing
 4. **Redis required**: All components depend on Redis being available
 5. **irgsh-repo isolation**: Each instance needs its own config for multi-arch support
+6. **SQLite storage**: Chief uses SQLite at `/var/lib/irgsh/chief/irgsh.db` (or `./tmp/irgsh/chief/irgsh.db` in DEV mode) for persistent job data
