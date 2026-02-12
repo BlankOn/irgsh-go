@@ -1063,65 +1063,61 @@ func main() {
 
 		{
 			Name:  "package",
-			Usage: "Package build commands (submit, status, log)",
+			Usage: "Submit a package build job, or use subcommands (status, log)",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:        "source",
+					Value:       "",
+					Destination: &sourceUrl,
+					Usage:       "Source URL",
+				},
+				cli.StringFlag{
+					Name:        "package",
+					Value:       "",
+					Destination: &packageUrl,
+					Usage:       "Package URL",
+				},
+				cli.StringFlag{
+					Name:        "component",
+					Value:       "",
+					Destination: &component,
+					Usage:       "Repository component",
+				},
+				cli.StringFlag{
+					Name:        "package-branch",
+					Value:       "",
+					Destination: &packageBranch,
+					Usage:       "package git branch",
+				},
+				cli.StringFlag{
+					Name:        "source-branch",
+					Value:       "",
+					Destination: &sourceBranch,
+					Usage:       "source git branch",
+				},
+				cli.BoolFlag{
+					Name:  "experimental",
+					Usage: "Enable experimental flag",
+				},
+				cli.BoolFlag{
+					Name:  "ignore-checks",
+					Usage: "Ignore all validation check and restriction",
+				},
+				cli.BoolFlag{
+					Name:  "force-version",
+					Usage: "Force overwrite existing package version in repository",
+				},
+			},
+			Action: packageSubmitAction,
 			Subcommands: []cli.Command{
 				{
-					Name:  "submit",
-					Usage: "Submit a package build job",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:        "source",
-							Value:       "",
-							Destination: &sourceUrl,
-							Usage:       "Source URL",
-						},
-						cli.StringFlag{
-							Name:        "package",
-							Value:       "",
-							Destination: &packageUrl,
-							Usage:       "Package URL",
-						},
-						cli.StringFlag{
-							Name:        "component",
-							Value:       "",
-							Destination: &component,
-							Usage:       "Repository component",
-						},
-						cli.StringFlag{
-							Name:        "package-branch",
-							Value:       "",
-							Destination: &packageBranch,
-							Usage:       "package git branch",
-						},
-						cli.StringFlag{
-							Name:        "source-branch",
-							Value:       "",
-							Destination: &sourceBranch,
-							Usage:       "source git branch",
-						},
-						cli.BoolFlag{
-							Name:  "experimental",
-							Usage: "Enable experimental flag",
-						},
-						cli.BoolFlag{
-							Name:  "ignore-checks",
-							Usage: "Ignore all validation check and restriction",
-						},
-						cli.BoolFlag{
-							Name:  "force-version",
-							Usage: "Force overwrite existing package version in repository",
-						},
-					},
-					Action: packageSubmitAction,
-				},
-				{
-					Name:  "status",
-					Usage: "Check status of a package build pipeline",
+					Name:   "status",
+					Usage:  "Check status of a package build pipeline",
 					Action: packageStatusAction,
 				},
 				{
-					Name:  "log",
-					Usage: "Read the logs of a package build pipeline",
+					Name:   "log",
+					Usage:  "Read the logs of a package build pipeline",
 					Action: packageLogAction,
 				},
 			},

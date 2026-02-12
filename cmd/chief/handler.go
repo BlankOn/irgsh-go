@@ -239,6 +239,14 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
             text-align: center;
             color: #999;
         }
+        @keyframes spin-gear {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning-gear {
+            vertical-align: middle;
+            animation: spin-gear 2s linear infinite;
+        }
     </style>
 </head>
 <body>
@@ -423,7 +431,17 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		} else if len(jobs) > 0 {
 			html += `<div class="section-title">Recent Packaging Jobs</div>`
 			html += `
-			<table>
+			<div style="margin-bottom: 10px;">
+				<label for="statusFilter" style="margin-right: 5px;">Filter by status:</label>
+				<select id="statusFilter" onchange="filterJobsByStatus(this.value)" style="padding: 4px 8px; font-size: 0.95em;">
+					<option value="all">All</option>
+					<option value="DONE">DONE</option>
+					<option value="FAILED">FAILED</option>
+					<option value="PENDING">PENDING</option>
+					<option value="UNKNOWN">UNKNOWN</option>
+				</select>
+			</div>
+			<table id="packagingJobsTable">
 				<thead>
 					<tr>
 						<th>Timestamp</th>
@@ -431,8 +449,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 						<th>Version</th>
 						<th>Maintainer</th>
 						<th>Component</th>
+						<th>Build</th>
+						<th>Repo</th>
 						<th>Status</th>
-						<th>Logs</th>
 						<th>UUID</th>
 					</tr>
 				</thead>
@@ -468,9 +487,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				} else if buildState == "SUCCESS" && repoState == "FAILURE" {
 					overallState = "FAILED"
 				} else if buildState == "SUCCESS" && (repoState == "PENDING" || repoState == "RECEIVED" || repoState == "STARTED") {
-					overallState = "REPO"
+					overallState = "PENDING"
 				} else if buildState != "" {
-					overallState = buildState
+					overallState = "PENDING"
 				} else {
 					overallState = "PENDING"
 				}
@@ -478,11 +497,26 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				job.State = overallState
 			}
 
+			// Helper to map a stage state to a CSS class
+			stageClass := func(state string) string {
+				switch state {
+				case "SUCCESS":
+					return "status-online"
+				case "FAILURE":
+					return "status-offline"
+				case "STARTED", "RECEIVED":
+					return "status-warning"
+				default:
+					return ""
+				}
+			}
+
 			// Render all jobs (including UNKNOWN ones)
 			for _, job := range jobs {
 				// Determine status color and text
 				statusClass := ""
 				statusText := job.State
+				filterStatus := job.State
 				switch job.State {
 				case "DONE":
 					statusClass = "status-online"
@@ -494,26 +528,21 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					} else if job.RepoState == "FAILURE" {
 						statusText = "FAILED (repo)"
 					}
-				case "REPO":
-					statusClass = "status-warning"
-					statusText = "REPO"
-				case "STARTED":
-					statusClass = "status-warning"
-					// Show which stage is running
-					statusText = "STARTED (" + job.CurrentStage + ")"
 				case "PENDING":
 					// Check if PENDING for more than 24 hours
 					if time.Since(job.SubmittedAt) > 24*time.Hour {
 						statusClass = "status-offline"
 						statusText = "STALLED"
+						filterStatus = "PENDING"
 					} else {
-						statusText = "PENDING"
+						statusText = `<svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
 					}
 				case "UNKNOWN":
 					statusClass = "status-offline"
 					statusText = "UNKNOWN"
 				default:
-					statusText = "PENDING"
+					statusText = `<svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
+					filterStatus = "PENDING"
 				}
 
 				// Format timestamp in Asia/Jakarta timezone with relative time
@@ -536,43 +565,57 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					if branchText == "" {
 						branchText = "default"
 					}
-					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, job.SourceURL, branchText))
+					linkURL := job.SourceURL + "/tree/" + branchText
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, linkURL, branchText))
 				}
 				if job.PackageURL != "" {
 					branchText := job.PackageBranch
 					if branchText == "" {
 						branchText = "default"
 					}
-					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, job.PackageURL, branchText))
+					linkURL := job.PackageURL + "/tree/" + branchText
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, linkURL, branchText))
 				}
 				if len(repoLinks) > 0 {
 					packageCell += fmt.Sprintf(`<br><span style="font-size: 0.85em; color: #666;">%s</span>`,
 						strings.Join(repoLinks, ", "))
 				}
 
+				buildStateText := job.BuildState
+				if buildStateText == "" {
+					buildStateText = "-"
+				}
+				repoStateText := job.RepoState
+				if repoStateText == "" {
+					repoStateText = "-"
+				}
+
 				html += fmt.Sprintf(`
-					<tr>
+					<tr data-status="%s">
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
+						<td><span class="%s">%s</span><br><a href="/logs/%s.build.log" target="_blank" style="font-size:0.85em;">log</a></td>
+						<td><span class="%s">%s</span><br><a href="/logs/%s.repo.log" target="_blank" style="font-size:0.85em;">log</a></td>
 						<td><span class="%s">%s</span></td>
-						<td>
-							<a href="/logs/%s.build.log" target="_blank">build.log</a> |
-							<a href="/logs/%s.repo.log" target="_blank">repo.log</a>
-						</td>
 						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
 					</tr>`,
+					filterStatus,
 					timeStr,
 					packageCell,
 					job.PackageVersion,
 					job.Maintainer,
 					job.Component,
+					stageClass(job.BuildState),
+					buildStateText,
+					job.TaskUUID,
+					stageClass(job.RepoState),
+					repoStateText,
+					job.TaskUUID,
 					statusClass,
 					statusText,
-					job.TaskUUID,
-					job.TaskUUID,
 					job.TaskUUID,
 				)
 			}
@@ -684,6 +727,20 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
     <div class="refresh-info">
         Page auto-refreshes every 10 seconds
     </div>
+<script>
+function filterJobsByStatus(status) {
+    var table = document.getElementById('packagingJobsTable');
+    if (!table) return;
+    var rows = table.querySelectorAll('tbody tr');
+    for (var i = 0; i < rows.length; i++) {
+        if (status === 'all' || rows[i].getAttribute('data-status') === status) {
+            rows[i].style.display = '';
+        } else {
+            rows[i].style.display = 'none';
+        }
+    }
+}
+</script>
 </body>
 </html>
 `
@@ -783,7 +840,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 
 	repoSignature := tasks.Signature{
 		Name: "repo",
-		UUID: submission.TaskUUID,
+		UUID: submission.TaskUUID + "_repo",
 	}
 
 	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
@@ -1008,7 +1065,7 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 
 	repoSignature := tasks.Signature{
 		Name: "repo",
-		UUID: submission.TaskUUID,
+		UUID: submission.TaskUUID + "_repo",
 	}
 
 	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)

@@ -19,6 +19,7 @@ type IrgshConfig struct {
 	Repo         RepoConfig         `json:"repo"`
 	Monitoring   MonitoringConfig   `json:"monitoring"`
 	Notification NotificationConfig `json:"notification"`
+	Storage      StorageConfig      `json:"storage"`
 	IsTest       bool               `json:"is_test"`
 	IsDev        bool               `json:"is_dev"`
 }
@@ -36,25 +37,25 @@ type BuilderConfig struct {
 }
 
 type ISOConfig struct {
-	Workdir   string `json:"workdir" validate:"required"`
-	Outputdir string `json:"outputdir" validate:"required"`
+	Workdir   string `json:"workdir"`
+	Outputdir string `json:"outputdir"`
 }
 
 type RepoConfig struct {
-	Workdir                    string `json:"workdir" validate:"required"`
-	DistName                   string `json:"dist_name" validate:"required"`                    // BlankOn
-	DistLabel                  string `json:"dist_label" validate:"required"`                   // BlankOn
-	DistCodename               string `json:"dist_codename" validate:"required"`                // verbeek
-	DistComponents             string `json:"dist_components" validate:"required"`              // main restricted extras extras-restricted
-	DistSupportedArchitectures string `json:"dist_supported_architectures" validate:"required"` // amd64 source
-	DistVersion                string `json:"dist_version" validate:"required"`                 // 12.0
-	DistVersionDesc            string `json:"dist_version_desc" validate:"required"`            // BlankOn Linux 12.0 Verbeek
-	DistSigningKey             string `json:"dist_signing_key" validate:"required"`             // 55BD65A0B3DA3A59ACA60932E2FE388D53B56A71
-	UpstreamName               string `json:"upstream_name" validate:"required"`                // merge.sid
-	UpstreamDistCodename       string `json:"upstream_dist_codename" validate:"required"`       // sid
-	UpstreamDistUrl            string `json:"upstream_dist_url" validate:"required"`            // http://kartolo.sby.datautama.net.id/debian
-	UpstreamDistComponents     string `json:"upstream_dist_components" validate:"required"`     // main non-free>restricted contrib>extras
-	GnupgDir                   string `json:"gnupg_dir" validate:"required"`                    // GNUPG dir path
+	Workdir                    string `json:"workdir"`
+	DistName                   string `json:"dist_name"`                    // BlankOn
+	DistLabel                  string `json:"dist_label"`                   // BlankOn
+	DistCodename               string `json:"dist_codename"`                // verbeek
+	DistComponents             string `json:"dist_components"`              // main restricted extras extras-restricted
+	DistSupportedArchitectures string `json:"dist_supported_architectures"` // amd64 source
+	DistVersion                string `json:"dist_version"`                 // 12.0
+	DistVersionDesc            string `json:"dist_version_desc"`            // BlankOn Linux 12.0 Verbeek
+	DistSigningKey             string `json:"dist_signing_key"`             // 55BD65A0B3DA3A59ACA60932E2FE388D53B56A71
+	UpstreamName               string `json:"upstream_name"`                // merge.sid
+	UpstreamDistCodename       string `json:"upstream_dist_codename"`       // sid
+	UpstreamDistUrl            string `json:"upstream_dist_url"`            // http://kartolo.sby.datautama.net.id/debian
+	UpstreamDistComponents     string `json:"upstream_dist_components"`     // main non-free>restricted contrib>extras
+	GnupgDir                   string `json:"gnupg_dir"`                    // GNUPG dir path
 }
 
 type MonitoringConfig struct {
@@ -66,6 +67,12 @@ type MonitoringConfig struct {
 
 type NotificationConfig struct {
 	WebhookURL string `json:"webhook_url"` // Webhook URL for job notifications
+}
+
+type StorageConfig struct {
+	DatabasePath string `json:"database_path"` // Path to SQLite database file (default: /var/lib/irgsh/chief/irgsh.db)
+	MaxJobs      int    `json:"max_jobs"`      // Maximum number of jobs to retain (default: 1000)
+	MaxISOJobs   int    `json:"max_iso_jobs"`  // Maximum number of ISO jobs to retain (default: 200)
 }
 
 // LoadConfigFromPath loads irgsh config from a specific file path
@@ -87,6 +94,17 @@ func LoadConfigFromPath(configPath string) (config IrgshConfig, err error) {
 	}
 
 	isDev := os.Getenv("DEV") == "1"
+	// Set storage defaults
+	if config.Storage.DatabasePath == "" {
+		config.Storage.DatabasePath = "/var/lib/irgsh/chief/irgsh.db"
+	}
+	if config.Storage.MaxJobs == 0 {
+		config.Storage.MaxJobs = 1000
+	}
+	if config.Storage.MaxISOJobs == 0 {
+		config.Storage.MaxISOJobs = 200
+	}
+
 	if isDev {
 		// Since it's in dev env, let's move some path to ./tmp
 		cwd, _ := os.Getwd()
@@ -98,6 +116,7 @@ func LoadConfigFromPath(configPath string) (config IrgshConfig, err error) {
 		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
 		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
 		config.ISO.Workdir = strings.ReplaceAll(config.ISO.Workdir, "/var/lib/", tmpDir)
+		config.Storage.DatabasePath = strings.ReplaceAll(config.Storage.DatabasePath, "/var/lib/", tmpDir)
 	}
 	config.IsDev = isDev
 
@@ -153,6 +172,17 @@ func LoadConfig() (config IrgshConfig, err error) {
 		return
 	}
 
+	// Set storage defaults
+	if config.Storage.DatabasePath == "" {
+		config.Storage.DatabasePath = "/var/lib/irgsh/chief/irgsh.db"
+	}
+	if config.Storage.MaxJobs == 0 {
+		config.Storage.MaxJobs = 1000
+	}
+	if config.Storage.MaxISOJobs == 0 {
+		config.Storage.MaxISOJobs = 200
+	}
+
 	if isDev {
 		// Since it's in dev env, let's move some path to ./tmp
 		cwd, _ := os.Getwd()
@@ -164,6 +194,7 @@ func LoadConfig() (config IrgshConfig, err error) {
 		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
 		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
 		config.ISO.Workdir = strings.ReplaceAll(config.ISO.Workdir, "/var/lib/", tmpDir)
+		config.Storage.DatabasePath = strings.ReplaceAll(config.Storage.DatabasePath, "/var/lib/", tmpDir)
 	}
 	config.IsDev = isDev
 
