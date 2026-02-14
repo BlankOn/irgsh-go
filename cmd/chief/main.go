@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -12,12 +11,13 @@ import (
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
 
-	"github.com/blankon/irgsh-go/internal/config"
-	"github.com/blankon/irgsh-go/internal/monitoring"
-
 	artifactEndpoint "github.com/blankon/irgsh-go/internal/artifact/endpoint"
 	artifactRepo "github.com/blankon/irgsh-go/internal/artifact/repo"
 	artifactService "github.com/blankon/irgsh-go/internal/artifact/service"
+	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
+	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
+	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
 var (
@@ -29,34 +29,11 @@ var (
 
 	artifactHTTPEndpoint *artifactEndpoint.ArtifactHTTPEndpoint
 	monitoringRegistry   *monitoring.Registry
+
+	chiefService *chiefusecase.ChiefUsecase
+	chiefStorage *chiefrepository.Storage
+	chiefGPG     *chiefrepository.GPG
 )
-
-type Submission struct {
-	TaskUUID               string    `json:"taskUUID"`
-	Timestamp              time.Time `json:"timestamp"`
-	PackageName            string    `json:"packageName"`
-	PackageVersion         string    `json:"packageVersion"`
-	PackageExtendedVersion string    `json:"packageExtendedVersion"`
-	PackageURL             string    `json:"packageUrl"`
-	SourceURL              string    `json:"sourceUrl"`
-	Maintainer             string    `json:"maintainer"`
-	MaintainerFingerprint  string    `json:"maintainerFingerprint"`
-	Component              string    `json:"component"`
-	IsExperimental         bool      `json:"isExperimental"`
-	ForceVersion           bool      `json:"forceVersion"`
-	Tarball                string    `json:"tarball"`
-	PackageBranch          string    `json:"packageBranch"`
-	SourceBranch           string    `json:"sourceBranch"`
-}
-
-type ArtifactsPayloadResponse struct {
-	Data []string `json:"data"`
-}
-
-type SubmitPayloadResponse struct {
-	PipelineId string   `json:"pipelineId"`
-	Jobs       []string `json:"jobs,omitempty"`
-}
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -67,7 +44,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Prepare workdir
 	err = os.MkdirAll(irgshConfig.Chief.Workdir, 0755)
 	if err != nil {
 		log.Fatalln(err)
@@ -78,7 +54,6 @@ func main() {
 		artifactService.NewArtifactService(
 			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
 
-	// Initialize monitoring registry if enabled
 	if irgshConfig.Monitoring.Enabled {
 		ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
 		monitoringRegistry, err = monitoring.NewRegistry(irgshConfig.Redis, ttl)
@@ -90,6 +65,9 @@ func main() {
 			log.Println("Monitoring registry initialized successfully")
 		}
 	}
+
+	chiefStorage = chiefrepository.NewStorage(irgshConfig.Chief.Workdir)
+	chiefGPG = chiefrepository.NewGPG(irgshConfig.Chief.GnupgDir, irgshConfig.IsDev)
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -110,16 +88,23 @@ func main() {
 			fmt.Println("Could not create server : " + err.Error())
 		}
 
+		chiefService = chiefusecase.NewChiefUsecase(
+			irgshConfig,
+			server,
+			monitoringRegistry,
+			chiefStorage,
+			chiefGPG,
+			version,
+		)
+
 		serve()
 
 		return nil
 	}
 	app.Run(os.Args)
-
 }
 
 func serve() {
-	// APIs
 	http.HandleFunc("/api/v1/artifacts", artifactHTTPEndpoint.GetArtifactListHandler)
 	http.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	http.HandleFunc("/api/v1/status", BuildStatusHandler)
@@ -130,12 +115,10 @@ func serve() {
 	http.HandleFunc("/api/v1/build-iso", BuildISOHandler)
 	http.HandleFunc("/api/v1/version", VersionHandler)
 
-	// Pages
 	http.HandleFunc("/maintainers", MaintainersHandler)
 
-	// Index handler (catch-all, must be registered last)
 	http.HandleFunc("/", indexHandler)
-	// Static file routes
+
 	artifactFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/artifacts"))
 	http.Handle("/artifacts/", http.StripPrefix("/artifacts/", artifactFs))
 	logFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/logs"))
@@ -143,7 +126,6 @@ func serve() {
 	submissionFs := http.FileServer(http.Dir(irgshConfig.Chief.Workdir + "/submissions"))
 	http.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
-	// Start monitoring cleanup job if enabled
 	if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
 		go startInstanceCleanup()
 	}
@@ -156,7 +138,6 @@ func serve() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-// startInstanceCleanup runs a background job to cleanup stale instances
 func startInstanceCleanup() {
 	interval := time.Duration(irgshConfig.Monitoring.CleanupInterval) * time.Second
 	timeout := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
@@ -171,25 +152,4 @@ func startInstanceCleanup() {
 			log.Printf("Failed to cleanup stale instances: %v\n", err)
 		}
 	}
-}
-
-func Move(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-	in.Close()
-	out.Close()
-
-	return os.Remove(src)
 }

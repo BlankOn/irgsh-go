@@ -1,7 +1,7 @@
 .env
 bin
-chief
-repo
+/chief
+/repo
 builder
 latest
 tmp
@@ -21,3 +21,4 @@ debian/irgsh/usr/share/irgsh/reprepro-template/conf/updates.orig
 utils/reprepro-template/conf/distributions.orig
 utils/reprepro-template/conf/options.orig
 utils/reprepro-template/conf/updates.orig
+notes
