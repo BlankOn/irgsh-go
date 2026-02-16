@@ -153,12 +153,23 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 	return jobs, nil
 }
 
-// UpdateJobState updates the state of a job
+// IsTerminalState returns true if the state is a final state that should not be overwritten.
+func IsTerminalState(state string) bool {
+	switch state {
+	case "SUCCESS", "DONE", "FAILURE", "FAILED":
+		return true
+	}
+	return false
+}
+
+// UpdateJobState updates the state of a job.
+// Terminal states (SUCCESS, DONE, FAILURE, FAILED) are never overwritten.
 func (s *JobStore) UpdateJobState(taskUUID, state string) error {
 	query := `
 		UPDATE jobs
 		SET state = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
 	`
 
 	result, err := s.db.Exec(query, state, taskUUID)
@@ -172,19 +183,21 @@ func (s *JobStore) UpdateJobState(taskUUID, state string) error {
 	}
 
 	if rowsAffected == 0 {
-		// Job not found, which is acceptable (might be too old)
+		// Job not found or already in terminal state, both acceptable
 		return nil
 	}
 
 	return nil
 }
 
-// UpdateJobStages updates the build and repo states of a job
+// UpdateJobStages updates the build and repo states of a job.
+// Jobs already in a terminal state (SUCCESS, DONE, FAILURE, FAILED) are not updated.
 func (s *JobStore) UpdateJobStages(taskUUID, buildState, repoState, currentStage string) error {
 	query := `
 		UPDATE jobs
 		SET build_state = ?, repo_state = ?, current_stage = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
 	`
 
 	_, err := s.db.Exec(query, buildState, repoState, currentStage, taskUUID)

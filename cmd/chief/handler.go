@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/internal/storage"
 )
 
 // Maintainer represents a GPG key maintainer
@@ -457,10 +458,10 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				</thead>
 				<tbody>`
 
-			// Get actual task states from machinery (only for jobs with known data)
+			// Get actual task states from machinery (only for non-terminal, non-UNKNOWN jobs)
 			for _, job := range jobs {
-				// Skip machinery query if job data is already missing (UNKNOWN state)
-				if job.State == "UNKNOWN" {
+				// Skip if job is already in a terminal state — trust SQLite
+				if storage.IsTerminalState(job.State) || job.State == "UNKNOWN" {
 					continue
 				}
 
@@ -470,6 +471,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 					job.TaskUUID,
 				)
 
+				// If machinery returns empty states for both, the data has expired.
+				// Keep the current SQLite state rather than overwriting.
+				if buildState == "" && repoState == "" {
+					continue
+				}
+
 				// Update job with stage information
 				job.BuildState = buildState
 				job.RepoState = repoState
@@ -477,10 +484,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 				// Determine overall state using same logic as BuildStatusHandler
 				var overallState string
-				// If machinery returns empty states for both, mark as UNKNOWN
-				if buildState == "" && repoState == "" {
-					overallState = "UNKNOWN"
-				} else if buildState == "FAILURE" {
+				if buildState == "FAILURE" {
 					overallState = "FAILED"
 				} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
 					overallState = "DONE"
@@ -495,6 +499,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				job.State = overallState
+
+				// Persist terminal states to SQLite so they survive Redis TTL expiry
+				if storage.IsTerminalState(overallState) {
+					monitoringRegistry.UpdateJobStages(job.TaskUUID, buildState, repoState, currentStage)
+					monitoringRegistry.UpdateJobState(job.TaskUUID, overallState)
+				}
 			}
 
 			// Helper to map a stage state to a CSS class
@@ -646,23 +656,36 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 				</thead>
 				<tbody>`
 
-			// Get actual task states from machinery
+			// Get actual task states from machinery (only for non-terminal, non-UNKNOWN jobs)
 			for _, job := range isoJobs {
-				// Skip machinery query if job data is already missing (UNKNOWN state)
-				if job.State != "UNKNOWN" {
-					// Query ISO task state using machinery backend
-					isoState := monitoring.GetISOJobStateFromMachinery(server.GetBackend(), job.TaskUUID)
-					if isoState != "" {
-						if isoState == "SUCCESS" {
-							job.State = "DONE"
-						} else if isoState == "FAILURE" {
-							job.State = "FAILED"
-						} else {
-							job.State = isoState
-						}
-					}
+				// Skip if job is already in a terminal state — trust SQLite
+				if storage.IsTerminalState(job.State) || job.State == "UNKNOWN" {
+					continue
 				}
 
+				// Query ISO task state using machinery backend
+				isoState := monitoring.GetISOJobStateFromMachinery(server.GetBackend(), job.TaskUUID)
+				if isoState == "" {
+					// Machinery data expired, keep current SQLite state
+					continue
+				}
+
+				if isoState == "SUCCESS" {
+					job.State = "DONE"
+				} else if isoState == "FAILURE" {
+					job.State = "FAILED"
+				} else {
+					job.State = isoState
+				}
+
+				// Persist terminal states to SQLite so they survive Redis TTL expiry
+				if storage.IsTerminalState(job.State) {
+					monitoringRegistry.UpdateISOJobState(job.TaskUUID, job.State)
+				}
+			}
+
+			// Render all ISO jobs
+			for _, job := range isoJobs {
 				// Determine status color and text
 				statusClass := ""
 				statusText := job.State
