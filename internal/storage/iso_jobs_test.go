@@ -145,6 +145,43 @@ func TestISOJobStore_CleanupOldJobs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestISOJobStore_TerminalStateNotOverwritten(t *testing.T) {
+	db, err := NewDB(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	store := NewISOJobStore(db, 100)
+
+	for _, terminalState := range []string{"SUCCESS", "DONE", "FAILURE", "FAILED"} {
+		uuid := "iso-terminal-" + terminalState
+		job := ISOJobInfo{
+			TaskUUID:    uuid,
+			RepoURL:     "https://github.com/test/iso-repo.git",
+			Branch:      "main",
+			SubmittedAt: time.Now().UTC(),
+			State:       "PENDING",
+		}
+		err = store.RecordISOJob(job)
+		require.NoError(t, err)
+
+		// Move to terminal state
+		err = store.UpdateISOJobState(uuid, terminalState)
+		require.NoError(t, err)
+
+		retrieved, err := store.GetISOJob(uuid)
+		require.NoError(t, err)
+		assert.Equal(t, terminalState, retrieved.State)
+
+		// Attempt to overwrite — should be silently ignored
+		err = store.UpdateISOJobState(uuid, "PENDING")
+		require.NoError(t, err)
+
+		retrieved, err = store.GetISOJob(uuid)
+		require.NoError(t, err)
+		assert.Equal(t, terminalState, retrieved.State, "terminal state %s was overwritten", terminalState)
+	}
+}
+
 func TestISOJobStore_RecordJobUpsert(t *testing.T) {
 	db, err := NewDB(":memory:")
 	require.NoError(t, err)

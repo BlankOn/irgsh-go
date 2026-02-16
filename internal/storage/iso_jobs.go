@@ -116,12 +116,14 @@ func (s *ISOJobStore) GetRecentISOJobs(limit int) ([]*ISOJobInfo, error) {
 	return jobs, nil
 }
 
-// UpdateISOJobState updates the state of an ISO job
+// UpdateISOJobState updates the state of an ISO job.
+// Terminal states (SUCCESS, DONE, FAILURE, FAILED) are never overwritten.
 func (s *ISOJobStore) UpdateISOJobState(taskUUID, state string) error {
 	query := `
 		UPDATE iso_jobs
 		SET state = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
 	`
 
 	_, err := s.db.Exec(query, state, taskUUID)

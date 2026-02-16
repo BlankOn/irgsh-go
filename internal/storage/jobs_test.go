@@ -205,6 +205,110 @@ func TestJobStore_CleanupOldJobs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestIsTerminalState(t *testing.T) {
+	assert.True(t, IsTerminalState("SUCCESS"))
+	assert.True(t, IsTerminalState("DONE"))
+	assert.True(t, IsTerminalState("FAILURE"))
+	assert.True(t, IsTerminalState("FAILED"))
+	assert.False(t, IsTerminalState("PENDING"))
+	assert.False(t, IsTerminalState("STARTED"))
+	assert.False(t, IsTerminalState("UNKNOWN"))
+	assert.False(t, IsTerminalState(""))
+}
+
+func TestJobStore_TerminalStateNotOverwritten(t *testing.T) {
+	db, err := NewDB(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	store := NewJobStore(db, 100)
+
+	for _, terminalState := range []string{"SUCCESS", "DONE", "FAILURE", "FAILED"} {
+		uuid := "test-terminal-" + terminalState
+		job := JobInfo{
+			TaskUUID:       uuid,
+			PackageName:    "test-package",
+			PackageVersion: "1.0.0",
+			Maintainer:     "Test Maintainer",
+			Component:      "main",
+			SubmittedAt:    time.Now().UTC(),
+			State:          "PENDING",
+			CurrentStage:   "build",
+		}
+		err = store.RecordJob(job)
+		require.NoError(t, err)
+
+		// Move to terminal state
+		err = store.UpdateJobState(uuid, terminalState)
+		require.NoError(t, err)
+
+		retrieved, err := store.GetJob(uuid)
+		require.NoError(t, err)
+		assert.Equal(t, terminalState, retrieved.State)
+
+		// Attempt to overwrite with PENDING — should be silently ignored
+		err = store.UpdateJobState(uuid, "PENDING")
+		require.NoError(t, err)
+
+		retrieved, err = store.GetJob(uuid)
+		require.NoError(t, err)
+		assert.Equal(t, terminalState, retrieved.State, "terminal state %s was overwritten", terminalState)
+
+		// Attempt to overwrite with UNKNOWN — should be silently ignored
+		err = store.UpdateJobState(uuid, "UNKNOWN")
+		require.NoError(t, err)
+
+		retrieved, err = store.GetJob(uuid)
+		require.NoError(t, err)
+		assert.Equal(t, terminalState, retrieved.State, "terminal state %s was overwritten to UNKNOWN", terminalState)
+	}
+}
+
+func TestJobStore_TerminalStateStagesNotOverwritten(t *testing.T) {
+	db, err := NewDB(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	store := NewJobStore(db, 100)
+
+	job := JobInfo{
+		TaskUUID:       "test-stages-terminal",
+		PackageName:    "test-package",
+		PackageVersion: "1.0.0",
+		Maintainer:     "Test Maintainer",
+		Component:      "main",
+		SubmittedAt:    time.Now().UTC(),
+		State:          "PENDING",
+		CurrentStage:   "build",
+	}
+	err = store.RecordJob(job)
+	require.NoError(t, err)
+
+	// Set stages while still PENDING — should work
+	err = store.UpdateJobStages("test-stages-terminal", "SUCCESS", "SUCCESS", "completed")
+	require.NoError(t, err)
+
+	retrieved, err := store.GetJob("test-stages-terminal")
+	require.NoError(t, err)
+	assert.Equal(t, "SUCCESS", retrieved.BuildState)
+	assert.Equal(t, "SUCCESS", retrieved.RepoState)
+	assert.Equal(t, "completed", retrieved.CurrentStage)
+
+	// Move to terminal state
+	err = store.UpdateJobState("test-stages-terminal", "DONE")
+	require.NoError(t, err)
+
+	// Attempt to overwrite stages — should be silently ignored
+	err = store.UpdateJobStages("test-stages-terminal", "", "", "build")
+	require.NoError(t, err)
+
+	retrieved, err = store.GetJob("test-stages-terminal")
+	require.NoError(t, err)
+	assert.Equal(t, "SUCCESS", retrieved.BuildState, "build_state was overwritten after terminal state")
+	assert.Equal(t, "SUCCESS", retrieved.RepoState, "repo_state was overwritten after terminal state")
+	assert.Equal(t, "completed", retrieved.CurrentStage, "current_stage was overwritten after terminal state")
+}
+
 func TestJobStore_RecordJobUpsert(t *testing.T) {
 	db, err := NewDB(":memory:")
 	require.NoError(t, err)

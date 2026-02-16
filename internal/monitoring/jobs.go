@@ -105,6 +105,14 @@ func GetJobStagesFromMachinery(backend iface.Backend, taskUUID string) (buildSta
 	return buildState, repoState, currentStage
 }
 
+// UpdateISOJobState updates the state of an ISO job in SQLite
+func (r *Registry) UpdateISOJobState(taskUUID string, state string) error {
+	if r.isoJobStore == nil {
+		return fmt.Errorf("ISO job store not initialized")
+	}
+	return r.isoJobStore.UpdateISOJobState(taskUUID, state)
+}
+
 // ISOJobInfo is an alias to storage.ISOJobInfo for backward compatibility
 type ISOJobInfo = storage.ISOJobInfo
 
