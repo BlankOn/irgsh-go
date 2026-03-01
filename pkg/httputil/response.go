@@ -1,9 +1,13 @@
 package httputil
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 )
 
 // StandardError response
@@ -43,4 +47,69 @@ func (e HTTPError) Error() string {
 
 func NewHTTPError(code int, message string) error {
 	return HTTPError{Code: code, Message: message}
+}
+
+// HTTPStatusError represents a non-success HTTP status code from a remote server.
+type HTTPStatusError struct {
+	StatusCode int
+}
+
+func (e HTTPStatusError) Error() string {
+	return fmt.Sprintf("HTTP %d", e.StatusCode)
+}
+
+// PostJSONWithRetry sends a JSON POST request, retrying on failure.
+func PostJSONWithRetry(ctx context.Context, client *http.Client, url string,
+	payload interface{}, maxRetries int, delay time.Duration,
+	onError func(attempt, max int, err error)) error {
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+
+	var lastErr error
+	for i := 1; i <= maxRetries; i++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			if onError != nil {
+				onError(i, maxRetries, err)
+			}
+			if i < maxRetries {
+				time.Sleep(delay)
+			}
+			continue
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+
+		lastErr = HTTPStatusError{StatusCode: resp.StatusCode}
+		if onError != nil {
+			onError(i, maxRetries, lastErr)
+		}
+		if i < maxRetries {
+			time.Sleep(delay)
+		}
+	}
+	return lastErr
+}
+
+// DecodeJSON decodes a JSON body into v, rejecting unknown fields.
+func DecodeJSON(r io.Reader, v interface{}) error {
+	if v == nil {
+		return nil
+	}
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	return dec.Decode(v)
 }

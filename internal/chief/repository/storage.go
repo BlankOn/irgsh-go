@@ -2,7 +2,6 @@ package repository
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,29 +41,6 @@ func (s *Storage) SubmissionDirPath(taskUUID string) string {
 
 func (s *Storage) SubmissionSignaturePath(taskUUID string) string {
 	return filepath.Join(s.SubmissionsDir(), taskUUID+".sig.txt")
-}
-
-func (s *Storage) MoveFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-
-	return os.Remove(src)
 }
 
 func (s *Storage) ExtractSubmission(taskUUID string) error {

@@ -73,7 +73,7 @@ func WriteLog(logPath string, message string) error {
 	return err
 }
 
-func ResetDir(dir string, mode os.FileMode) error {
+func resetDir(dir string, mode os.FileMode) error {
 	_, err := os.Stat(dir)
 	if err == nil {
 		if err := os.RemoveAll(dir); err != nil {
@@ -97,7 +97,7 @@ func CopyDir(src string, dst string) error {
 		return fmt.Errorf("[copyDir] source is not a directory: %s", src)
 	}
 
-	err = ResetDir(dst, srcInfo.Mode())
+	err = resetDir(dst, srcInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("[copyDir] failed to prepare destination dir: %w", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +20,7 @@ import (
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/pkg/httputil"
+	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
 type ChiefUsecase struct {
@@ -571,7 +571,7 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 
 	src := filepath.Join(s.Storage.SubmissionsDir(), submission.Tarball+".tar.gz")
 	path := s.Storage.SubmissionTarballPath(submission.TaskUUID)
-	if err := s.Storage.MoveFile(src, path); err != nil {
+	if err := systemutil.MoveFile(src, path); err != nil {
 		log.Println(err)
 		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
@@ -583,7 +583,7 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 
 	src = filepath.Join(s.Storage.SubmissionsDir(), submission.Tarball+".token")
 	path = s.Storage.SubmissionSignaturePath(submission.TaskUUID)
-	if err := s.Storage.MoveFile(src, path); err != nil {
+	if err := systemutil.MoveFile(src, path); err != nil {
 		log.Println(err)
 		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
@@ -892,7 +892,7 @@ func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) erro
 		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
-	fileBytes, err := ioutil.ReadAll(file)
+	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		log.Println(err.Error())
 		return httputil.NewHTTPError(http.StatusBadRequest, "")

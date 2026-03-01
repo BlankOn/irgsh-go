@@ -1,7 +1,7 @@
 package httputil
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +19,7 @@ func TestResponseJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler(w, req)
 	resp := w.Result()
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	assert.Equal(t, body, []byte("null"))
 	assert.Equal(t, w.Header(), http.Header(http.Header{"Content-Type": []string{"application/json"}}))
@@ -32,7 +32,7 @@ func TestResponseJSON(t *testing.T) {
 	w = httptest.NewRecorder()
 	handler(w, req)
 	resp = w.Result()
-	body, _ = ioutil.ReadAll(resp.Body)
+	body, _ = io.ReadAll(resp.Body)
 
 	assert.Equal(t, body, []byte(`{"message":"Not OK"}`))
 	assert.Equal(t, w.Header(), http.Header(http.Header{"Content-Type": []string{"application/json"}}))
