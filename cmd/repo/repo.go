@@ -163,6 +163,27 @@ func Repo(payload string) (err error) {
 			// Ignore err - package might not exist yet
 			fmt.Printf("error (ignored): %v\n", errForce)
 		}
+
+		// Remove the binary packages as well
+		cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
+		%s reprepro -v -v -v --nothingiserror remove %s %s`,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			irgshConfig.Repo.Workdir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			gnupgDir,
+			irgshConfig.Repo.DistCodename+experimentalSuffix,
+			packageName,
+		)
+		_, errForce = systemutil.CmdExec(
+			cmdStr,
+			fmt.Sprintf("Force version: removing existing binary packages for %s", packageName),
+			logPath,
+		)
+		if errForce != nil {
+			// Ignore err - package might not exist yet
+			fmt.Printf("error (ignored): %v\n", errForce)
+		}
 	}
 
 	// Injecting the package
@@ -191,14 +212,15 @@ func Repo(payload string) (err error) {
 		return
 	}
 
-	// Injecting changes
+	// Injecting source package via .dsc (avoids checksum mismatch between
+	// CLI-built .deb and builder-built .deb that .changes would reference)
 	ignoreDistribution := ""
 	if raw["isExperimental"].(bool) {
 		ignoreDistribution = "--ignore=wrongdistribution"
 	}
 
 	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
-	%s reprepro -v -v -v --nothingiserror --ignore=missingfile %s --component %s include %s %s/artifacts/%s/*source.changes`,
+	%s reprepro -v -v -v --nothingiserror %s --component %s includedsc %s %s/artifacts/%s/*.dsc`,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+experimentalSuffix,
 		irgshConfig.Repo.Workdir,
@@ -213,12 +235,12 @@ func Repo(payload string) (err error) {
 
 	_, err = systemutil.CmdExec(
 		cmdStr,
-		"Injecting the changes file from artifact to the repository",
+		"Injecting the dsc file from artifact to the repository",
 		logPath,
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject changes file: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject dsc file: "+err.Error())
 		uploadLog(logPath, taskUUID)
 		return
 	}

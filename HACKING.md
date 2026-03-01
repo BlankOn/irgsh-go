@@ -79,7 +79,7 @@ Open three different terminal and run these command for each:
 
 Open the fourth terminal and try to submit a dummy package using this command bellow:
 
-- `./bin/irgsh-cli package submit --experimental --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git --ignore-checks`
+- `./bin/irgsh-cli package --experimental --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git --ignore-checks`
 
 You may be asked for your GPG key passphrase. You'll see the package preprared in this terminal, then in the chief terminal (job coordination), then in builder terminal (package building), then in repo terminal (package submission into the repository).
 

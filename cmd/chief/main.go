@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -18,6 +20,7 @@ import (
 	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/internal/storage"
 )
 
 var (
@@ -29,6 +32,7 @@ var (
 
 	artifactHTTPEndpoint *artifactEndpoint.ArtifactHTTPEndpoint
 	monitoringRegistry   *monitoring.Registry
+	storageDB            *storage.DB
 
 	chiefService *chiefusecase.ChiefUsecase
 	chiefStorage *chiefrepository.Storage
@@ -54,9 +58,23 @@ func main() {
 		artifactService.NewArtifactService(
 			artifactRepo.NewFileRepo(irgshConfig.Chief.Workdir)))
 
+	// Initialize SQLite storage for job persistence
+	storageDB, err = storage.NewDB(irgshConfig.Storage.DatabasePath)
+	if err != nil {
+		log.Fatalf("Failed to initialize storage database: %v\n", err)
+	}
+	log.Printf("Storage database initialized at %s\n", irgshConfig.Storage.DatabasePath)
+
+	// Initialize monitoring registry if enabled
 	if irgshConfig.Monitoring.Enabled {
 		ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
-		monitoringRegistry, err = monitoring.NewRegistry(irgshConfig.Redis, ttl)
+		monitoringRegistry, err = monitoring.NewRegistry(
+			irgshConfig.Redis,
+			ttl,
+			storageDB,
+			irgshConfig.Storage.MaxJobs,
+			irgshConfig.Storage.MaxISOJobs,
+		)
 		if err != nil {
 			log.Printf("Failed to initialize monitoring registry: %v\n", err)
 			log.Println("Continuing without monitoring...")
@@ -96,6 +114,9 @@ func main() {
 			chiefGPG,
 			version,
 		)
+
+		// Setup graceful shutdown
+		go handleShutdown()
 
 		serve()
 
@@ -153,4 +174,33 @@ func startInstanceCleanup() {
 			log.Printf("Failed to cleanup stale instances: %v\n", err)
 		}
 	}
+}
+
+// handleShutdown handles graceful shutdown on SIGINT/SIGTERM
+func handleShutdown() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	log.Println("Shutting down gracefully...")
+
+	// Close storage database
+	if storageDB != nil {
+		if err := storageDB.Close(); err != nil {
+			log.Printf("Error closing storage database: %v\n", err)
+		} else {
+			log.Println("Storage database closed")
+		}
+	}
+
+	// Close monitoring registry
+	if monitoringRegistry != nil {
+		if err := monitoringRegistry.Close(); err != nil {
+			log.Printf("Error closing monitoring registry: %v\n", err)
+		} else {
+			log.Println("Monitoring registry closed")
+		}
+	}
+
+	os.Exit(0)
 }

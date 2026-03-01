@@ -75,6 +75,26 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, res)
 }
 
+func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["uuid"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "403")
+		return
+	}
+	UUID := keys[0]
+
+	jobStatus, isoStatus, err := chiefService.ISOStatus(UUID)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	res := fmt.Sprintf(`{"pipelineId": "%s", "jobStatus": "%s", "isoStatus": "%s", "state": "%s"}`,
+		UUID, jobStatus, isoStatus, jobStatus)
+	fmt.Fprintf(w, res)
+}
+
 func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {

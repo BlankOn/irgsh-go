@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blankon/irgsh-go/internal/storage"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -25,15 +26,17 @@ const (
 	instanceRemovalTimeout = 24 * time.Hour
 )
 
-// Registry manages worker instances in Redis
+// Registry manages worker instances in Redis and job data in SQLite
 type Registry struct {
-	client         *redis.Client
-	instanceTTL    time.Duration // Timeout to mark as offline
-	ctx            context.Context
+	client      *redis.Client
+	instanceTTL time.Duration // Timeout to mark as offline
+	ctx         context.Context
+	jobStore    *storage.JobStore    // SQLite job store
+	isoJobStore *storage.ISOJobStore // SQLite ISO job store
 }
 
-// NewRegistry creates a new instance registry
-func NewRegistry(redisURL string, ttl time.Duration) (*Registry, error) {
+// NewRegistry creates a new instance registry with Redis for instances and SQLite for jobs
+func NewRegistry(redisURL string, ttl time.Duration, db *storage.DB, maxJobs, maxISOJobs int) (*Registry, error) {
 	// Parse Redis URL
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -52,11 +55,31 @@ func NewRegistry(redisURL string, ttl time.Duration) (*Registry, error) {
 		ttl = defaultInstanceTTL
 	}
 
+	// Initialize job stores if database is provided
+	var jobStore *storage.JobStore
+	var isoJobStore *storage.ISOJobStore
+	if db != nil {
+		jobStore = storage.NewJobStore(db, maxJobs)
+		isoJobStore = storage.NewISOJobStore(db, maxISOJobs)
+	}
+
 	return &Registry{
 		client:      client,
 		instanceTTL: ttl,
 		ctx:         ctx,
+		jobStore:    jobStore,
+		isoJobStore: isoJobStore,
 	}, nil
+}
+
+// GetJobStore returns the job store for direct access if needed
+func (r *Registry) GetJobStore() *storage.JobStore {
+	return r.jobStore
+}
+
+// GetISOJobStore returns the ISO job store for direct access if needed
+func (r *Registry) GetISOJobStore() *storage.ISOJobStore {
+	return r.isoJobStore
 }
 
 // UpdateInstance updates or creates an instance record

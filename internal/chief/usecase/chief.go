@@ -683,6 +683,39 @@ func (s *ChiefUsecase) BuildStatus(UUID string) (string, error) {
 	return pipelineState, nil
 }
 
+func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
+	isoSignature := tasks.Signature{
+		Name: "iso",
+		UUID: UUID,
+		Args: []tasks.Arg{
+			{
+				Type:  "string",
+				Value: "xyz",
+			},
+		},
+	}
+	isoResult := result.NewAsyncResult(&isoSignature, s.Server.GetBackend())
+	isoResult.Touch()
+	isoState := isoResult.GetState()
+
+	isoStatusStr := isoState.State
+
+	var jobStatus string
+	if isoStatusStr == "FAILURE" {
+		jobStatus = "FAILED"
+	} else if isoStatusStr == "SUCCESS" {
+		jobStatus = "DONE"
+	} else if isoStatusStr == "PENDING" || isoStatusStr == "RECEIVED" || isoStatusStr == "STARTED" {
+		jobStatus = "BUILDING"
+	} else if isoStatusStr == "" {
+		jobStatus = "UNKNOWN"
+	} else {
+		jobStatus = isoStatusStr
+	}
+
+	return jobStatus, isoStatusStr, nil
+}
+
 func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, error) {
 	if !s.Config.Monitoring.Enabled || s.MonitoringRegistry == nil {
 		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusServiceUnavailable, `{"error": "monitoring is not enabled, retry requires job tracking"}`)

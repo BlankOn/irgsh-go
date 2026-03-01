@@ -112,7 +112,7 @@ Their logs are available at `/var/log/irgsh/`. After these three services are up
 Submit a package build job,
 
 ```
-irgsh-cli package submit --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
+irgsh-cli package --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
 ```
 
 Check the status of a package build pipeline,

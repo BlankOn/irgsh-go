@@ -124,9 +124,9 @@ func BuildWithMonitoring(payload string) (string, error) {
 
 //  startMonitoringHeartbeat sends periodic heartbeats to Redis
 func startMonitoringHeartbeat() {
-	// Create registry client
+	// Create registry client (no SQLite storage needed for workers)
 	ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
-	registry, err := monitoring.NewRegistry(irgshConfig.Redis, ttl)
+	registry, err := monitoring.NewRegistry(irgshConfig.Redis, ttl, nil, 0, 0)
 	if err != nil {
 		log.Printf("Failed to create monitoring registry: %v\n", err)
 		return
