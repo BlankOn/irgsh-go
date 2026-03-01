@@ -90,4 +90,4 @@ require (
 	modernc.org/memory v1.8.0 // indirect
 )
 
-go 1.21
+go 1.23
