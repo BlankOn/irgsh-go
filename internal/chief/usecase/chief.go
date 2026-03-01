@@ -946,68 +946,48 @@ func (s *ChiefUsecase) BuildISO() error {
 	return nil
 }
 
-func (s *ChiefUsecase) UploadSubmission(r *http.Request) (string, error) {
+func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (string, error) {
 	targetPath := s.Storage.SubmissionsDir()
 	if err := s.Storage.EnsureDir(targetPath); err != nil {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
-	if err := r.ParseMultipartForm(512 << 20); err != nil {
-		log.Printf("ParseMultipartForm error: %v", err)
-		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
-	}
-
-	file, _, err := r.FormFile("token")
-	if err != nil {
-		log.Println(err.Error())
-		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
-	}
-	defer file.Close()
-
-	fileBytes, err := ioutil.ReadAll(file)
-	if err != nil {
-		log.Println(err.Error())
-		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
-	}
-
 	id := uuid.New().String()
-	fileName := id + ".token"
-	newPath := filepath.Join(targetPath, fileName)
-	newFile, err := os.Create(newPath)
+
+	// Write token file
+	tokenPath := filepath.Join(targetPath, id+".token")
+	tokenFile, err := os.Create(tokenPath)
 	if err != nil {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
-	defer newFile.Close()
-	if _, err := newFile.Write(fileBytes); err != nil || newFile.Close() != nil {
+	if _, err := tokenFile.Write(tokenData); err != nil {
+		tokenFile.Close()
+		log.Println(err.Error())
+		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
+	}
+	if err := tokenFile.Close(); err != nil {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
-	if err := s.GPG.VerifyFile(newPath); err != nil {
+	if err := s.GPG.VerifyFile(tokenPath); err != nil {
 		log.Println(err)
 		return "", httputil.NewHTTPError(http.StatusUnauthorized, "401 Unauthorized")
 	}
 
-	file, _, err = r.FormFile("blob")
-	if err != nil {
-		log.Println(err.Error())
-		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
-	}
-	defer file.Close()
-
-	fileName = id + ".tar.gz"
-	newPath = filepath.Join(targetPath, fileName)
-	newFile, err = os.Create(newPath)
+	// Write blob file with content-type validation
+	blobPath := filepath.Join(targetPath, id+".tar.gz")
+	blobFile, err := os.Create(blobPath)
 	if err != nil {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
-	defer newFile.Close()
+	defer blobFile.Close()
 
 	header := make([]byte, 512)
-	n, err := file.Read(header)
+	n, err := blob.Read(header)
 	if err != nil && err != io.EOF {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
@@ -1018,16 +998,16 @@ func (s *ChiefUsecase) UploadSubmission(r *http.Request) (string, error) {
 	log.Println(filetype)
 	if !strings.Contains(filetype, "gzip") {
 		log.Println("File upload rejected: should be a tar.gz file.")
-		os.Remove(newPath)
+		os.Remove(blobPath)
 		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
-	if _, err := newFile.Write(header); err != nil {
+	if _, err := blobFile.Write(header); err != nil {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
-	if _, err := io.Copy(newFile, file); err != nil {
+	if _, err := io.Copy(blobFile, blob); err != nil {
 		log.Println(err.Error())
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
@@ -196,7 +197,36 @@ func submissionUploadHandler() http.HandlerFunc {
 		log.Printf("Content-Type: %s", r.Header.Get("Content-Type"))
 		log.Printf("Content-Length: %d", r.ContentLength)
 
-		id, err := chiefService.UploadSubmission(r)
+		if err := r.ParseMultipartForm(512 << 20); err != nil {
+			log.Printf("ParseMultipartForm error: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		tokenFile, _, err := r.FormFile("token")
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer tokenFile.Close()
+
+		tokenData, err := io.ReadAll(tokenFile)
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		blobFile, _, err := r.FormFile("blob")
+		if err != nil {
+			log.Println(err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer blobFile.Close()
+
+		id, err := chiefService.UploadSubmission(tokenData, blobFile)
 		if err != nil {
 			writeUsecaseError(w, err)
 			return

@@ -52,3 +52,28 @@ type ReleaseFetcher interface {
 type UpdateApplier interface {
 	Apply(reader io.Reader) error
 }
+
+// Prompter abstracts user-interactive confirmations.
+type Prompter interface {
+	Confirm(label string) (bool, error)
+}
+
+// DebianPackager abstracts Debian packaging shell operations.
+type DebianPackager interface {
+	ExtractPackageName(controlPath string) (string, error)
+	ExtractVersion(changelogPath string) (string, error)
+	ExtractExtendedVersion(changelogPath string) (string, error)
+	ExtractChangelogMaintainer(changelogPath string) (string, error)
+	ExtractUploaders(controlPath string) (string, error)
+	BuildSource(dir string) error
+	Sign(dir, keyFingerprint string) error
+	GenBuildInfo(dir string) error
+	GenChanges(dir string) (string, error)
+	Lintian(changesPath string) (string, error)
+}
+
+// GPGSigner abstracts GPG operations for the CLI.
+type GPGSigner interface {
+	GetIdentity(fingerprint string) (string, error)
+	ClearSign(inputPath, outputPath, fingerprint string) error
+}
