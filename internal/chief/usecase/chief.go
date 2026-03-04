@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -22,6 +21,7 @@ import (
 	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/internal/storage"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
@@ -33,7 +33,6 @@ const maxLogSize = 10 << 20
 // file paths and identifiers: alphanumeric, dots, hyphens, underscores.
 var safeIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._+-]+$`)
 
-var errInvalidID = errors.New("invalid identifier: contains unsafe characters")
 
 type ChiefUsecase struct {
 	config             config.IrgshConfig
@@ -259,6 +258,14 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
             text-align: center;
             color: #999;
         }
+        @keyframes spin-gear {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning-gear {
+            vertical-align: middle;
+            animation: spin-gear 2s linear infinite;
+        }
     </style>
 </head>
 <body>
@@ -429,7 +436,17 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 		} else if len(jobs) > 0 {
 			out += `<div class="section-title">Recent Packaging Jobs</div>`
 			out += `
-			<table>
+			<div style="margin-bottom: 10px;">
+				<label for="statusFilter" style="margin-right: 5px;">Filter by status:</label>
+				<select id="statusFilter" onchange="filterJobsByStatus(this.value)" style="padding: 4px 8px; font-size: 0.95em;">
+					<option value="all">All</option>
+					<option value="DONE">DONE</option>
+					<option value="FAILED">FAILED</option>
+					<option value="PENDING">PENDING</option>
+					<option value="UNKNOWN">UNKNOWN</option>
+				</select>
+			</div>
+			<table id="packagingJobsTable">
 				<thead>
 					<tr>
 						<th>Timestamp</th>
@@ -437,8 +454,9 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 						<th>Version</th>
 						<th>Maintainer</th>
 						<th>Component</th>
+						<th>Build</th>
+						<th>Repo</th>
 						<th>Status</th>
-						<th>Logs</th>
 						<th>UUID</th>
 					</tr>
 				</thead>
@@ -449,60 +467,89 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 				jakartaLoc = time.UTC
 			}
 
+			stageClass := func(state string) string {
+				switch state {
+				case "SUCCESS":
+					return "status-online"
+				case "FAILURE":
+					return "status-offline"
+				case "STARTED", "RECEIVED":
+					return "status-warning"
+				default:
+					return ""
+				}
+			}
+
 			for _, job := range jobs {
-				buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
-					s.server.GetBackend(),
-					job.TaskUUID,
-				)
-
-				job.BuildState = buildState
-				job.RepoState = repoState
-				job.CurrentStage = currentStage
-
-				var overallState string
-				if buildState == "FAILURE" {
-					overallState = "FAILED"
-				} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
-					overallState = "DONE"
-				} else if buildState == "SUCCESS" && repoState == "FAILURE" {
-					overallState = "FAILED"
-				} else if buildState == "SUCCESS" && (repoState == "PENDING" || repoState == "RECEIVED" || repoState == "STARTED") {
-					overallState = "REPO"
-				} else if buildState != "" {
-					overallState = buildState
+				// Skip machinery query for terminal states -- trust SQLite
+				if storage.IsTerminalState(job.State) || job.State == "UNKNOWN" {
+					// Use stored build/repo states as-is
 				} else {
-					overallState = "PENDING"
+					buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
+						s.server.GetBackend(),
+						job.TaskUUID,
+					)
+
+					// If machinery returns empty for both, data has expired
+					if buildState == "" && repoState == "" {
+						// Keep current SQLite state
+					} else {
+						job.BuildState = buildState
+						job.RepoState = repoState
+						job.CurrentStage = currentStage
+
+						var overallState string
+						if buildState == "FAILURE" {
+							overallState = "FAILED"
+						} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
+							overallState = "DONE"
+						} else if buildState == "SUCCESS" && repoState == "FAILURE" {
+							overallState = "FAILED"
+						} else if buildState == "SUCCESS" && (repoState == "PENDING" || repoState == "RECEIVED" || repoState == "STARTED") {
+							overallState = "PENDING"
+						} else if buildState != "" {
+							overallState = "PENDING"
+						} else {
+							overallState = "PENDING"
+						}
+
+						job.State = overallState
+
+						// Persist terminal states to SQLite so they survive Redis TTL expiry
+						if storage.IsTerminalState(overallState) {
+							s.monitoringRegistry.UpdateJobStages(job.TaskUUID, buildState, repoState, currentStage)
+							s.monitoringRegistry.UpdateJobState(job.TaskUUID, overallState)
+						}
+					}
 				}
 
-				job.State = overallState
-
 				statusClass := ""
-				statusText := overallState
-				switch overallState {
+				statusText := job.State
+				filterStatus := job.State
+				switch job.State {
 				case "DONE":
 					statusClass = "status-online"
 				case "FAILED":
 					statusClass = "status-offline"
-					if buildState == "FAILURE" {
+					if job.BuildState == "FAILURE" {
 						statusText = "FAILED (build)"
-					} else if repoState == "FAILURE" {
+					} else if job.RepoState == "FAILURE" {
 						statusText = "FAILED (repo)"
 					}
-				case "REPO":
-					statusClass = "status-warning"
-					statusText = "REPO"
-				case "STARTED":
-					statusClass = "status-warning"
-					statusText = "STARTED (" + currentStage + ")"
 				case "PENDING":
 					if time.Since(job.SubmittedAt) > 24*time.Hour {
 						statusClass = "status-offline"
 						statusText = "STALLED"
 					} else {
-						statusText = "PENDING"
+						statusText = `<svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
 					}
+					filterStatus = "PENDING"
+				case "UNKNOWN":
+					statusClass = "status-offline"
+					statusText = "UNKNOWN"
 				default:
-					statusText = "PENDING"
+					statusText = `<svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
+					filterStatus = "PENDING"
 				}
 
 				jakartaTime := job.SubmittedAt.In(jakartaLoc)
@@ -522,44 +569,121 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 					if branchText == "" {
 						branchText = "default"
 					}
-					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, html.EscapeString(job.SourceURL), html.EscapeString(branchText)))
+					linkURL := job.SourceURL + "/tree/" + branchText
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, html.EscapeString(linkURL), html.EscapeString(branchText)))
 				}
 				if job.PackageURL != "" {
 					branchText := job.PackageBranch
 					if branchText == "" {
 						branchText = "default"
 					}
-					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, html.EscapeString(job.PackageURL), html.EscapeString(branchText)))
+					linkURL := job.PackageURL + "/tree/" + branchText
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, html.EscapeString(linkURL), html.EscapeString(branchText)))
 				}
 				if len(repoLinks) > 0 {
 					packageCell += fmt.Sprintf(`<br><span style="font-size: 0.85em; color: #666;">%s</span>`,
 						strings.Join(repoLinks, ", "))
 				}
 
+				buildStateText := job.BuildState
+				if buildStateText == "" {
+					buildStateText = "-"
+				}
+				repoStateText := job.RepoState
+				if repoStateText == "" {
+					repoStateText = "-"
+				}
+
 				out += fmt.Sprintf(`
-					<tr>
+					<tr data-status="%s">
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
+						<td><span class="%s">%s</span><br><a href="/logs/%s.build.log" target="_blank" style="font-size:0.85em;">log</a></td>
+						<td><span class="%s">%s</span><br><a href="/logs/%s.repo.log" target="_blank" style="font-size:0.85em;">log</a></td>
 						<td><span class="%s">%s</span></td>
-						<td>
-							<a href="/logs/%s.build.log" target="_blank">build.log</a> |
-							<a href="/logs/%s.repo.log" target="_blank">repo.log</a>
-						</td>
 						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
 					</tr>`,
+					html.EscapeString(filterStatus),
 					timeStr,
 					packageCell,
 					html.EscapeString(job.PackageVersion),
 					html.EscapeString(job.Maintainer),
 					html.EscapeString(job.Component),
+					stageClass(job.BuildState),
+					html.EscapeString(buildStateText),
+					html.EscapeString(job.TaskUUID),
+					stageClass(job.RepoState),
+					html.EscapeString(repoStateText),
+					html.EscapeString(job.TaskUUID),
 					statusClass,
 					statusText,
 					html.EscapeString(job.TaskUUID),
-					html.EscapeString(job.TaskUUID),
-					html.EscapeString(job.TaskUUID),
+				)
+			}
+
+			out += `
+				</tbody>
+			</table>
+			`
+		}
+
+		// ISO jobs section
+		isoJobs, isoErr := s.monitoringRegistry.GetRecentISOJobs(50)
+		if isoErr != nil {
+			log.Printf("Failed to list ISO jobs: %v\n", isoErr)
+		} else if len(isoJobs) > 0 {
+			out += `<div class="section-title">Recent ISO Build Jobs</div>`
+			out += `
+			<table>
+				<thead>
+					<tr>
+						<th>Timestamp</th>
+						<th>Repository</th>
+						<th>Branch</th>
+						<th>Status</th>
+						<th>UUID</th>
+					</tr>
+				</thead>
+				<tbody>`
+
+			jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
+			if locErr != nil {
+				jakartaLoc = time.UTC
+			}
+
+			for _, isoJob := range isoJobs {
+				isoStatusClass := ""
+				switch isoJob.State {
+				case "SUCCESS", "DONE":
+					isoStatusClass = "status-online"
+				case "FAILURE", "FAILED":
+					isoStatusClass = "status-offline"
+				case "STARTED", "RECEIVED":
+					isoStatusClass = "status-warning"
+				}
+
+				isoTime := isoJob.SubmittedAt.In(jakartaLoc)
+				isoTimeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
+					isoTime.Format("2006-01-02 15:04:05 MST"),
+					formatRelativeTime(isoJob.SubmittedAt))
+
+				out += fmt.Sprintf(`
+					<tr>
+						<td>%s</td>
+						<td>%s</td>
+						<td>%s</td>
+						<td><span class="%s">%s</span></td>
+						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
+					</tr>`,
+					isoTimeStr,
+					html.EscapeString(isoJob.RepoURL),
+					html.EscapeString(isoJob.Branch),
+					isoStatusClass,
+					html.EscapeString(isoJob.State),
+					html.EscapeString(isoJob.TaskUUID),
 				)
 			}
 
@@ -574,6 +698,21 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
     <div class="refresh-info">
         Page auto-refreshes every 10 seconds
     </div>
+    <script>
+    function filterJobsByStatus(status) {
+        var table = document.getElementById('packagingJobsTable');
+        if (!table) return;
+        var rows = table.getElementsByTagName('tr');
+        for (var i = 1; i < rows.length; i++) {
+            var row = rows[i];
+            if (status === 'all' || row.getAttribute('data-status') === status) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    }
+    </script>
 </body>
 </html>
 `
@@ -587,6 +726,9 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 	}
 	if !safeIDPattern.MatchString(submission.PackageName) {
 		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid package name")
+	}
+	if !safeIDPattern.MatchString(submission.Tarball) {
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid tarball identifier")
 	}
 
 	submission.Timestamp = time.Now()
@@ -707,9 +849,11 @@ func (s *ChiefUsecase) BuildStatus(UUID string) (BuildStatusResponse, error) {
 	} else if buildState.State == "SUCCESS" && repoState.State == "FAILURE" {
 		pipelineState = "FAILED"
 	} else if buildState.State == "SUCCESS" && (repoState.State == "PENDING" || repoState.State == "RECEIVED" || repoState.State == "STARTED") {
-		pipelineState = "REPO"
+		pipelineState = "BUILDING"
+	} else if buildState.State == "" {
+		pipelineState = "UNKNOWN"
 	} else {
-		pipelineState = buildState.State
+		pipelineState = "BUILDING"
 	}
 
 	return BuildStatusResponse{
@@ -755,6 +899,9 @@ func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
 }
 
 func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, error) {
+	if !safeIDPattern.MatchString(oldTaskUUID) {
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid pipeline identifier")
+	}
 	if !s.config.Monitoring.Enabled || s.monitoringRegistry == nil {
 		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusServiceUnavailable, `{"error": "monitoring is not enabled, retry requires job tracking"}`)
 	}
