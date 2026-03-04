@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -22,8 +23,8 @@ var (
 	server     *machinery.Server
 	version    string
 
-	irgshConfig     = config.IrgshConfig{}
-	activeTasks int = 0
+	irgshConfig = config.IrgshConfig{}
+	activeTasks atomic.Int32
 )
 
 func main() {
@@ -127,11 +128,9 @@ func main() {
 
 // RepoWithMonitoring wraps the Repo function with active task tracking
 func RepoWithMonitoring(payload string) error {
-	// Increment active tasks
-	activeTasks++
-	defer func() { activeTasks-- }()
+	activeTasks.Add(1)
+	defer activeTasks.Add(-1)
 
-	// Call original Repo function
 	return Repo(payload)
 }
 
@@ -142,7 +141,7 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeRepo, irgshConfig.Repo.Workdir,
-		interval, func() int { return activeTasks },
+		interval, func() int { return int(activeTasks.Load()) },
 	)
 }
 

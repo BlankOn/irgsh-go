@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -24,8 +25,7 @@ var (
 
 	irgshConfig = config.IrgshConfig{}
 
-	// Monitoring
-	activeTasks int = 0
+	activeTasks atomic.Int32
 )
 
 func main() {
@@ -117,11 +117,9 @@ func main() {
 
 // ISOBuildWithMonitoring wraps the BuildISO function with active task tracking
 func ISOBuildWithMonitoring(payload string) (string, error) {
-	// Increment active tasks
-	activeTasks++
-	defer func() { activeTasks-- }()
+	activeTasks.Add(1)
+	defer activeTasks.Add(-1)
 
-	// Call original BuildISO function
 	return BuildISO(payload)
 }
 
@@ -132,7 +130,7 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeISO, irgshConfig.ISO.Workdir,
-		interval, func() int { return activeTasks },
+		interval, func() int { return int(activeTasks.Load()) },
 	)
 }
 
