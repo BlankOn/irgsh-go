@@ -87,11 +87,16 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		fmt.Println("sourceUrl: " + params.SourceURL)
 		err = u.RepoSync.Sync(params.SourceURL, sourceBranch, filepath.Join(tmpDir, "source"))
 		if err != nil {
+			// Only fall back to tarball download if the repo/branch was not found.
+			// Other errors (e.g. network, permission) should propagate immediately.
+			if !strings.Contains(err.Error(), "repo or branch not found") {
+				return entity.SubmitResponse{}, err
+			}
 			fmt.Println(err.Error())
 			// Try as downloadable tarball
 			downloadableTarballURL = strings.TrimSuffix(params.SourceURL, "\n")
 			log.Println("Downloading the tarball " + downloadableTarballURL)
-			resp, dlErr := http.Get(downloadableTarballURL)
+			resp, dlErr := http.Get(downloadableTarballURL) //nolint:gosec
 			if dlErr != nil {
 				return entity.SubmitResponse{}, dlErr
 			}
@@ -342,13 +347,12 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 }
 
 func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (entity.PackageStatus, error) {
-	cfg, err := u.Config.Load()
-	if err != nil {
+	if _, err := u.Config.Load(); err != nil {
 		return entity.PackageStatus{}, ErrConfigMissing
 	}
-	_ = cfg
 
 	if pipelineID == "" {
+		var err error
 		pipelineID, err = u.Pipelines.LoadPackageID()
 		if err != nil || pipelineID == "" {
 			return entity.PackageStatus{}, ErrPipelineIDMissing
@@ -360,11 +364,9 @@ func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (enti
 }
 
 func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error) {
-	cfg, loadErr := u.Config.Load()
-	if loadErr != nil {
+	if _, loadErr := u.Config.Load(); loadErr != nil {
 		return "", "", ErrConfigMissing
 	}
-	_ = cfg
 
 	if pipelineID == "" {
 		pipelineID, err = u.Pipelines.LoadPackageID()
