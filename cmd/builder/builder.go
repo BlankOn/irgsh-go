@@ -35,41 +35,6 @@ func sendBuildNotification(taskUUID, status string, jobInfo notification.JobNoti
 	)
 }
 
-func Clone(payload string) (next string, err error) {
-	var raw map[string]interface{}
-	if err := json.Unmarshal([]byte(payload), &raw); err != nil {
-		return "", err
-	}
-
-	taskUUID, ok := raw["taskUUID"].(string)
-	if !ok || taskUUID == "" {
-		return "", fmt.Errorf("taskUUID is required")
-	}
-
-	targetDir := filepath.Join(irgshConfig.Builder.Workdir, taskUUID)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return "", err
-	}
-
-	sourceURL, _ := raw["sourceUrl"].(string)
-	if sourceURL != "" {
-		cmdStr := "git clone " + sourceURL + " " + filepath.Join(targetDir, "source")
-		if _, err := systemutil.CmdExec(cmdStr, "", ""); err != nil {
-			return "", err
-		}
-	}
-
-	packageURL, _ := raw["packageUrl"].(string)
-	if packageURL != "" {
-		cmdStr := "git clone " + packageURL + " " + filepath.Join(targetDir, "package")
-		if _, err := systemutil.CmdExec(cmdStr, "", ""); err != nil {
-			return "", err
-		}
-	}
-
-	return payload, nil
-}
-
 // Main task wrapper
 func Build(payload string) (next string, err error) {
 	in := []byte(payload)
