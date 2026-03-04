@@ -115,15 +115,22 @@ func CopyDir(src string, dst string) error {
 		}
 
 		targetPath := filepath.Join(dst, relPath)
-		if fileInfo.IsDir() {
-			return os.MkdirAll(targetPath, fileInfo.Mode())
+
+		// filepath.Walk follows symlinks, so use Lstat to detect them
+		lstatInfo, err := os.Lstat(currentPath)
+		if err != nil {
+			return err
 		}
-		if fileInfo.Mode()&os.ModeSymlink != 0 {
+		if lstatInfo.Mode()&os.ModeSymlink != 0 {
 			linkTarget, err := os.Readlink(currentPath)
 			if err != nil {
 				return err
 			}
 			return os.Symlink(linkTarget, targetPath)
+		}
+
+		if fileInfo.IsDir() {
+			return os.MkdirAll(targetPath, fileInfo.Mode())
 		}
 
 		return CopyFile(currentPath, targetPath, fileInfo.Mode())
@@ -169,6 +176,13 @@ func CopyFile(src string, dst string, mode os.FileMode) (err error) {
 }
 
 func MoveFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	} else if _, ok := err.(*os.LinkError); !ok {
+		return err
+	}
+
+	// Cross-device fallback: copy + remove
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -182,9 +196,16 @@ func MoveFile(src, dst string) error {
 
 	if _, err := io.Copy(out, in); err != nil {
 		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		os.Remove(dst)
 		return err
 	}
 	if err := out.Close(); err != nil {
+		os.Remove(dst)
 		return err
 	}
 
