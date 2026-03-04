@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,7 +16,8 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 	if err == nil {
 		return
 	}
-	if useErr, ok := err.(httputil.HTTPError); ok {
+	var useErr httputil.HTTPError
+	if errors.As(err, &useErr) {
 		w.WriteHeader(useErr.Code)
 		if useErr.Message != "" {
 			fmt.Fprintf(w, useErr.Message)
@@ -53,7 +55,12 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonStr, _ := json.Marshal(payload)
+	jsonStr, err := json.Marshal(payload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
 	fmt.Fprintf(w, string(jsonStr))
 }
 
@@ -66,14 +73,19 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	UUID := keys[0]
 
-	state, err := chiefService.BuildStatus(UUID)
+	status, err := chiefService.BuildStatus(UUID)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
 
-	res := fmt.Sprintf("{ \"pipelineId\": \"%s\", \"state\": \"%s\" }", UUID, state)
-	fmt.Fprintf(w, res)
+	jsonStr, err := json.Marshal(status)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
+	fmt.Fprintf(w, string(jsonStr))
 }
 
 func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +123,12 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonStr, _ := json.Marshal(payload)
+	jsonStr, err := json.Marshal(payload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
 	fmt.Fprintf(w, string(jsonStr))
 }
 
@@ -184,11 +201,26 @@ func logUploadHandler() http.HandlerFunc {
 }
 
 func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
-	if err := chiefService.BuildISO(); err != nil {
+	var submission chiefusecase.ISOSubmission
+	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "400")
+		return
+	}
+
+	payload, err := chiefService.BuildISO(submission)
+	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+
+	jsonStr, err := json.Marshal(payload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "500")
+		return
+	}
+	fmt.Fprintf(w, string(jsonStr))
 }
 
 func submissionUploadHandler() http.HandlerFunc {

@@ -20,6 +20,13 @@ type Submission struct {
 	SourceBranch           string    `json:"sourceBranch"`
 }
 
+type ISOSubmission struct {
+	TaskUUID  string    `json:"taskUUID"`
+	Timestamp time.Time `json:"timestamp"`
+	RepoURL   string    `json:"repoUrl"`
+	Branch    string    `json:"branch"`
+}
+
 type Maintainer struct {
 	KeyID string
 	Name  string
@@ -27,6 +34,14 @@ type Maintainer struct {
 }
 
 type SubmitPayloadResponse struct {
-	PipelineId string   `json:"pipelineId"`
+	PipelineID string   `json:"pipelineId"`
 	Jobs       []string `json:"jobs,omitempty"`
+}
+
+type BuildStatusResponse struct {
+	PipelineID  string `json:"pipelineId"`
+	JobStatus   string `json:"jobStatus"`
+	BuildStatus string `json:"buildStatus"`
+	RepoStatus  string `json:"repoStatus"`
+	State       string `json:"state"`
 }

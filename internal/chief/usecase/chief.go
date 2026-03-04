@@ -3,6 +3,7 @@ package usecase
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -122,7 +123,7 @@ func parseGPGKeys(output string) []Maintainer {
 }
 
 func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
-	html := `<!DOCTYPE html>
+	out := `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -255,11 +256,11 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
     </div>
 `
 
-	html += `<div class="section-title">Package Maintainers</div>`
+	out += `<div class="section-title">Package Maintainers</div>`
 
 	maintainers := s.GetMaintainers()
 	if len(maintainers) > 0 {
-		html += `
+		out += `
 		<table>
 			<thead>
 				<tr>
@@ -271,23 +272,23 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 			<tbody>`
 
 		for _, m := range maintainers {
-			html += fmt.Sprintf(`
+			out += fmt.Sprintf(`
 				<tr>
 					<td style="font-family: monospace;">%s</td>
 					<td>%s</td>
 					<td>%s</td>
 				</tr>`,
-				m.KeyID,
-				m.Name,
-				m.Email,
+				html.EscapeString(m.KeyID),
+				html.EscapeString(m.Name),
+				html.EscapeString(m.Email),
 			)
 		}
 
-		html += `
+		out += `
 			</tbody>
 		</table>`
 	} else {
-		html += `<div class="empty-state">No maintainers found</div>`
+		out += `<div class="empty-state">No maintainers found</div>`
 	}
 
 	if s.config.Monitoring.Enabled && s.monitoringRegistry != nil {
@@ -300,9 +301,9 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 				log.Printf("Failed to get summary: %v\n", err)
 			}
 
-			html += `<div class="section-title">Workers</div>`
+			out += `<div class="section-title">Workers</div>`
 
-			html += fmt.Sprintf(`
+			out += fmt.Sprintf(`
     <div class="summary">
         <div class="summary-item">
             <div class="summary-number">%d</div>
@@ -319,20 +320,20 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 `, summary.Total, summary.Online, summary.Offline)
 
 			for typeName, count := range summary.ByType {
-				html += fmt.Sprintf(`
+				out += fmt.Sprintf(`
         <div class="summary-item">
             <div class="summary-number" style="color: #2196F3;">%d</div>
             <div>%s</div>
         </div>
-`, count, typeName)
+`, count, html.EscapeString(typeName))
 			}
 
-			html += `
+			out += `
     </div>
 `
 
 			if len(instances) > 0 {
-				html += `
+				out += `
     <table>
         <thead>
             <tr>
@@ -377,7 +378,7 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 						diskStr += " / " + monitoring.FormatBytes(instance.DiskTotal)
 					}
 
-					html += fmt.Sprintf(`
+					out += fmt.Sprintf(`
             <tr>
                 <td><span class="%s">%s</span></td>
                 <td>%s</td>
@@ -389,10 +390,10 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
                 <td class="metric">%s</td>
             </tr>`,
 						badgeClass,
-						instance.InstanceType,
-						instance.Hostname,
+						html.EscapeString(string(instance.InstanceType)),
+						html.EscapeString(instance.Hostname),
 						statusClass,
-						instance.Status,
+						html.EscapeString(string(instance.Status)),
 						uptimeStr,
 						instance.ActiveTasks,
 						instance.Concurrency,
@@ -402,12 +403,12 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 					)
 				}
 
-				html += `
+				out += `
         </tbody>
     </table>
 `
 			} else {
-				html += `<div class="empty-state">No worker instances found</div>`
+				out += `<div class="empty-state">No worker instances found</div>`
 			}
 		}
 
@@ -415,8 +416,8 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 		if err != nil {
 			log.Printf("Failed to list jobs: %v\n", err)
 		} else if len(jobs) > 0 {
-			html += `<div class="section-title">Recent Packaging Jobs</div>`
-			html += `
+			out += `<div class="section-title">Recent Packaging Jobs</div>`
+			out += `
 			<table>
 				<thead>
 					<tr>
@@ -488,8 +489,11 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 					statusText = "PENDING"
 				}
 
-				jakartaLoc, _ := time.LoadLocation("Asia/Jakarta")
-				jakartaTime := job.SubmittedAt.In(jakartaLoc)
+				jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
+			if locErr != nil {
+				jakartaLoc = time.UTC
+			}
+			jakartaTime := job.SubmittedAt.In(jakartaLoc)
 				timeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
 					jakartaTime.Format("2006-01-02 15:04:05 MST"),
 					formatRelativeTime(job.SubmittedAt))
@@ -499,28 +503,28 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 					expTag = " <span style=\"color: #ff9800; font-weight: bold;\">[experimental]</span>"
 				}
 
-				packageCell := job.PackageName + expTag
+				packageCell := html.EscapeString(job.PackageName) + expTag
 				var repoLinks []string
 				if job.SourceURL != "" {
 					branchText := job.SourceBranch
 					if branchText == "" {
 						branchText = "default"
 					}
-					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, job.SourceURL, branchText))
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, html.EscapeString(job.SourceURL), html.EscapeString(branchText)))
 				}
 				if job.PackageURL != "" {
 					branchText := job.PackageBranch
 					if branchText == "" {
 						branchText = "default"
 					}
-					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, job.PackageURL, branchText))
+					repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, html.EscapeString(job.PackageURL), html.EscapeString(branchText)))
 				}
 				if len(repoLinks) > 0 {
 					packageCell += fmt.Sprintf(`<br><span style="font-size: 0.85em; color: #666;">%s</span>`,
 						strings.Join(repoLinks, ", "))
 				}
 
-				html += fmt.Sprintf(`
+				out += fmt.Sprintf(`
 					<tr>
 						<td>%s</td>
 						<td>%s</td>
@@ -536,25 +540,25 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 					</tr>`,
 					timeStr,
 					packageCell,
-					job.PackageVersion,
-					job.Maintainer,
-					job.Component,
+					html.EscapeString(job.PackageVersion),
+					html.EscapeString(job.Maintainer),
+					html.EscapeString(job.Component),
 					statusClass,
 					statusText,
-					job.TaskUUID,
-					job.TaskUUID,
-					job.TaskUUID,
+					html.EscapeString(job.TaskUUID),
+					html.EscapeString(job.TaskUUID),
+					html.EscapeString(job.TaskUUID),
 				)
 			}
 
-			html += `
+			out += `
 				</tbody>
 			</table>
 			`
 		}
 	}
 
-	html += `
+	out += `
     <div class="refresh-info">
         Page auto-refreshes every 10 seconds
     </div>
@@ -562,7 +566,7 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 </html>
 `
 
-	return html, nil
+	return out, nil
 }
 
 func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadResponse, error) {
@@ -650,10 +654,10 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 		}
 	}
 
-	return SubmitPayloadResponse{PipelineId: submission.TaskUUID}, nil
+	return SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
 }
 
-func (s *ChiefUsecase) BuildStatus(UUID string) (string, error) {
+func (s *ChiefUsecase) BuildStatus(UUID string) (BuildStatusResponse, error) {
 	buildSignature := tasks.Signature{
 		Name: "build",
 		UUID: UUID,
@@ -689,7 +693,13 @@ func (s *ChiefUsecase) BuildStatus(UUID string) (string, error) {
 		pipelineState = buildState.State
 	}
 
-	return pipelineState, nil
+	return BuildStatusResponse{
+		PipelineID:  UUID,
+		JobStatus:   pipelineState,
+		BuildStatus: buildState.State,
+		RepoStatus:  repoState.State,
+		State:       pipelineState,
+	}, nil
 }
 
 func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
@@ -732,7 +742,8 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 
 	job, err := s.monitoringRegistry.GetJob(oldTaskUUID)
 	if err != nil {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, fmt.Sprintf(`{"error": "job not found: %s"}`, oldTaskUUID))
+		log.Printf("Job not found for retry: %s: %v\n", oldTaskUUID, err)
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "job not found"}`)
 	}
 
 	parts := strings.Split(oldTaskUUID, "_")
@@ -759,13 +770,13 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 
 	if err := s.storage.CopyFileWithSudo(oldTarball, newTarball); err != nil {
 		log.Printf("Failed to copy submission tarball: %v\n", err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to copy submission files for retry: %s"}`, err.Error()))
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission files for retry"}`)
 	}
 
 	if _, err := os.Stat(oldDir); err == nil {
 		if err := s.storage.CopyDirWithSudo(oldDir, newDir); err != nil {
 			log.Printf("Failed to copy submission directory: %v\n", err)
-			return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to copy submission directory for retry: %s"}`, err.Error()))
+			return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission directory for retry"}`)
 		}
 	}
 
@@ -816,11 +827,15 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 		UUID: submission.TaskUUID,
 	}
 
-	chain, _ := tasks.NewChain(&buildSignature, &repoSignature)
+	chain, err := tasks.NewChain(&buildSignature, &repoSignature)
+	if err != nil {
+		log.Printf("Could not create chain: %v\n", err)
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to create retry task chain"}`)
+	}
 	_, err = s.server.SendChain(chain)
 	if err != nil {
 		log.Println("Could not send chain : " + err.Error())
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf(`{"error": "failed to queue retry task: %s"}`, err.Error()))
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
 	}
 
 	newJob := monitoring.JobInfo{
@@ -843,7 +858,7 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 
 	log.Printf("Job %s retried as new pipeline %s\n", oldTaskUUID, newTaskUUID)
 
-	return SubmitPayloadResponse{PipelineId: newTaskUUID}, nil
+	return SubmitPayloadResponse{PipelineID: newTaskUUID}, nil
 }
 
 func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
@@ -931,21 +946,45 @@ func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) erro
 	return nil
 }
 
-func (s *ChiefUsecase) BuildISO() error {
+func (s *ChiefUsecase) BuildISO(submission ISOSubmission) (SubmitPayloadResponse, error) {
+	submission.Timestamp = time.Now()
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_iso"
+
+	jsonStr, err := json.Marshal(submission)
+	if err != nil {
+		log.Println(err.Error())
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
+	}
+
 	signature := tasks.Signature{
 		Name: "iso",
-		UUID: uuid.New().String(),
+		UUID: submission.TaskUUID,
 		Args: []tasks.Arg{
 			{
 				Type:  "string",
-				Value: "iso-specific-value",
+				Value: string(jsonStr),
 			},
 		},
 	}
 	if _, err := s.server.SendTask(&signature); err != nil {
-		return httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		log.Printf("Could not send ISO task: %v\n", err)
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
-	return nil
+
+	if s.config.Monitoring.Enabled && s.monitoringRegistry != nil {
+		isoJob := monitoring.ISOJobInfo{
+			TaskUUID:    submission.TaskUUID,
+			RepoURL:     submission.RepoURL,
+			Branch:      submission.Branch,
+			SubmittedAt: submission.Timestamp,
+			State:       "PENDING",
+		}
+		if err := s.monitoringRegistry.RecordISOJob(isoJob); err != nil {
+			log.Printf("Failed to record ISO job: %v\n", err)
+		}
+	}
+
+	return SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
 }
 
 func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (string, error) {
@@ -1001,6 +1040,7 @@ func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (strin
 	if !strings.Contains(filetype, "gzip") {
 		log.Println("File upload rejected: should be a tar.gz file.")
 		os.Remove(blobPath)
+		os.Remove(tokenPath)
 		return "", httputil.NewHTTPError(http.StatusBadRequest, "")
 	}
 
