@@ -61,7 +61,7 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "403")
+		fmt.Fprintf(w, "400")
 		return
 	}
 	UUID := keys[0]
@@ -80,7 +80,7 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "403")
+		fmt.Fprintf(w, "400")
 		return
 	}
 	UUID := keys[0]
@@ -247,5 +247,5 @@ func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func VersionHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "{\"version\":\""+chiefService.Version+"\"}")
+	fmt.Fprintf(w, "{\"version\":\""+chiefService.GetVersion()+"\"}")
 }
