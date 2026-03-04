@@ -12,15 +12,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/blankon/irgsh-go/internal/cli/entity"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 	"gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
-var (
-	ErrCacheUnavailable     = errors.New("cache unavailable")
-	ErrRepoOrBranchNotFound = errors.New("repo or branch not found")
-)
+var ErrCacheUnavailable = errors.New("cache unavailable")
 
 // GitRepoSync implements usecase.RepoSync using a local git cache.
 type GitRepoSync struct {
@@ -88,13 +86,13 @@ func getRemoteHash(repoURL string, branch string) (string, error) {
 	if err != nil {
 		err = fmt.Errorf("git ls-remote: %w: %s", err, stderr.String())
 		log.Printf("[getRemoteHash] %v", err)
-		return "", ErrRepoOrBranchNotFound
+		return "", entity.ErrRepoOrBranchNotFound
 	}
 	parts := strings.Fields(out.String())
 	if len(parts) > 0 {
 		return parts[0], nil
 	}
-	return "", ErrRepoOrBranchNotFound
+	return "", entity.ErrRepoOrBranchNotFound
 }
 
 func removeCacheDir(cacheDir string) error {
@@ -265,7 +263,7 @@ func cloneCache(repoURL string, branch string, cacheDir string) error {
 			strings.Contains(errMsg, "reference not found") ||
 			strings.Contains(errMsg, "couldn't find remote ref") {
 			log.Printf("[cloneCache] repository or branch not found: %v", err)
-			return ErrRepoOrBranchNotFound
+			return entity.ErrRepoOrBranchNotFound
 		}
 		log.Printf("[cloneCache] failed to clone cache: %v", err)
 		return err

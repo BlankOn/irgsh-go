@@ -14,8 +14,9 @@ func (u *CLIUsecase) SaveConfig(cfg entity.Config) error {
 	if cfg.MaintainerSigningKey == "" {
 		return errors.New("signing key should not be empty")
 	}
-	if _, err := url.ParseRequestURI(cfg.ChiefAddress); err != nil {
-		return err
+	parsed, err := url.Parse(cfg.ChiefAddress)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return errors.New("chief address must be a valid URL with scheme and host")
 	}
 	return u.Config.Save(cfg)
 }

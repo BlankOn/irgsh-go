@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 )
@@ -32,5 +33,10 @@ func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (enti
 	}
 
 	fmt.Println("Pipeline " + resp.PipelineID + " has been queued for retry")
+
+	if err := u.Pipelines.SaveRetryID(resp.PipelineID); err != nil {
+		log.Printf("warning: failed to save retry pipeline ID: %v", err)
+	}
+
 	return resp, nil
 }

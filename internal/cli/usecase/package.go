@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
+
 	"github.com/google/uuid"
 )
 
@@ -51,15 +52,16 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 
 	// Validate URLs
 	if params.SourceURL != "" {
-		if _, err := url.ParseRequestURI(params.SourceURL); err != nil {
-			return entity.SubmitResponse{}, err
+		u, err := url.Parse(params.SourceURL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return entity.SubmitResponse{}, errors.New("--source must be a valid URL with scheme and host")
 		}
 	}
 	if params.PackageURL == "" {
 		return entity.SubmitResponse{}, errors.New("--package should not be empty")
 	}
-	if _, err := url.ParseRequestURI(params.PackageURL); err != nil {
-		return entity.SubmitResponse{}, err
+	if u, err := url.Parse(params.PackageURL); err != nil || u.Scheme == "" || u.Host == "" {
+		return entity.SubmitResponse{}, errors.New("--package must be a valid URL with scheme and host")
 	}
 
 	// Experimental prompt
@@ -91,7 +93,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		if err != nil {
 			// Only fall back to tarball download if the repo/branch was not found.
 			// Other errors (e.g. network, permission) should propagate immediately.
-			if !strings.Contains(err.Error(), "repo or branch not found") {
+			if !errors.Is(err, entity.ErrRepoOrBranchNotFound) {
 				return entity.SubmitResponse{}, err
 			}
 			fmt.Println(err.Error())
