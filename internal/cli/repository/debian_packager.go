@@ -4,8 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
+
+// safeFingerprint matches GPG key fingerprints (hex digits, with optional 0x prefix).
+var safeFingerprint = regexp.MustCompile(`^(0x)?[a-fA-F0-9]+$`)
 
 // shellRunner is the subset of ShellRunner needed by ShellDebianPackager.
 type shellRunner interface {
@@ -134,6 +138,9 @@ func (d *ShellDebianPackager) BuildSource(dir string) error {
 }
 
 func (d *ShellDebianPackager) Sign(dir, keyFingerprint string) error {
+	if !safeFingerprint.MatchString(keyFingerprint) {
+		return fmt.Errorf("invalid GPG key fingerprint: %q", keyFingerprint)
+	}
 	cmd := fmt.Sprintf("cd %s && debsign -k%s *.dsc", dir, keyFingerprint)
 	return d.shell.RunInteractive(cmd)
 }
