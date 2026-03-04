@@ -81,6 +81,8 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	}
 	tmpBase := filepath.Join(homeDir, ".irgsh", "tmp")
 	tmpDir := filepath.Join(tmpBase, tmpID)
+	defer os.RemoveAll(tmpDir)
+	defer os.Remove(filepath.Join(tmpBase, tmpID+".tar.gz"))
 
 	var downloadableTarballURL string
 	if params.SourceURL != "" {
@@ -96,7 +98,11 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 			// Try as downloadable tarball
 			downloadableTarballURL = strings.TrimSuffix(params.SourceURL, "\n")
 			log.Println("Downloading the tarball " + downloadableTarballURL)
-			resp, dlErr := http.Get(downloadableTarballURL) //nolint:gosec
+			dlReq, dlErr := http.NewRequestWithContext(ctx, http.MethodGet, downloadableTarballURL, nil)
+			if dlErr != nil {
+				return entity.SubmitResponse{}, dlErr
+			}
+			resp, dlErr := http.DefaultClient.Do(dlReq)
 			if dlErr != nil {
 				return entity.SubmitResponse{}, dlErr
 			}
@@ -208,8 +214,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 			packageName, packageVersion,
 		)
 		if _, shellErr := u.Shell.Output(cmdStr); shellErr != nil {
-			log.Printf("error: %v", shellErr)
-			log.Println("Failed to create orig tarball.")
+			return entity.SubmitResponse{}, fmt.Errorf("failed to create orig tarball: %w", shellErr)
 		}
 	}
 
@@ -298,14 +303,17 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		PackageBranch:          packageBranch,
 		SourceBranch:           sourceBranch,
 	}
-	jsonByte, _ := json.Marshal(submission)
+	jsonByte, err := json.Marshal(submission)
+	if err != nil {
+		return entity.SubmitResponse{}, fmt.Errorf("failed to marshal submission: %w", err)
+	}
 
 	// Sign auth token
 	log.Println("Signing auth token...")
 	tokenContent := b64.StdEncoding.EncodeToString(jsonByte)
 	tokenPath := filepath.Join(tmpDir, "token")
 	tokenSigPath := filepath.Join(tmpDir, "token.sig")
-	if err := os.WriteFile(tokenPath, []byte(tokenContent), 0644); err != nil {
+	if err := os.WriteFile(tokenPath, []byte(tokenContent), 0600); err != nil {
 		return entity.SubmitResponse{}, err
 	}
 	if err := u.GPG.ClearSign(tokenPath, tokenSigPath, cfg.MaintainerSigningKey); err != nil {
@@ -391,7 +399,7 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 		return "", "", err
 	}
 	if strings.Contains(buildLog, "404 page not found") {
-		return "", "", errors.New("builder log is not found. The worker/pipeline may terminated ungracefully")
+		return "", "", errors.New("builder log is not found. The worker/pipeline may have terminated ungracefully")
 	}
 
 	repoLog, err = u.Chief.FetchLog(ctx, pipelineID+".repo.log")
@@ -399,7 +407,7 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 		return "", "", err
 	}
 	if strings.Contains(repoLog, "404 page not found") {
-		return "", "", errors.New("repo log is not found. The worker/pipeline may terminated ungracefully")
+		return "", "", errors.New("repo log is not found. The worker/pipeline may have terminated ungracefully")
 	}
 
 	return buildLog, repoLog, nil

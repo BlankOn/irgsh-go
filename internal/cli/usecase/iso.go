@@ -85,7 +85,7 @@ func (u *CLIUsecase) ISOLog(ctx context.Context, pipelineID string) (string, err
 		return "", err
 	}
 	if strings.Contains(logResult, "404 page not found") {
-		return "", errors.New("ISO log is not found. The worker/pipeline may terminated ungracefully")
+		return "", errors.New("ISO log is not found. The worker/pipeline may have terminated ungracefully")
 	}
 
 	return logResult, nil
