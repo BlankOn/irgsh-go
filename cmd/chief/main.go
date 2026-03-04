@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -103,7 +102,7 @@ func main() {
 			},
 		)
 		if err != nil {
-			fmt.Println("Could not create server : " + err.Error())
+			log.Fatalf("Could not create server: %v", err)
 		}
 
 		chiefService = chiefusecase.NewChiefUsecase(

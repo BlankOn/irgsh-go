@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,6 +25,15 @@ import (
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
+
+// maxLogSize is the maximum size of a log file upload (10 MB).
+const maxLogSize = 10 << 20
+
+// safeIDPattern matches strings that contain only safe characters for use in
+// file paths and identifiers: alphanumeric, dots, hyphens, underscores.
+var safeIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._+-]+$`)
+
+var errInvalidID = errors.New("invalid identifier: contains unsafe characters")
 
 type ChiefUsecase struct {
 	config             config.IrgshConfig
@@ -93,7 +104,7 @@ func parseGPGKeys(output string) []Maintainer {
 				Email: "",
 			}
 
-			if len(fields) > 4 && len(fields[4]) >= 8 {
+			if len(fields) > 4 && len(fields[4]) >= 16 {
 				currentKey.KeyID = fields[4][len(fields[4])-16:]
 			}
 
@@ -433,6 +444,11 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 				</thead>
 				<tbody>`
 
+			jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
+			if locErr != nil {
+				jakartaLoc = time.UTC
+			}
+
 			for _, job := range jobs {
 				buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
 					s.server.GetBackend(),
@@ -489,11 +505,7 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 					statusText = "PENDING"
 				}
 
-				jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
-			if locErr != nil {
-				jakartaLoc = time.UTC
-			}
-			jakartaTime := job.SubmittedAt.In(jakartaLoc)
+				jakartaTime := job.SubmittedAt.In(jakartaLoc)
 				timeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
 					jakartaTime.Format("2006-01-02 15:04:05 MST"),
 					formatRelativeTime(job.SubmittedAt))
@@ -570,6 +582,13 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 }
 
 func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadResponse, error) {
+	if !safeIDPattern.MatchString(submission.MaintainerFingerprint) {
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid maintainer fingerprint")
+	}
+	if !safeIDPattern.MatchString(submission.PackageName) {
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid package name")
+	}
+
 	submission.Timestamp = time.Now()
 	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_" + submission.MaintainerFingerprint + "_" + submission.PackageName
 
@@ -862,6 +881,10 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 }
 
 func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
+	if !safeIDPattern.MatchString(id) {
+		return httputil.NewHTTPError(http.StatusBadRequest, "invalid artifact id")
+	}
+
 	targetPath := s.storage.ArtifactsDir()
 	if err := s.storage.EnsureDir(targetPath); err != nil {
 		log.Println(err.Error())
@@ -910,13 +933,20 @@ func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
 }
 
 func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) error {
+	if !safeIDPattern.MatchString(id) {
+		return httputil.NewHTTPError(http.StatusBadRequest, "invalid log id")
+	}
+	if !safeIDPattern.MatchString(logType) {
+		return httputil.NewHTTPError(http.StatusBadRequest, "invalid log type")
+	}
+
 	targetPath := s.storage.LogsDir()
 	if err := s.storage.EnsureDir(targetPath); err != nil {
 		log.Println(err.Error())
 		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
-	fileBytes, err := io.ReadAll(file)
+	fileBytes, err := io.ReadAll(io.LimitReader(file, maxLogSize))
 	if err != nil {
 		log.Println(err.Error())
 		return httputil.NewHTTPError(http.StatusBadRequest, "")
@@ -947,6 +977,13 @@ func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) erro
 }
 
 func (s *ChiefUsecase) BuildISO(submission ISOSubmission) (SubmitPayloadResponse, error) {
+	if submission.RepoURL == "" {
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "repoUrl is required")
+	}
+	if submission.Branch == "" {
+		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch is required")
+	}
+
 	submission.Timestamp = time.Now()
 	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_iso"
 
@@ -1015,6 +1052,7 @@ func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (strin
 
 	if err := s.gpg.VerifyFile(tokenPath); err != nil {
 		log.Println(err)
+		os.Remove(tokenPath)
 		return "", httputil.NewHTTPError(http.StatusUnauthorized, "401 Unauthorized")
 	}
 
