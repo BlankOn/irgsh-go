@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -20,12 +19,12 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 	if errors.As(err, &useErr) {
 		w.WriteHeader(useErr.Code)
 		if useErr.Message != "" {
-			fmt.Fprintf(w, useErr.Message)
+			io.WriteString(w, useErr.Message)
 		}
 		return
 	}
 	w.WriteHeader(http.StatusInternalServerError)
-	fmt.Fprintf(w, "500")
+	io.WriteString(w, "500")
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +34,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		writeUsecaseError(w, err)
 		return
 	}
-	fmt.Fprintf(w, html)
+	io.WriteString(w, html)
 }
 
 func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
@@ -43,9 +42,9 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&submission)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "400")
+		io.WriteString(w, "400")
 		return
 	}
 
@@ -58,17 +57,17 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	jsonStr, err := json.Marshal(payload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
+		io.WriteString(w, "500")
 		return
 	}
-	fmt.Fprintf(w, string(jsonStr))
+	w.Write(jsonStr)
 }
 
 func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "400")
+		io.WriteString(w, "400")
 		return
 	}
 	UUID := keys[0]
@@ -82,17 +81,17 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	jsonStr, err := json.Marshal(status)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
+		io.WriteString(w, "500")
 		return
 	}
-	fmt.Fprintf(w, string(jsonStr))
+	w.Write(jsonStr)
 }
 
 func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "400")
+		io.WriteString(w, "400")
 		return
 	}
 	UUID := keys[0]
@@ -103,16 +102,31 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := fmt.Sprintf(`{"pipelineId": "%s", "jobStatus": "%s", "isoStatus": "%s", "state": "%s"}`,
-		UUID, jobStatus, isoStatus, jobStatus)
-	fmt.Fprintf(w, res)
+	res := struct {
+		PipelineID string `json:"pipelineId"`
+		JobStatus  string `json:"jobStatus"`
+		ISOStatus  string `json:"isoStatus"`
+		State      string `json:"state"`
+	}{
+		PipelineID: UUID,
+		JobStatus:  jobStatus,
+		ISOStatus:  isoStatus,
+		State:      jobStatus,
+	}
+	jsonStr, err := json.Marshal(res)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, "500")
+		return
+	}
+	w.Write(jsonStr)
 }
 
 func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"error": "uuid parameter is required"}`)
+		io.WriteString(w, `{"error": "uuid parameter is required"}`)
 		return
 	}
 	oldTaskUUID := keys[0]
@@ -126,10 +140,10 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	jsonStr, err := json.Marshal(payload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
+		io.WriteString(w, "500")
 		return
 	}
-	fmt.Fprintf(w, string(jsonStr))
+	w.Write(jsonStr)
 }
 
 func artifactUploadHandler() http.HandlerFunc {
@@ -204,7 +218,7 @@ func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
 	var submission chiefusecase.ISOSubmission
 	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "400")
+		io.WriteString(w, "400")
 		return
 	}
 
@@ -217,10 +231,10 @@ func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
 	jsonStr, err := json.Marshal(payload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "500")
+		io.WriteString(w, "500")
 		return
 	}
-	fmt.Fprintf(w, string(jsonStr))
+	w.Write(jsonStr)
 }
 
 func submissionUploadHandler() http.HandlerFunc {
@@ -265,7 +279,10 @@ func submissionUploadHandler() http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "{\"id\":\""+id+"\"}")
+		resp := struct {
+			ID string `json:"id"`
+		}{ID: id}
+		json.NewEncoder(w).Encode(resp)
 	})
 }
 
@@ -275,9 +292,12 @@ func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
 		writeUsecaseError(w, err)
 		return
 	}
-	fmt.Fprintf(w, output)
+	io.WriteString(w, output)
 }
 
 func VersionHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "{\"version\":\""+chiefService.GetVersion()+"\"}")
+	resp := struct {
+		Version string `json:"version"`
+	}{Version: chiefService.GetVersion()}
+	json.NewEncoder(w).Encode(resp)
 }
