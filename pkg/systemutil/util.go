@@ -59,17 +59,20 @@ func StreamLog(path string) {
 	}
 }
 
-// WriteLog appends a message to both stdout and the log file using echo and tee
+// WriteLog appends a message to both stdout and the log file.
 func WriteLog(logPath string, message string) error {
-	if len(logPath) == 0 {
-		fmt.Println(message)
+	fmt.Println(message)
+	if logPath == "" {
 		return nil
 	}
 
-	// Use echo with tee to write to both stdout and log file
-	// This ensures the message appears in the streaming log
-	cmdStr := fmt.Sprintf("echo '%s' | tee -a %s", message, logPath)
-	_, err := exec.Command("bash", "-c", cmdStr).Output()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(message + "\n")
 	return err
 }
 
@@ -189,7 +192,12 @@ func MoveFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	srcInfo, err := in.Stat()
+	if err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, srcInfo.Mode())
 	if err != nil {
 		return err
 	}
