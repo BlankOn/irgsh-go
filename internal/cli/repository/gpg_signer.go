@@ -2,30 +2,34 @@ package repository
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
-
-	"github.com/blankon/irgsh-go/internal/cli/usecase"
 )
 
-// ShellGPGSigner implements usecase.GPGSigner using gpg shell commands.
-type ShellGPGSigner struct {
-	shell usecase.ShellRunner
-}
+// ShellGPGSigner implements usecase.GPGSigner using gpg commands.
+type ShellGPGSigner struct{}
 
-func NewShellGPGSigner(shell usecase.ShellRunner) *ShellGPGSigner {
-	return &ShellGPGSigner{shell: shell}
+func NewShellGPGSigner() *ShellGPGSigner {
+	return &ShellGPGSigner{}
 }
 
 func (g *ShellGPGSigner) GetIdentity(fingerprint string) (string, error) {
-	cmd := fmt.Sprintf("gpg -K | grep -A 1 %s | tail -n 1 | cut -d ']' -f 2", fingerprint)
-	out, err := g.shell.Output(cmd)
+	out, err := exec.Command("gpg", "-K", "--with-colons", fingerprint).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get maintainer identity: %w", err)
 	}
-	return strings.TrimSpace(out), nil
+	// Parse uid line from colons output
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) > 9 && fields[0] == "uid" {
+			return strings.TrimSpace(fields[9]), nil
+		}
+	}
+	return "", fmt.Errorf("no uid found for fingerprint %s", fingerprint)
 }
 
 func (g *ShellGPGSigner) ClearSign(inputPath, outputPath, fingerprint string) error {
-	cmd := fmt.Sprintf("gpg -u %s --clearsign --output %s --sign %s", fingerprint, outputPath, inputPath)
-	return g.shell.RunInteractive(cmd)
+	cmd := exec.Command("gpg", "-u", fingerprint, "--clearsign", "--output", outputPath, "--sign", inputPath)
+	cmd.Stdin = nil
+	return cmd.Run()
 }

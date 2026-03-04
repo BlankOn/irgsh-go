@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,26 +43,23 @@ func (s *Storage) SubmissionSignaturePath(taskUUID string) string {
 }
 
 func (s *Storage) ExtractSubmission(taskUUID string) error {
-	cmdStr := fmt.Sprintf("cd %s && tar -xvf %s.tar.gz -C %s", s.SubmissionsDir(), taskUUID, taskUUID)
-	return exec.Command("bash", "-c", cmdStr).Run()
+	tarball := filepath.Join(s.SubmissionsDir(), taskUUID+".tar.gz")
+	dir := filepath.Join(s.SubmissionsDir(), taskUUID)
+	return exec.Command("tar", "-xvf", tarball, "-C", dir).Run()
 }
 
 func (s *Storage) CopyFileWithSudo(src, dst string) error {
-	cmdStr := fmt.Sprintf("sudo cp '%s' '%s'", src, dst)
-	return exec.Command("bash", "-c", cmdStr).Run()
+	return exec.Command("sudo", "cp", src, dst).Run()
 }
 
 func (s *Storage) CopyDirWithSudo(src, dst string) error {
-	cmdStr := fmt.Sprintf("sudo cp -r '%s' '%s'", src, dst)
-	return exec.Command("bash", "-c", cmdStr).Run()
+	return exec.Command("sudo", "cp", "-r", src, dst).Run()
 }
 
 func (s *Storage) ChownWithSudo(path string) error {
-	cmdStr := fmt.Sprintf("sudo chown irgsh:irgsh '%s'", path)
-	return exec.Command("bash", "-c", cmdStr).Run()
+	return exec.Command("sudo", "chown", "irgsh:irgsh", path).Run()
 }
 
 func (s *Storage) ChownRecursiveWithSudo(path string) error {
-	cmdStr := fmt.Sprintf("sudo chown -R irgsh:irgsh '%s'", path)
-	return exec.Command("bash", "-c", cmdStr).Run()
+	return exec.Command("sudo", "chown", "-R", "irgsh:irgsh", path).Run()
 }

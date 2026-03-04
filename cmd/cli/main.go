@@ -28,7 +28,7 @@ func main() {
 	chiefClient := repository.NewHTTPChiefClient(configStore)
 	repoSync := repository.NewGitRepoSync(filepath.Join(basePath, "cache"))
 	debianPkg := repository.NewShellDebianPackager(shell)
-	gpgSigner := repository.NewShellGPGSigner(shell)
+	gpgSigner := repository.NewShellGPGSigner()
 	releases := repository.NewGitHubReleaseFetcher()
 	updater := &repository.GoUpdateApplier{}
 	prompter := &repository.TerminalPrompter{}

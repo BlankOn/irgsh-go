@@ -1,6 +1,11 @@
 package repository
 
-import "os/exec"
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
 
 type GPG struct {
 	GnupgDir string
@@ -11,16 +16,16 @@ func NewGPG(gnupgDir string, isDev bool) *GPG {
 	return &GPG{GnupgDir: gnupgDir, IsDev: isDev}
 }
 
-func (g *GPG) envPrefix() string {
-	if g.IsDev {
-		return ""
+func (g *GPG) gpgCmd(args ...string) *exec.Cmd {
+	cmd := exec.Command("gpg", args...)
+	if !g.IsDev {
+		cmd.Env = append(os.Environ(), "GNUPGHOME="+g.GnupgDir)
 	}
-	return "GNUPGHOME=" + g.GnupgDir + " "
+	return cmd
 }
 
 func (g *GPG) ListKeysWithColons() (string, error) {
-	cmdStr := g.envPrefix() + "gpg --list-keys --with-colons"
-	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	output, err := g.gpgCmd("--list-keys", "--with-colons").Output()
 	if err != nil {
 		return "", err
 	}
@@ -28,20 +33,29 @@ func (g *GPG) ListKeysWithColons() (string, error) {
 }
 
 func (g *GPG) ListKeys() (string, error) {
-	cmdStr := g.envPrefix() + "gpg --list-keys | tail -n +2"
-	output, err := exec.Command("bash", "-c", cmdStr).Output()
+	output, err := g.gpgCmd("--list-keys").Output()
 	if err != nil {
 		return "", err
+	}
+	// Skip the first line (trust database info)
+	lines := strings.SplitN(string(output), "\n", 2)
+	if len(lines) > 1 {
+		return lines[1], nil
 	}
 	return string(output), nil
 }
 
 func (g *GPG) VerifySignedSubmission(submissionPath string) error {
-	cmdStr := "cd " + submissionPath + " && " + g.envPrefix() + "gpg --verify signed/*.dsc"
-	return exec.Command("bash", "-c", cmdStr).Run()
+	matches, err := filepath.Glob(filepath.Join(submissionPath, "signed", "*.dsc"))
+	if err != nil {
+		return err
+	}
+	if len(matches) == 0 {
+		return exec.ErrNotFound
+	}
+	return g.gpgCmd("--verify", matches[0]).Run()
 }
 
 func (g *GPG) VerifyFile(filePath string) error {
-	cmdStr := g.envPrefix() + "gpg --verify " + filePath
-	return exec.Command("bash", "-c", cmdStr).Run()
+	return g.gpgCmd("--verify", filePath).Run()
 }
