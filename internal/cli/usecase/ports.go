@@ -7,8 +7,6 @@ import (
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 )
 
-type ProgressFunc func(uploaded, total int64)
-
 type ConfigStore interface {
 	Load() (entity.Config, error)
 	Save(config entity.Config) error
@@ -35,7 +33,7 @@ type ShellRunner interface {
 
 type ChiefAPI interface {
 	GetVersion(ctx context.Context) (entity.VersionResponse, error)
-	UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress ProgressFunc) (entity.UploadResponse, error)
+	UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress func(uploaded, total int64)) (entity.UploadResponse, error)
 	SubmitPackage(ctx context.Context, submission entity.Submission) (entity.SubmitResponse, error)
 	SubmitISO(ctx context.Context, submission entity.ISOSubmission) (entity.SubmitResponse, error)
 	GetPackageStatus(ctx context.Context, pipelineID string) (entity.PackageStatus, error)
@@ -68,8 +66,6 @@ type DebianPackager interface {
 	BuildSource(dir string) error
 	Sign(dir, keyFingerprint string) error
 	GenBuildInfo(dir string) error
-	GenChanges(dir string) (string, error)
-	Lintian(changesPath string) (string, error)
 }
 
 // GPGSigner abstracts GPG operations for the CLI.

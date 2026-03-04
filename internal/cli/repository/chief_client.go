@@ -13,16 +13,20 @@ import (
 	"path"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
-	"github.com/blankon/irgsh-go/internal/cli/usecase"
 )
+
+// configLoader is the subset of ConfigStore needed by HTTPChiefClient.
+type configLoader interface {
+	Load() (entity.Config, error)
+}
 
 // HTTPChiefClient implements usecase.ChiefAPI using net/http.
 type HTTPChiefClient struct {
-	configStore usecase.ConfigStore
+	configStore configLoader
 	httpClient  *http.Client
 }
 
-func NewHTTPChiefClient(configStore usecase.ConfigStore) *HTTPChiefClient {
+func NewHTTPChiefClient(configStore configLoader) *HTTPChiefClient {
 	return &HTTPChiefClient{
 		configStore: configStore,
 		httpClient:  &http.Client{},
@@ -77,7 +81,7 @@ func (c *HTTPChiefClient) GetVersion(ctx context.Context) (entity.VersionRespons
 type progressWriter struct {
 	total      int64
 	uploaded   int64
-	onProgress usecase.ProgressFunc
+	onProgress func(uploaded, total int64)
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
@@ -89,7 +93,7 @@ func (pw *progressWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress usecase.ProgressFunc) (entity.UploadResponse, error) {
+func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress func(uploaded, total int64)) (entity.UploadResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
 		return entity.UploadResponse{}, err

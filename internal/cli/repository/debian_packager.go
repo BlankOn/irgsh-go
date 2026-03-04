@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/blankon/irgsh-go/internal/cli/usecase"
 )
+
+// shellRunner is the subset of ShellRunner needed by ShellDebianPackager.
+type shellRunner interface {
+	Output(cmd string) (string, error)
+	RunInteractive(cmd string) error
+}
 
 // ShellDebianPackager implements usecase.DebianPackager using shell commands.
 type ShellDebianPackager struct {
-	shell usecase.ShellRunner
+	shell shellRunner
 }
 
-func NewShellDebianPackager(shell usecase.ShellRunner) *ShellDebianPackager {
+func NewShellDebianPackager(shell shellRunner) *ShellDebianPackager {
 	return &ShellDebianPackager{shell: shell}
 }
 
@@ -137,16 +141,6 @@ func (d *ShellDebianPackager) Sign(dir, keyFingerprint string) error {
 func (d *ShellDebianPackager) GenBuildInfo(dir string) error {
 	cmd := fmt.Sprintf("cd %s && dpkg-genbuildinfo", dir)
 	return d.shell.RunInteractive(cmd)
-}
-
-func (d *ShellDebianPackager) GenChanges(dir string) (string, error) {
-	cmd := fmt.Sprintf("cd %s && dpkg-genchanges", dir)
-	return d.shell.Output(cmd)
-}
-
-func (d *ShellDebianPackager) Lintian(changesPath string) (string, error) {
-	cmd := fmt.Sprintf("lintian --profile blankon %s 2>&1", changesPath)
-	return d.shell.Output(cmd)
 }
 
 // readFirstLine reads the first line from a file.

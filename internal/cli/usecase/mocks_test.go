@@ -5,7 +5,6 @@ import (
 	"io"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
-	"github.com/blankon/irgsh-go/internal/cli/usecase"
 )
 
 // mockConfigStore implements usecase.ConfigStore for testing.
@@ -62,29 +61,29 @@ func (m *mockPipelineStore) LoadRetryID() (string, error) {
 
 // mockChiefAPI implements usecase.ChiefAPI for testing.
 type mockChiefAPI struct {
-	version       entity.VersionResponse
-	versionErr    error
-	uploadResp    entity.UploadResponse
-	uploadErr     error
-	submitResp    entity.SubmitResponse
-	submitErr     error
-	isoResp       entity.SubmitResponse
-	isoErr        error
-	pkgStatus     entity.PackageStatus
-	pkgStatusErr  error
-	isoStatus     entity.ISOStatus
-	isoStatusErr  error
-	retryResp     entity.RetryResponse
-	retryErr      error
-	fetchLogResp  string
-	fetchLogErr   error
+	version      entity.VersionResponse
+	versionErr   error
+	uploadResp   entity.UploadResponse
+	uploadErr    error
+	submitResp   entity.SubmitResponse
+	submitErr    error
+	isoResp      entity.SubmitResponse
+	isoErr       error
+	pkgStatus    entity.PackageStatus
+	pkgStatusErr error
+	isoStatus    entity.ISOStatus
+	isoStatusErr error
+	retryResp    entity.RetryResponse
+	retryErr     error
+	fetchLogResp string
+	fetchLogErr  error
 }
 
 func (m *mockChiefAPI) GetVersion(_ context.Context) (entity.VersionResponse, error) {
 	return m.version, m.versionErr
 }
 
-func (m *mockChiefAPI) UploadSubmission(_ context.Context, _, _ string, _ usecase.ProgressFunc) (entity.UploadResponse, error) {
+func (m *mockChiefAPI) UploadSubmission(_ context.Context, _, _ string, _ func(int64, int64)) (entity.UploadResponse, error) {
 	return m.uploadResp, m.uploadErr
 }
 
@@ -146,7 +145,6 @@ type mockDebianPackager struct {
 	extendedVersion string
 	maintainer      string
 	uploaders       string
-	lintianOutput   string
 	err             error
 }
 
@@ -180,14 +178,6 @@ func (m *mockDebianPackager) Sign(_, _ string) error {
 
 func (m *mockDebianPackager) GenBuildInfo(_ string) error {
 	return m.err
-}
-
-func (m *mockDebianPackager) GenChanges(_ string) (string, error) {
-	return "", m.err
-}
-
-func (m *mockDebianPackager) Lintian(_ string) (string, error) {
-	return m.lintianOutput, m.err
 }
 
 // mockGPGSigner implements usecase.GPGSigner for testing.
