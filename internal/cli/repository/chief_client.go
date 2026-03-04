@@ -13,6 +13,7 @@ import (
 	"path"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 // configLoader is the subset of ConfigStore needed by HTTPChiefClient.
@@ -45,7 +46,7 @@ func checkResponse(resp *http.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
-	return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+	return httputil.HTTPStatusError{StatusCode: resp.StatusCode}
 }
 
 func (c *HTTPChiefClient) GetVersion(ctx context.Context) (entity.VersionResponse, error) {

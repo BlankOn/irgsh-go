@@ -7,6 +7,7 @@ import (
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -101,7 +102,7 @@ func TestISOLog_NotFound(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
 		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{fetchLogResp: "404 page not found"},
+		&mockChiefAPI{fetchLogErr: httputil.HTTPStatusError{StatusCode: 404}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.ISOLog(context.Background(), "iso-123")

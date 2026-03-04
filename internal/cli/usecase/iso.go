@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 )
@@ -82,10 +81,10 @@ func (u *CLIUsecase) ISOLog(ctx context.Context, pipelineID string) (string, err
 
 	logResult, err := u.Chief.FetchLog(ctx, pipelineID+".iso.log")
 	if err != nil {
+		if isHTTPNotFound(err) {
+			return "", errors.New("ISO log is not found. The worker/pipeline may have terminated ungracefully")
+		}
 		return "", err
-	}
-	if strings.Contains(logResult, "404 page not found") {
-		return "", errors.New("ISO log is not found. The worker/pipeline may have terminated ungracefully")
 	}
 
 	return logResult, nil

@@ -7,6 +7,7 @@ import (
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -94,8 +95,8 @@ func TestPackageLog_BuildLogNotFound(t *testing.T) {
 		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		&mockChiefAPI{
-			pkgStatus:    entity.PackageStatus{State: "DONE"},
-			fetchLogResp: "404 page not found",
+			pkgStatus:   entity.PackageStatus{State: "DONE"},
+			fetchLogErr: httputil.HTTPStatusError{StatusCode: 404},
 		},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)

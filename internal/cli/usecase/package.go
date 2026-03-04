@@ -12,12 +12,17 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 
 	"github.com/google/uuid"
 )
+
+// safeDebianName matches safe Debian package names and version strings.
+// Rejects shell metacharacters while allowing all valid Debian identifiers.
+var safeDebianName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.+~:-]*$`)
 
 func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitParams) (entity.SubmitResponse, error) {
 	cfg, err := u.Config.Load()
@@ -52,15 +57,15 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 
 	// Validate URLs
 	if params.SourceURL != "" {
-		u, err := url.Parse(params.SourceURL)
-		if err != nil || u.Scheme == "" || u.Host == "" {
+		srcURL, err := url.Parse(params.SourceURL)
+		if err != nil || srcURL.Scheme == "" || srcURL.Host == "" {
 			return entity.SubmitResponse{}, errors.New("--source must be a valid URL with scheme and host")
 		}
 	}
 	if params.PackageURL == "" {
 		return entity.SubmitResponse{}, errors.New("--package should not be empty")
 	}
-	if u, err := url.Parse(params.PackageURL); err != nil || u.Scheme == "" || u.Host == "" {
+	if pkgURL, err := url.Parse(params.PackageURL); err != nil || pkgURL.Scheme == "" || pkgURL.Host == "" {
 		return entity.SubmitResponse{}, errors.New("--package must be a valid URL with scheme and host")
 	}
 
@@ -146,12 +151,18 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	if packageName == "" {
 		return entity.SubmitResponse{}, errors.New("repository does not contain debian spec directory")
 	}
+	if !safeDebianName.MatchString(packageName) {
+		return entity.SubmitResponse{}, fmt.Errorf("invalid package name %q: contains unsafe characters", packageName)
+	}
 	log.Println("Package name: " + packageName)
 
 	log.Println("Getting package version...")
 	packageVersion, err := u.Debian.ExtractVersion(changelogPath)
 	if err != nil {
 		return entity.SubmitResponse{}, err
+	}
+	if !safeDebianName.MatchString(packageVersion) {
+		return entity.SubmitResponse{}, fmt.Errorf("invalid package version %q: contains unsafe characters", packageVersion)
 	}
 	log.Println("Package version: " + packageVersion)
 
@@ -326,8 +337,10 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Uploading blob...")
 	blobPath := filepath.Join(tmpBase, tmpID+".tar.gz")
 	uploadResp, err := u.Chief.UploadSubmission(ctx, blobPath, tokenSigPath, func(uploaded, total int64) {
-		percentage := float64(uploaded) / float64(total) * 100
-		fmt.Printf("\rUploading: %.2f%% (%d/%d bytes)", percentage, uploaded, total)
+		if total > 0 {
+			percentage := float64(uploaded) / float64(total) * 100
+			fmt.Printf("\rUploading: %.2f%% (%d/%d bytes)", percentage, uploaded, total)
+		}
 	})
 	if err != nil {
 		return entity.SubmitResponse{}, fmt.Errorf("upload failed: %w", err)
@@ -398,18 +411,18 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 
 	buildLog, err = u.Chief.FetchLog(ctx, pipelineID+".build.log")
 	if err != nil {
+		if isHTTPNotFound(err) {
+			return "", "", errors.New("builder log is not found. The worker/pipeline may have terminated ungracefully")
+		}
 		return "", "", err
-	}
-	if strings.Contains(buildLog, "404 page not found") {
-		return "", "", errors.New("builder log is not found. The worker/pipeline may have terminated ungracefully")
 	}
 
 	repoLog, err = u.Chief.FetchLog(ctx, pipelineID+".repo.log")
 	if err != nil {
+		if isHTTPNotFound(err) {
+			return "", "", errors.New("repo log is not found. The worker/pipeline may have terminated ungracefully")
+		}
 		return "", "", err
-	}
-	if strings.Contains(repoLog, "404 page not found") {
-		return "", "", errors.New("repo log is not found. The worker/pipeline may have terminated ungracefully")
 	}
 
 	return buildLog, repoLog, nil
