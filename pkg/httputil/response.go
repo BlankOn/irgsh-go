@@ -83,10 +83,15 @@ func PostJSONWithRetry(ctx context.Context, client *http.Client, url string,
 				onError(i, maxRetries, err)
 			}
 			if i < maxRetries {
-				time.Sleep(delay)
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 			continue
 		}
+		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -98,7 +103,11 @@ func PostJSONWithRetry(ctx context.Context, client *http.Client, url string,
 			onError(i, maxRetries, lastErr)
 		}
 		if i < maxRetries {
-			time.Sleep(delay)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 	return lastErr
