@@ -8,9 +8,9 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
-	"sync/atomic"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
@@ -37,6 +37,13 @@ func (c *HTTPChiefClient) baseURL() (string, error) {
 	return cfg.ChiefAddress, nil
 }
 
+func checkResponse(resp *http.Response) error {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+}
+
 func (c *HTTPChiefClient) GetVersion(ctx context.Context) (entity.VersionResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
@@ -55,6 +62,10 @@ func (c *HTTPChiefClient) GetVersion(ctx context.Context) (entity.VersionRespons
 	}
 	defer resp.Body.Close()
 
+	if err := checkResponse(resp); err != nil {
+		return entity.VersionResponse{}, err
+	}
+
 	var v entity.VersionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
 		return entity.VersionResponse{}, err
@@ -71,9 +82,9 @@ type progressWriter struct {
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
 	n := len(p)
-	atomic.AddInt64(&pw.uploaded, int64(n))
+	pw.uploaded += int64(n)
 	if pw.onProgress != nil {
-		pw.onProgress(atomic.LoadInt64(&pw.uploaded), pw.total)
+		pw.onProgress(pw.uploaded, pw.total)
 	}
 	return n, nil
 }
@@ -172,6 +183,10 @@ func (c *HTTPChiefClient) SubmitPackage(ctx context.Context, submission entity.S
 	}
 	defer resp.Body.Close()
 
+	if err := checkResponse(resp); err != nil {
+		return entity.SubmitResponse{}, err
+	}
+
 	var sr entity.SubmitResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
 		return entity.SubmitResponse{}, err
@@ -202,6 +217,10 @@ func (c *HTTPChiefClient) SubmitISO(ctx context.Context, submission entity.ISOSu
 	}
 	defer resp.Body.Close()
 
+	if err := checkResponse(resp); err != nil {
+		return entity.SubmitResponse{}, err
+	}
+
 	var sr entity.SubmitResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
 		return entity.SubmitResponse{}, err
@@ -215,7 +234,7 @@ func (c *HTTPChiefClient) GetPackageStatus(ctx context.Context, pipelineID strin
 		return entity.PackageStatus{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/status?uuid="+pipelineID, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/status?uuid="+url.QueryEscape(pipelineID), nil)
 	if err != nil {
 		return entity.PackageStatus{}, err
 	}
@@ -225,6 +244,10 @@ func (c *HTTPChiefClient) GetPackageStatus(ctx context.Context, pipelineID strin
 		return entity.PackageStatus{}, err
 	}
 	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return entity.PackageStatus{}, err
+	}
 
 	var ps entity.PackageStatus
 	if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
@@ -239,7 +262,7 @@ func (c *HTTPChiefClient) GetISOStatus(ctx context.Context, pipelineID string) (
 		return entity.ISOStatus{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/iso-status?uuid="+pipelineID, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/iso-status?uuid="+url.QueryEscape(pipelineID), nil)
 	if err != nil {
 		return entity.ISOStatus{}, err
 	}
@@ -249,6 +272,10 @@ func (c *HTTPChiefClient) GetISOStatus(ctx context.Context, pipelineID string) (
 		return entity.ISOStatus{}, err
 	}
 	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return entity.ISOStatus{}, err
+	}
 
 	var is entity.ISOStatus
 	if err := json.NewDecoder(resp.Body).Decode(&is); err != nil {
@@ -263,7 +290,7 @@ func (c *HTTPChiefClient) Retry(ctx context.Context, pipelineID string) (entity.
 		return entity.RetryResponse{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/retry?uuid="+pipelineID, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/retry?uuid="+url.QueryEscape(pipelineID), nil)
 	if err != nil {
 		return entity.RetryResponse{}, err
 	}
@@ -273,6 +300,10 @@ func (c *HTTPChiefClient) Retry(ctx context.Context, pipelineID string) (entity.
 		return entity.RetryResponse{}, err
 	}
 	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return entity.RetryResponse{}, err
+	}
 
 	var rr entity.RetryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&rr); err != nil {
@@ -298,7 +329,11 @@ func (c *HTTPChiefClient) FetchLog(ctx context.Context, logPath string) (string,
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	if err := checkResponse(resp); err != nil {
+		return "", err
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return "", err
 	}
