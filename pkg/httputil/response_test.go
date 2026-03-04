@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,22 +42,6 @@ func TestResponseJSON(t *testing.T) {
 	assert.Equal(t, w.Code, 500)
 }
 
-func TestDecodeJSON(t *testing.T) {
-	type payload struct {
-		Name string `json:"name"`
-	}
-
-	var result payload
-	err := DecodeJSON(strings.NewReader(`{"name":"irgsh"}`), &result)
-	assert.NoError(t, err)
-	assert.Equal(t, "irgsh", result.Name)
-
-	err = DecodeJSON(strings.NewReader(`{"name":"irgsh","extra":"oops"}`), &result)
-	assert.Error(t, err)
-
-	err = DecodeJSON(strings.NewReader(`{"name":"irgsh"}`), nil)
-	assert.NoError(t, err)
-}
 
 func TestPostJSONWithRetry_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

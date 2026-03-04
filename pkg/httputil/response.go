@@ -18,17 +18,18 @@ type StandardError struct {
 // ResponseJSON response http request with application/json
 func ResponseJSON(data interface{}, status int, writer http.ResponseWriter) (err error) {
 	writer.Header().Set("Content-type", "application/json")
-	writer.WriteHeader(status)
 
 	d, err := json.Marshal(data)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 		d, _ = json.Marshal(StandardError{Message: "ResponseJSON: Failed to response " + err.Error()})
-		err = fmt.Errorf("ResponseJSON: Failed to response : %s", err)
+		writer.Write(d)
+		return fmt.Errorf("ResponseJSON: Failed to response : %s", err)
 	}
 
+	writer.WriteHeader(status)
 	writer.Write(d)
-	return
+	return nil
 }
 
 // ResponseError response http request with standard error
@@ -113,12 +114,3 @@ func PostJSONWithRetry(ctx context.Context, client *http.Client, url string,
 	return lastErr
 }
 
-// DecodeJSON decodes a JSON body into v, rejecting unknown fields.
-func DecodeJSON(r io.Reader, v interface{}) error {
-	if v == nil {
-		return nil
-	}
-	dec := json.NewDecoder(r)
-	dec.DisallowUnknownFields()
-	return dec.Decode(v)
-}
