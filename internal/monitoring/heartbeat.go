@@ -1,14 +1,16 @@
 package monitoring
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
 )
 
 // StartHeartbeatLoop connects to Redis and sends periodic heartbeats.
-// It blocks forever; callers should invoke it in a goroutine.
+// It blocks until ctx is cancelled; callers should invoke it in a goroutine.
 func StartHeartbeatLoop(
+	ctx context.Context,
 	redisAddr string,
 	ttl time.Duration,
 	instanceType InstanceType,
@@ -56,7 +58,12 @@ func StartHeartbeatLoop(
 	}
 
 	send()
-	for range ticker.C {
-		send()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			send()
+		}
 	}
 }

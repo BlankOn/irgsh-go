@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -138,6 +139,7 @@ func startMonitoringHeartbeat() {
 	ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
 	interval := time.Duration(irgshConfig.Monitoring.HeartbeatInterval) * time.Second
 	monitoring.StartHeartbeatLoop(
+		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeRepo, irgshConfig.Repo.Workdir,
 		interval, func() int { return activeTasks },
