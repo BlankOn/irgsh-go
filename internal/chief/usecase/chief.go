@@ -1068,11 +1068,13 @@ func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
 
 	if _, err := newFile.Write(header); err != nil {
 		log.Println(err.Error())
+		os.Remove(newPath)
 		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if _, err := io.Copy(newFile, file); err != nil {
 		log.Println(err.Error())
+		os.Remove(newPath)
 		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
@@ -1220,9 +1222,10 @@ func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (strin
 	}
 	header = header[:n]
 
-	filetype := strings.Split(http.DetectContentType(header), ";")[0]
-	log.Println(filetype)
-	if !strings.Contains(filetype, "gzip") {
+	filetype := http.DetectContentType(header)
+	switch filetype {
+	case "application/gzip", "application/x-gzip":
+	default:
 		log.Println("File upload rejected: should be a tar.gz file.")
 		os.Remove(blobPath)
 		os.Remove(tokenPath)
@@ -1231,11 +1234,15 @@ func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (strin
 
 	if _, err := blobFile.Write(header); err != nil {
 		log.Println(err.Error())
+		os.Remove(blobPath)
+		os.Remove(tokenPath)
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
 	if _, err := io.Copy(blobFile, blob); err != nil {
 		log.Println(err.Error())
+		os.Remove(blobPath)
+		os.Remove(tokenPath)
 		return "", httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
