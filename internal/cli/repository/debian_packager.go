@@ -81,8 +81,8 @@ func (d *ShellDebianPackager) ExtractExtendedVersion(changelogPath string) (stri
 	if strings.Contains(version, "-") {
 		return strings.SplitN(version, "-", 2)[1], nil
 	}
-	// No revision part - return the version itself
-	return version, nil
+	// No revision part
+	return "", nil
 }
 
 func (d *ShellDebianPackager) ExtractChangelogMaintainer(changelogPath string) (string, error) {
