@@ -10,7 +10,7 @@ import (
 
 func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (entity.SubmitResponse, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.SubmitResponse{}, ErrConfigMissing
+		return entity.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	if repoURL == "" {
@@ -49,7 +49,7 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (ent
 
 func (u *CLIUsecase) ISOStatus(ctx context.Context, pipelineID string) (entity.ISOStatus, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.ISOStatus{}, ErrConfigMissing
+		return entity.ISOStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
@@ -66,7 +66,7 @@ func (u *CLIUsecase) ISOStatus(ctx context.Context, pipelineID string) (entity.I
 
 func (u *CLIUsecase) ISOLog(ctx context.Context, pipelineID string) (string, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return "", ErrConfigMissing
+		return "", fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error

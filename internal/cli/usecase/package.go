@@ -27,7 +27,7 @@ var safeDebianName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.+~:-]*$`)
 func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitParams) (entity.SubmitResponse, error) {
 	cfg, err := u.Config.Load()
 	if err != nil {
-		return entity.SubmitResponse{}, ErrConfigMissing
+		return entity.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	// Validate chief connectivity (unless ignoring checks)
@@ -371,7 +371,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 
 func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (entity.PackageStatus, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.PackageStatus{}, ErrConfigMissing
+		return entity.PackageStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	if pipelineID == "" {
@@ -388,7 +388,7 @@ func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (enti
 
 func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error) {
 	if _, loadErr := u.Config.Load(); loadErr != nil {
-		return "", "", ErrConfigMissing
+		return "", "", fmt.Errorf("%w: %v", ErrConfigMissing, loadErr)
 	}
 
 	if pipelineID == "" {

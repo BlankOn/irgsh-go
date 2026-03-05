@@ -11,7 +11,7 @@ import (
 
 func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (entity.RetryResponse, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.RetryResponse{}, ErrConfigMissing
+		return entity.RetryResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
