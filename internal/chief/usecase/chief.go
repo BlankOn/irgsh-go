@@ -822,12 +822,6 @@ func (s *ChiefUsecase) BuildStatus(UUID string) (BuildStatusResponse, error) {
 	buildSignature := tasks.Signature{
 		Name: "build",
 		UUID: UUID,
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: "xyz",
-			},
-		},
 	}
 	buildResult := result.NewAsyncResult(&buildSignature, s.server.GetBackend())
 	buildResult.Touch()
@@ -869,12 +863,6 @@ func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
 	isoSignature := tasks.Signature{
 		Name: "iso",
 		UUID: UUID,
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: "xyz",
-			},
-		},
 	}
 	isoResult := result.NewAsyncResult(&isoSignature, s.server.GetBackend())
 	isoResult.Touch()
