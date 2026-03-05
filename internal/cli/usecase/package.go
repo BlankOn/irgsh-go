@@ -24,6 +24,11 @@ import (
 // Rejects shell metacharacters while allowing all valid Debian identifiers.
 var safeDebianName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.+~:-]*$`)
 
+// sq shell-quotes a string by wrapping it in single quotes with proper escaping.
+func sq(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
 func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitParams) (entity.SubmitResponse, error) {
 	cfg, err := u.Config.Load()
 	if err != nil {
@@ -222,7 +227,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		log.Println("Creating orig tarball...")
 		cmdStr := fmt.Sprintf(
 			"cd %s && mkdir -p tmp && mv source tmp && cd tmp && mv source %s-%s && tar cfJ %s.orig.tar.xz %s-%s && rm -rf %s-%s && mv *.xz .. && cd .. && rm -rf tmp",
-			tmpDir, packageName, packageVersion,
+			sq(tmpDir), packageName, packageVersion,
 			origFileName, packageName, packageVersion,
 			packageName, packageVersion,
 		)
@@ -233,7 +238,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 
 	// Rename package dir for debuild
 	log.Println("Renaming workdir...")
-	renameCmd := fmt.Sprintf("cd %s && mv package %s", tmpDir, packageNameVersion)
+	renameCmd := fmt.Sprintf("cd %s && mv package %s", sq(tmpDir), packageNameVersion)
 	if err := u.Shell.Run(renameCmd); err != nil {
 		return entity.SubmitResponse{}, fmt.Errorf("failed to rename workdir: %w", err)
 	}
@@ -257,7 +262,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	if err := u.Debian.GenBuildInfo(workDir); err != nil {
 		// Some packages need debuild first; try that
 		log.Println("Trying debuild before dpkg-genbuildinfo...")
-		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", workDir)
+		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", sq(workDir))
 		if shellErr := u.Shell.RunInteractive(debuildCmd); shellErr != nil {
 			return entity.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %v): %w", shellErr, err)
 		}
@@ -265,7 +270,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 
 	// dpkg-genchanges
 	log.Println("Generating changes file...")
-	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes", workDir)
+	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes", sq(workDir))
 	if err := u.Shell.RunInteractive(genchangesCmd); err != nil {
 		return entity.SubmitResponse{}, fmt.Errorf("dpkg-genchanges failed: %w", err)
 	}
@@ -273,7 +278,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	// Lintian
 	if !params.IgnoreChecks {
 		log.Println("Lintian test...")
-		lintianCmd := fmt.Sprintf("cd %s && lintian --profile blankon 2>&1", workDir)
+		lintianCmd := fmt.Sprintf("cd %s && lintian --profile blankon 2>&1", sq(workDir))
 		lintianOut, lintianErr := u.Shell.Output(lintianCmd)
 		log.Println(lintianOut)
 		if lintianErr != nil || strings.Contains(lintianOut, "E:") {
@@ -283,20 +288,20 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 
 	// Move signed files
 	log.Println("Moving generated files to signed dir...")
-	moveCmd := fmt.Sprintf("cd %s && mkdir signed && mv *.xz ./signed/ || true && mv *.dsc ./signed/ && mv *.changes ./signed/", tmpDir)
+	moveCmd := fmt.Sprintf("cd %s && mkdir signed && mv *.xz ./signed/ || true && mv *.dsc ./signed/ && mv *.changes ./signed/", sq(tmpDir))
 	if err := u.Shell.Run(moveCmd); err != nil {
 		return entity.SubmitResponse{}, err
 	}
 
 	// Clean up package dir
 	log.Println("Cleaning up...")
-	if err := u.Shell.Run("rm -rf " + filepath.Join(tmpDir, "package")); err != nil {
+	if err := u.Shell.Run("rm -rf " + sq(filepath.Join(tmpDir, "package"))); err != nil {
 		return entity.SubmitResponse{}, err
 	}
 
 	// Compress
 	log.Println("Compressing...")
-	compressCmd := fmt.Sprintf("cd %s && tar -zcvf ../%s.tar.gz .", tmpDir, tmpID)
+	compressCmd := fmt.Sprintf("cd %s && tar -zcvf ../%s.tar.gz .", sq(tmpDir), tmpID)
 	if err := u.Shell.Run(compressCmd); err != nil {
 		return entity.SubmitResponse{}, err
 	}

@@ -132,8 +132,13 @@ func (d *ShellDebianPackager) ExtractUploaders(controlPath string) (string, erro
 	return "", nil
 }
 
+// sq shell-quotes a string by wrapping it in single quotes with proper escaping.
+func sq(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
 func (d *ShellDebianPackager) BuildSource(dir string) error {
-	cmd := fmt.Sprintf("cd %s && dpkg-source --build .", dir)
+	cmd := fmt.Sprintf("cd %s && dpkg-source --build .", sq(dir))
 	return d.shell.RunInteractive(cmd)
 }
 
@@ -141,12 +146,12 @@ func (d *ShellDebianPackager) Sign(dir, keyFingerprint string) error {
 	if !safeFingerprint.MatchString(keyFingerprint) {
 		return fmt.Errorf("invalid GPG key fingerprint: %q", keyFingerprint)
 	}
-	cmd := fmt.Sprintf("cd %s && debsign -k%s *.dsc", dir, keyFingerprint)
+	cmd := fmt.Sprintf("cd %s && debsign -k%s *.dsc", sq(dir), keyFingerprint)
 	return d.shell.RunInteractive(cmd)
 }
 
 func (d *ShellDebianPackager) GenBuildInfo(dir string) error {
-	cmd := fmt.Sprintf("cd %s && dpkg-genbuildinfo", dir)
+	cmd := fmt.Sprintf("cd %s && dpkg-genbuildinfo", sq(dir))
 	return d.shell.RunInteractive(cmd)
 }
 
