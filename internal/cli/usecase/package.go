@@ -58,15 +58,15 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	// Validate URLs
 	if params.SourceURL != "" {
 		srcURL, err := url.Parse(params.SourceURL)
-		if err != nil || srcURL.Scheme == "" || srcURL.Host == "" {
-			return entity.SubmitResponse{}, errors.New("--source must be a valid URL with scheme and host")
+		if err != nil || srcURL.Host == "" || (srcURL.Scheme != "http" && srcURL.Scheme != "https") {
+			return entity.SubmitResponse{}, errors.New("--source must be a valid http or https URL")
 		}
 	}
 	if params.PackageURL == "" {
 		return entity.SubmitResponse{}, errors.New("--package should not be empty")
 	}
-	if pkgURL, err := url.Parse(params.PackageURL); err != nil || pkgURL.Scheme == "" || pkgURL.Host == "" {
-		return entity.SubmitResponse{}, errors.New("--package must be a valid URL with scheme and host")
+	if pkgURL, err := url.Parse(params.PackageURL); err != nil || pkgURL.Host == "" || (pkgURL.Scheme != "http" && pkgURL.Scheme != "https") {
+		return entity.SubmitResponse{}, errors.New("--package must be a valid http or https URL")
 	}
 
 	// Experimental prompt
