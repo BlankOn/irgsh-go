@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"time"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 	"github.com/blankon/irgsh-go/pkg/httputil"
@@ -30,7 +31,7 @@ type HTTPChiefClient struct {
 func NewHTTPChiefClient(configStore configLoader) *HTTPChiefClient {
 	return &HTTPChiefClient{
 		configStore: configStore,
-		httpClient:  &http.Client{},
+		httpClient:  &http.Client{Timeout: 60 * time.Second},
 	}
 }
 

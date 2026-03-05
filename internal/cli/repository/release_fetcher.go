@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/blankon/irgsh-go/internal/cli/entity"
 )
@@ -18,7 +19,7 @@ type GitHubReleaseFetcher struct {
 }
 
 func NewGitHubReleaseFetcher() *GitHubReleaseFetcher {
-	return &GitHubReleaseFetcher{httpClient: &http.Client{}}
+	return &GitHubReleaseFetcher{httpClient: &http.Client{Timeout: 30 * time.Second}}
 }
 
 func (f *GitHubReleaseFetcher) FetchLatest(ctx context.Context) (entity.GitHubRelease, error) {
