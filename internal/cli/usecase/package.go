@@ -259,7 +259,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		log.Println("Trying debuild before dpkg-genbuildinfo...")
 		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", workDir)
 		if shellErr := u.Shell.RunInteractive(debuildCmd); shellErr != nil {
-			log.Printf("debuild + genbuildinfo warning: %v", shellErr)
+			return entity.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %v): %w", shellErr, err)
 		}
 	}
 
