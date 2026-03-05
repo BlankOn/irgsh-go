@@ -11,6 +11,18 @@ import (
 	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"error":"internal server error"}`)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(data)
+}
+
 func writeUsecaseError(w http.ResponseWriter, err error) {
 	if err == nil {
 		return
@@ -54,13 +66,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonStr, err := json.Marshal(payload)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "500")
-		return
-	}
-	w.Write(jsonStr)
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -78,13 +84,7 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonStr, err := json.Marshal(status)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "500")
-		return
-	}
-	w.Write(jsonStr)
+	writeJSON(w, http.StatusOK, status)
 }
 
 func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,13 +113,7 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 		ISOStatus:  isoStatus,
 		State:      jobStatus,
 	}
-	jsonStr, err := json.Marshal(res)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "500")
-		return
-	}
-	w.Write(jsonStr)
+	writeJSON(w, http.StatusOK, res)
 }
 
 func RetryHandler(w http.ResponseWriter, r *http.Request) {
@@ -137,13 +131,7 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonStr, err := json.Marshal(payload)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "500")
-		return
-	}
-	w.Write(jsonStr)
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func artifactUploadHandler() http.HandlerFunc {
@@ -228,13 +216,7 @@ func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonStr, err := json.Marshal(payload)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "500")
-		return
-	}
-	w.Write(jsonStr)
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func submissionUploadHandler() http.HandlerFunc {
@@ -278,11 +260,10 @@ func submissionUploadHandler() http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
 		resp := struct {
 			ID string `json:"id"`
 		}{ID: id}
-		json.NewEncoder(w).Encode(resp)
+		writeJSON(w, http.StatusOK, resp)
 	})
 }
 
@@ -299,5 +280,5 @@ func VersionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Version string `json:"version"`
 	}{Version: chiefService.GetVersion()}
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
