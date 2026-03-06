@@ -47,7 +47,8 @@ func checkResponse(resp *http.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
-	return httputil.HTTPStatusError{StatusCode: resp.StatusCode}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return httputil.HTTPStatusError{StatusCode: resp.StatusCode, Body: string(body)}
 }
 
 func (c *HTTPChiefClient) GetVersion(ctx context.Context) (domain.VersionResponse, error) {
@@ -324,7 +325,7 @@ func (c *HTTPChiefClient) FetchLog(ctx context.Context, logPath string) (string,
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/logs/"+logPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/logs/"+url.PathEscape(logPath), nil)
 	if err != nil {
 		return "", err
 	}

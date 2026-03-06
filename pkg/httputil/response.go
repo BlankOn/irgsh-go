@@ -53,9 +53,13 @@ func NewHTTPError(code int, message string) error {
 // HTTPStatusError represents a non-success HTTP status code from a remote server.
 type HTTPStatusError struct {
 	StatusCode int
+	Body       string
 }
 
 func (e HTTPStatusError) Error() string {
+	if e.Body != "" {
+		return fmt.Sprintf("HTTP %d: %s", e.StatusCode, e.Body)
+	}
 	return fmt.Sprintf("HTTP %d", e.StatusCode)
 }
 
