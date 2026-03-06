@@ -110,7 +110,11 @@ func main() {
 		}
 
 		// Graceful shutdown
-		go handleShutdown(httpServer, storageDB, monitoringRegistry)
+		shutdownDone := make(chan struct{})
+		go func() {
+			handleShutdown(httpServer, storageDB, monitoringRegistry)
+			close(shutdownDone)
+		}()
 
 		port := os.Getenv("PORT")
 		if len(port) < 1 {
@@ -122,6 +126,7 @@ func main() {
 			log.Fatalf("HTTP server error: %v", err)
 		}
 
+		<-shutdownDone
 		return nil
 	}
 	app.Run(os.Args)

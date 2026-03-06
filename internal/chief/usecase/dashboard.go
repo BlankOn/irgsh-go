@@ -470,7 +470,7 @@ func (d *DashboardService) renderPackagingJobs(out *string) {
 		}
 
 		statusClass := ""
-		statusText := job.State
+		statusText := html.EscapeString(job.State)
 		filterStatus := job.State
 		switch job.State {
 		case "DONE":

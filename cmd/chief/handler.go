@@ -52,15 +52,17 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 	}
 	var useErr httputil.HTTPError
 	if errors.As(err, &useErr) {
+		msg := useErr.Message
+		if msg == "" {
+			msg = http.StatusText(useErr.Code)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(useErr.Code)
-		if useErr.Message != "" {
-			// Already JSON — write directly
-			if len(useErr.Message) > 0 && useErr.Message[0] == '{' {
-				io.WriteString(w, useErr.Message)
-			} else {
-				json.NewEncoder(w).Encode(map[string]string{"error": useErr.Message})
-			}
+		// Already JSON — write directly
+		if msg[0] == '{' {
+			io.WriteString(w, msg)
+		} else {
+			json.NewEncoder(w).Encode(map[string]string{"error": msg})
 		}
 		return
 	}
@@ -164,7 +166,7 @@ func artifactUploadHandler() http.HandlerFunc {
 
 		if !ok || len(keys[0]) < 1 {
 			log.Println("Url Param 'uuid' is missing")
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "id parameter is required")
 			return
 		}
 
@@ -173,7 +175,7 @@ func artifactUploadHandler() http.HandlerFunc {
 		file, _, err := r.FormFile("uploadFile")
 		if err != nil {
 			log.Println(err.Error())
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "uploadFile is required")
 			return
 		}
 		defer file.Close()
@@ -193,7 +195,7 @@ func logUploadHandler() http.HandlerFunc {
 
 		if !ok || len(keys[0]) < 1 {
 			log.Println("Url Param 'id' is missing")
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "id parameter is required")
 			return
 		}
 
@@ -203,7 +205,7 @@ func logUploadHandler() http.HandlerFunc {
 
 		if !ok || len(keys[0]) < 1 {
 			log.Println("Url Param 'type' is missing")
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "type parameter is required")
 			return
 		}
 
@@ -212,7 +214,7 @@ func logUploadHandler() http.HandlerFunc {
 		file, _, err := r.FormFile("uploadFile")
 		if err != nil {
 			log.Println(err.Error())
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "uploadFile is required")
 			return
 		}
 		defer file.Close()
@@ -250,14 +252,14 @@ func submissionUploadHandler() http.HandlerFunc {
 
 		if err := r.ParseMultipartForm(512 << 20); err != nil {
 			log.Printf("ParseMultipartForm error: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "invalid multipart form")
 			return
 		}
 
 		tokenFile, _, err := r.FormFile("token")
 		if err != nil {
 			log.Println(err.Error())
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "token field is required")
 			return
 		}
 		defer tokenFile.Close()
@@ -265,14 +267,14 @@ func submissionUploadHandler() http.HandlerFunc {
 		tokenData, err := io.ReadAll(tokenFile)
 		if err != nil {
 			log.Println(err.Error())
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "failed to read token")
 			return
 		}
 
 		blobFile, _, err := r.FormFile("blob")
 		if err != nil {
 			log.Println(err.Error())
-			w.WriteHeader(http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "blob field is required")
 			return
 		}
 		defer blobFile.Close()
