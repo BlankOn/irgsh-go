@@ -79,11 +79,12 @@ Split the 1294-line `ChiefUsecase` god object into focused services.
 
 | Task | Status |
 |------|--------|
-| Fix `writeUsecaseError` Content-Type | todo |
-| Move config loading into `app.Action` | todo |
-| Add HTTP server read/write timeouts | todo |
-| Escape `s.version` in HTML with `html.EscapeString` | todo |
-| Verify: `go build && go test -race ./...` | todo |
+| Escape `d.version` in HTML with `html.EscapeString` | done |
+| Fix `writeUsecaseError` Content-Type, normalize errors to JSON | done |
+| Move config loading into `app.Action` | done |
+| Add HTTP server timeouts + graceful `server.Shutdown` | done |
+| Use `http.ServeMux` instead of `DefaultServeMux` | done |
+| Verify: `go build && go test -race ./...` | done |
 
 ### Phase 6: Dashboard Template Extraction
 
