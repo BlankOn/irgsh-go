@@ -51,13 +51,13 @@ Create the chief domain layer and interface definitions.
 
 | Task | Status |
 |------|--------|
-| Create `internal/chief/domain/submission.go` | todo |
-| Create `internal/chief/domain/job.go` | todo |
-| Create `internal/chief/domain/maintainer.go` | todo |
-| Create `internal/chief/domain/errors.go` | todo |
-| Create `internal/chief/domain/status.go` (centralized status mapping) | todo |
-| Create `internal/chief/usecase/ports.go` (all interfaces) | todo |
-| Verify: `go build && go test -race ./...` | todo |
+| Create `internal/chief/domain/submission.go` | done |
+| Create `internal/chief/domain/job.go` | done |
+| Create `internal/chief/domain/maintainer.go` | done |
+| Create `internal/chief/domain/errors.go` | done |
+| Create `internal/chief/domain/status.go` (centralized status mapping) | done |
+| Create `internal/chief/usecase/ports.go` (all interfaces) | done |
+| Verify: `go build && go test -race ./...` | done |
 
 ### Phase 4: Chief Service Split
 
