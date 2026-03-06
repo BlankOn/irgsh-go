@@ -65,15 +65,15 @@ Split the 1294-line `ChiefUsecase` god object into focused services.
 
 | Task | Status |
 |------|--------|
-| Create `MachineryTaskQueue` adapter in `repository/machinery.go` | todo |
-| Extract `SubmissionService` (SubmitPackage, RetryPipeline, BuildISO) | todo |
-| Extract `UploadService` (UploadArtifact, UploadLog, UploadSubmission) | todo |
-| Extract `StatusService` (BuildStatus, ISOStatus) | todo |
-| Extract `MaintainerService` (GetMaintainers, ListMaintainersRaw) | todo |
-| Extract `DashboardService` (RenderIndexHTML) | todo |
-| Define `ChiefService` interface in `cmd/chief/handler.go` | todo |
-| Update handler wiring in `cmd/chief/main.go` | todo |
-| Verify: `go build && go test -race ./...` | todo |
+| Create `MachineryTaskQueue` adapter in `repository/machinery.go` | done |
+| Extract `MaintainerService` (GetMaintainers, ListMaintainersRaw) | done |
+| Extract `UploadService` (UploadArtifact, UploadLog, UploadSubmission) | done |
+| Extract `StatusService` (BuildStatus, ISOStatus) | done |
+| Extract `SubmissionService` (SubmitPackage, RetryPipeline, BuildISO) | done |
+| Extract `DashboardService` (RenderIndexHTML) | done |
+| Define `ChiefService` interface in `cmd/chief/handler.go` | done |
+| Update handler wiring in `cmd/chief/main.go` | done |
+| Verify: `go build && go test -race ./...` | done |
 
 ### Phase 5: Chief Handler & Server Fixes
 
