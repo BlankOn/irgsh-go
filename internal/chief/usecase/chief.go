@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/RichardKnop/machinery/v1/tasks"
 	"github.com/google/uuid"
 
+	"github.com/blankon/irgsh-go/internal/chief/domain"
 	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/monitoring"
@@ -28,11 +28,6 @@ import (
 
 // maxLogSize is the maximum size of a log file upload (10 MB).
 const maxLogSize = 10 << 20
-
-// safeIDPattern matches strings that contain only safe characters for use in
-// file paths and identifiers: alphanumeric, dots, hyphens, underscores.
-var safeIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._+-]+$`)
-
 
 type ChiefUsecase struct {
 	config             config.IrgshConfig
@@ -66,18 +61,18 @@ func (s *ChiefUsecase) GetVersion() string {
 	return s.version
 }
 
-func (s *ChiefUsecase) GetMaintainers() []Maintainer {
+func (s *ChiefUsecase) GetMaintainers() []domain.Maintainer {
 	output, err := s.gpg.ListKeysWithColons()
 	if err != nil {
 		log.Printf("Failed to list GPG keys: %v\n", err)
-		return []Maintainer{}
+		return []domain.Maintainer{}
 	}
 	return parseGPGKeys(output)
 }
 
-func parseGPGKeys(output string) []Maintainer {
-	var maintainers []Maintainer
-	var currentKey *Maintainer
+func parseGPGKeys(output string) []domain.Maintainer {
+	var maintainers []domain.Maintainer
+	var currentKey *domain.Maintainer
 
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -97,7 +92,7 @@ func parseGPGKeys(output string) []Maintainer {
 			if currentKey != nil {
 				maintainers = append(maintainers, *currentKey)
 			}
-			currentKey = &Maintainer{
+			currentKey = &domain.Maintainer{
 				KeyID: "",
 				Name:  "",
 				Email: "",
@@ -720,15 +715,15 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 	return out, nil
 }
 
-func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadResponse, error) {
-	if !safeIDPattern.MatchString(submission.MaintainerFingerprint) {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid maintainer fingerprint")
+func (s *ChiefUsecase) SubmitPackage(submission domain.Submission) (domain.SubmitPayloadResponse, error) {
+	if !domain.SafeIDPattern.MatchString(submission.MaintainerFingerprint) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid maintainer fingerprint")
 	}
-	if !safeIDPattern.MatchString(submission.PackageName) {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid package name")
+	if !domain.SafeIDPattern.MatchString(submission.PackageName) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid package name")
 	}
-	if !safeIDPattern.MatchString(submission.Tarball) {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid tarball identifier")
+	if !domain.SafeIDPattern.MatchString(submission.Tarball) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid tarball identifier")
 	}
 
 	submission.Timestamp = time.Now()
@@ -736,37 +731,37 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 
 	if err := s.storage.EnsureDir(filepath.Join(s.storage.SubmissionsDir(), submission.TaskUUID)); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	src := filepath.Join(s.storage.SubmissionsDir(), submission.Tarball+".tar.gz")
 	path := s.storage.SubmissionTarballPath(submission.TaskUUID)
 	if err := systemutil.MoveFile(src, path); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if err := s.storage.ExtractSubmission(submission.TaskUUID); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	src = filepath.Join(s.storage.SubmissionsDir(), submission.Tarball+".token")
 	path = s.storage.SubmissionSignaturePath(submission.TaskUUID)
 	if err := systemutil.MoveFile(src, path); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if err := s.gpg.VerifySignedSubmission(s.storage.SubmissionDirPath(submission.TaskUUID)); err != nil {
 		log.Println(err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusUnauthorized, "401 Unauthorized")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusUnauthorized, "401 Unauthorized")
 	}
 
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
 		fmt.Println(err.Error())
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
 	buildSignature := tasks.Signature{
@@ -788,11 +783,11 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 	chain, err := tasks.NewChain(&buildSignature, &repoSignature)
 	if err != nil {
 		log.Printf("Could not create chain: %v\n", err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 	if _, err = s.server.SendChain(chain); err != nil {
 		log.Printf("Could not send chain: %v\n", err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if s.config.Monitoring.Enabled && s.monitoringRegistry != nil {
@@ -815,10 +810,10 @@ func (s *ChiefUsecase) SubmitPackage(submission Submission) (SubmitPayloadRespon
 		}
 	}
 
-	return SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
+	return domain.SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
 }
 
-func (s *ChiefUsecase) BuildStatus(UUID string) (BuildStatusResponse, error) {
+func (s *ChiefUsecase) BuildStatus(UUID string) (domain.BuildStatusResponse, error) {
 	buildSignature := tasks.Signature{
 		Name: "build",
 		UUID: UUID,
@@ -835,22 +830,9 @@ func (s *ChiefUsecase) BuildStatus(UUID string) (BuildStatusResponse, error) {
 	repoResult.Touch()
 	repoState := repoResult.GetState()
 
-	var pipelineState string
-	if buildState.State == "FAILURE" {
-		pipelineState = "FAILED"
-	} else if buildState.State == "SUCCESS" && repoState.State == "SUCCESS" {
-		pipelineState = "DONE"
-	} else if buildState.State == "SUCCESS" && repoState.State == "FAILURE" {
-		pipelineState = "FAILED"
-	} else if buildState.State == "SUCCESS" && (repoState.State == "PENDING" || repoState.State == "RECEIVED" || repoState.State == "STARTED") {
-		pipelineState = "BUILDING"
-	} else if buildState.State == "" {
-		pipelineState = "UNKNOWN"
-	} else {
-		pipelineState = "BUILDING"
-	}
+	pipelineState := domain.DeriveBuildPipelineState(buildState.State, repoState.State)
 
-	return BuildStatusResponse{
+	return domain.BuildStatusResponse{
 		PipelineID:  UUID,
 		JobStatus:   pipelineState,
 		BuildStatus: buildState.State,
@@ -869,35 +851,23 @@ func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
 	isoState := isoResult.GetState()
 
 	isoStatusStr := isoState.State
-
-	var jobStatus string
-	if isoStatusStr == "FAILURE" {
-		jobStatus = "FAILED"
-	} else if isoStatusStr == "SUCCESS" {
-		jobStatus = "DONE"
-	} else if isoStatusStr == "PENDING" || isoStatusStr == "RECEIVED" || isoStatusStr == "STARTED" {
-		jobStatus = "BUILDING"
-	} else if isoStatusStr == "" {
-		jobStatus = "UNKNOWN"
-	} else {
-		jobStatus = isoStatusStr
-	}
+	jobStatus := domain.DeriveISOPipelineState(isoStatusStr)
 
 	return jobStatus, isoStatusStr, nil
 }
 
-func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse, error) {
-	if !safeIDPattern.MatchString(oldTaskUUID) {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid pipeline identifier")
+func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (domain.SubmitPayloadResponse, error) {
+	if !domain.SafeIDPattern.MatchString(oldTaskUUID) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid pipeline identifier")
 	}
 	if !s.config.Monitoring.Enabled || s.monitoringRegistry == nil {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusServiceUnavailable, `{"error": "monitoring is not enabled, retry requires job tracking"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusServiceUnavailable, `{"error": "monitoring is not enabled, retry requires job tracking"}`)
 	}
 
 	job, err := s.monitoringRegistry.GetJob(oldTaskUUID)
 	if err != nil {
 		log.Printf("Job not found for retry: %s: %v\n", oldTaskUUID, err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "job not found"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "job not found"}`)
 	}
 
 	parts := strings.Split(oldTaskUUID, "_")
@@ -919,18 +889,18 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 
 	if _, err := os.Stat(oldTarball); os.IsNotExist(err) {
 		log.Printf("Original submission tarball not found: %s\n", oldTarball)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "original submission tarball not found, cannot retry"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "original submission tarball not found, cannot retry"}`)
 	}
 
 	if err := s.storage.CopyFileWithSudo(oldTarball, newTarball); err != nil {
 		log.Printf("Failed to copy submission tarball: %v\n", err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission files for retry"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission files for retry"}`)
 	}
 
 	if _, err := os.Stat(oldDir); err == nil {
 		if err := s.storage.CopyDirWithSudo(oldDir, newDir); err != nil {
 			log.Printf("Failed to copy submission directory: %v\n", err)
-			return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission directory for retry"}`)
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission directory for retry"}`)
 		}
 	}
 
@@ -944,7 +914,7 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 
 	log.Printf("Retry: submission files copied successfully\n")
 
-	submission := Submission{
+	submission := domain.Submission{
 		TaskUUID:              newTaskUUID,
 		Timestamp:             newTimestamp,
 		PackageName:           job.PackageName,
@@ -962,7 +932,7 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
 		log.Println(err.Error())
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
 	}
 
 	buildSignature := tasks.Signature{
@@ -984,12 +954,12 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 	chain, err := tasks.NewChain(&buildSignature, &repoSignature)
 	if err != nil {
 		log.Printf("Could not create chain: %v\n", err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to create retry task chain"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to create retry task chain"}`)
 	}
 	_, err = s.server.SendChain(chain)
 	if err != nil {
 		log.Println("Could not send chain : " + err.Error())
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
 	}
 
 	newJob := monitoring.JobInfo{
@@ -1012,11 +982,11 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (SubmitPayloadResponse,
 
 	log.Printf("Job %s retried as new pipeline %s\n", oldTaskUUID, newTaskUUID)
 
-	return SubmitPayloadResponse{PipelineID: newTaskUUID}, nil
+	return domain.SubmitPayloadResponse{PipelineID: newTaskUUID}, nil
 }
 
 func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
-	if !safeIDPattern.MatchString(id) {
+	if !domain.SafeIDPattern.MatchString(id) {
 		return httputil.NewHTTPError(http.StatusBadRequest, "invalid artifact id")
 	}
 
@@ -1070,10 +1040,10 @@ func (s *ChiefUsecase) UploadArtifact(id string, file io.Reader) error {
 }
 
 func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) error {
-	if !safeIDPattern.MatchString(id) {
+	if !domain.SafeIDPattern.MatchString(id) {
 		return httputil.NewHTTPError(http.StatusBadRequest, "invalid log id")
 	}
-	if !safeIDPattern.MatchString(logType) {
+	if !domain.SafeIDPattern.MatchString(logType) {
 		return httputil.NewHTTPError(http.StatusBadRequest, "invalid log type")
 	}
 
@@ -1113,12 +1083,12 @@ func (s *ChiefUsecase) UploadLog(id string, logType string, file io.Reader) erro
 	return nil
 }
 
-func (s *ChiefUsecase) BuildISO(submission ISOSubmission) (SubmitPayloadResponse, error) {
+func (s *ChiefUsecase) BuildISO(submission domain.ISOSubmission) (domain.SubmitPayloadResponse, error) {
 	if submission.RepoURL == "" {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "repoUrl is required")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "repoUrl is required")
 	}
 	if submission.Branch == "" {
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch is required")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch is required")
 	}
 
 	submission.Timestamp = time.Now()
@@ -1127,7 +1097,7 @@ func (s *ChiefUsecase) BuildISO(submission ISOSubmission) (SubmitPayloadResponse
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
 		log.Println(err.Error())
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
 	signature := tasks.Signature{
@@ -1142,7 +1112,7 @@ func (s *ChiefUsecase) BuildISO(submission ISOSubmission) (SubmitPayloadResponse
 	}
 	if _, err := s.server.SendTask(&signature); err != nil {
 		log.Printf("Could not send ISO task: %v\n", err)
-		return SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if s.config.Monitoring.Enabled && s.monitoringRegistry != nil {
@@ -1158,7 +1128,7 @@ func (s *ChiefUsecase) BuildISO(submission ISOSubmission) (SubmitPayloadResponse
 		}
 	}
 
-	return SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
+	return domain.SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
 }
 
 func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (string, error) {

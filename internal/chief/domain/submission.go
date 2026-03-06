@@ -1,7 +1,8 @@
-package usecase
+package domain
 
 import "time"
 
+// Submission represents a package build submission from a maintainer.
 type Submission struct {
 	TaskUUID               string    `json:"taskUUID"`
 	Timestamp              time.Time `json:"timestamp"`
@@ -20,28 +21,10 @@ type Submission struct {
 	SourceBranch           string    `json:"sourceBranch"`
 }
 
+// ISOSubmission represents an ISO build request.
 type ISOSubmission struct {
 	TaskUUID  string    `json:"taskUUID"`
 	Timestamp time.Time `json:"timestamp"`
 	RepoURL   string    `json:"repoUrl"`
 	Branch    string    `json:"branch"`
-}
-
-type Maintainer struct {
-	KeyID string
-	Name  string
-	Email string
-}
-
-type SubmitPayloadResponse struct {
-	PipelineID string   `json:"pipelineId"`
-	Jobs       []string `json:"jobs,omitempty"`
-}
-
-type BuildStatusResponse struct {
-	PipelineID  string `json:"pipelineId"`
-	JobStatus   string `json:"jobStatus"`
-	BuildStatus string `json:"buildStatus"`
-	RepoStatus  string `json:"repoStatus"`
-	State       string `json:"state"`
 }

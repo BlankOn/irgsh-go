@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
+	"github.com/blankon/irgsh-go/internal/chief/domain"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
@@ -50,7 +50,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
-	submission := chiefusecase.Submission{}
+	submission := domain.Submission{}
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&submission)
 	if err != nil {
@@ -203,7 +203,7 @@ func logUploadHandler() http.HandlerFunc {
 }
 
 func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
-	var submission chiefusecase.ISOSubmission
+	var submission domain.ISOSubmission
 	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		io.WriteString(w, "400")
