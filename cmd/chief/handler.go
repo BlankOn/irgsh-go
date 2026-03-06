@@ -30,6 +30,7 @@ type ChiefService interface {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, `{"error":"internal server error"}`)
 		return
@@ -39,20 +40,31 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Write(data)
 }
 
+func writeJSONError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 func writeUsecaseError(w http.ResponseWriter, err error) {
 	if err == nil {
 		return
 	}
 	var useErr httputil.HTTPError
 	if errors.As(err, &useErr) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(useErr.Code)
 		if useErr.Message != "" {
-			io.WriteString(w, useErr.Message)
+			// Already JSON — write directly
+			if len(useErr.Message) > 0 && useErr.Message[0] == '{' {
+				io.WriteString(w, useErr.Message)
+			} else {
+				json.NewEncoder(w).Encode(map[string]string{"error": useErr.Message})
+			}
 		}
 		return
 	}
-	w.WriteHeader(http.StatusInternalServerError)
-	io.WriteString(w, "500")
+	writeJSONError(w, http.StatusInternalServerError, "internal server error")
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -71,8 +83,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&submission)
 	if err != nil {
 		log.Println(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, "400")
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -88,8 +99,7 @@ func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {
 func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, "400")
+		writeJSONError(w, http.StatusBadRequest, "uuid parameter is required")
 		return
 	}
 	UUID := keys[0]
@@ -106,8 +116,7 @@ func BuildStatusHandler(w http.ResponseWriter, r *http.Request) {
 func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, "400")
+		writeJSONError(w, http.StatusBadRequest, "uuid parameter is required")
 		return
 	}
 	UUID := keys[0]
@@ -135,8 +144,7 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["uuid"]
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, `{"error": "uuid parameter is required"}`)
+		writeJSONError(w, http.StatusBadRequest, "uuid parameter is required")
 		return
 	}
 	oldTaskUUID := keys[0]
@@ -221,8 +229,7 @@ func logUploadHandler() http.HandlerFunc {
 func BuildISOHandler(w http.ResponseWriter, r *http.Request) {
 	var submission domain.ISOSubmission
 	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, "400")
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -289,6 +296,7 @@ func MaintainersHandler(w http.ResponseWriter, r *http.Request) {
 		writeUsecaseError(w, err)
 		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	io.WriteString(w, output)
 }
 

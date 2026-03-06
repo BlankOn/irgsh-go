@@ -178,7 +178,7 @@ func (d *DashboardService) RenderIndexHTML() (string, error) {
 </head>
 <body>
     <div class="header">
-        <div>irgsh-chief ` + d.version + `</div>
+        <div>irgsh-chief ` + html.EscapeString(d.version) + `</div>
     </div>
 `
 
