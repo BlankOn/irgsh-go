@@ -3,7 +3,7 @@ package usecase_test
 import (
 	"testing"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/stretchr/testify/assert"
 )
@@ -11,7 +11,7 @@ import (
 func TestSaveConfig_Success(t *testing.T) {
 	store := &mockConfigStore{}
 	svc := usecase.NewCLIUsecase(store, nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
-	err := svc.SaveConfig(entity.Config{
+	err := svc.SaveConfig(domain.Config{
 		ChiefAddress:         "http://example.com",
 		MaintainerSigningKey: "ABCD1234",
 	})
@@ -23,7 +23,7 @@ func TestSaveConfig_Success(t *testing.T) {
 func TestSaveConfig_EmptyChief(t *testing.T) {
 	store := &mockConfigStore{}
 	svc := usecase.NewCLIUsecase(store, nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
-	err := svc.SaveConfig(entity.Config{
+	err := svc.SaveConfig(domain.Config{
 		MaintainerSigningKey: "ABCD1234",
 	})
 	assert.Error(t, err)
@@ -33,7 +33,7 @@ func TestSaveConfig_EmptyChief(t *testing.T) {
 func TestSaveConfig_EmptyKey(t *testing.T) {
 	store := &mockConfigStore{}
 	svc := usecase.NewCLIUsecase(store, nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
-	err := svc.SaveConfig(entity.Config{
+	err := svc.SaveConfig(domain.Config{
 		ChiefAddress: "http://example.com",
 	})
 	assert.Error(t, err)
@@ -43,7 +43,7 @@ func TestSaveConfig_EmptyKey(t *testing.T) {
 func TestSaveConfig_InvalidURL(t *testing.T) {
 	store := &mockConfigStore{}
 	svc := usecase.NewCLIUsecase(store, nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
-	err := svc.SaveConfig(entity.Config{
+	err := svc.SaveConfig(domain.Config{
 		ChiefAddress:         "not-a-url",
 		MaintainerSigningKey: "ABCD1234",
 	})

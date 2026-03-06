@@ -1,4 +1,4 @@
-package entity
+package domain
 
 // Submission is the wire format sent to the chief API.
 type Submission struct {

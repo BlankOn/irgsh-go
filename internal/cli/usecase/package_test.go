@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
@@ -13,9 +13,9 @@ import (
 
 func TestPackageStatus_Success(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{pkgStatus: entity.PackageStatus{
+		&mockChiefAPI{pkgStatus: domain.PackageStatus{
 			PipelineID:  "pkg-123",
 			JobStatus:   "DONE",
 			BuildStatus: "SUCCESS",
@@ -42,9 +42,9 @@ func TestPackageStatus_ConfigMissing(t *testing.T) {
 
 func TestPackageStatus_LoadFromStore(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{packageID: "stored-pkg"},
-		&mockChiefAPI{pkgStatus: entity.PackageStatus{PipelineID: "stored-pkg", State: "DONE"}},
+		&mockChiefAPI{pkgStatus: domain.PackageStatus{PipelineID: "stored-pkg", State: "DONE"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	status, err := svc.PackageStatus(context.Background(), "")
@@ -54,7 +54,7 @@ func TestPackageStatus_LoadFromStore(t *testing.T) {
 
 func TestPackageStatus_PipelineIDMissing(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
@@ -64,10 +64,10 @@ func TestPackageStatus_PipelineIDMissing(t *testing.T) {
 
 func TestPackageLog_Success(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		&mockChiefAPI{
-			pkgStatus:    entity.PackageStatus{State: "DONE"},
+			pkgStatus:    domain.PackageStatus{State: "DONE"},
 			fetchLogResp: "log content",
 		},
 		nil, nil, nil, nil, nil, nil, nil, "",
@@ -80,9 +80,9 @@ func TestPackageLog_Success(t *testing.T) {
 
 func TestPackageLog_PipelineNotFinished(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{pkgStatus: entity.PackageStatus{State: "STARTED"}},
+		&mockChiefAPI{pkgStatus: domain.PackageStatus{State: "STARTED"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, _, err := svc.PackageLog(context.Background(), "pkg-123")
@@ -92,10 +92,10 @@ func TestPackageLog_PipelineNotFinished(t *testing.T) {
 
 func TestPackageLog_BuildLogNotFound(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		&mockChiefAPI{
-			pkgStatus:   entity.PackageStatus{State: "DONE"},
+			pkgStatus:   domain.PackageStatus{State: "DONE"},
 			fetchLogErr: httputil.HTTPStatusError{StatusCode: 404},
 		},
 		nil, nil, nil, nil, nil, nil, nil, "",

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
@@ -13,9 +13,9 @@ import (
 
 func TestSubmitISO_Success(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{isoResp: entity.SubmitResponse{PipelineID: "iso-123"}},
+		&mockChiefAPI{isoResp: domain.SubmitResponse{PipelineID: "iso-123"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	resp, err := svc.SubmitISO(context.Background(), "http://repo.git", "main")
@@ -34,7 +34,7 @@ func TestSubmitISO_ConfigMissing(t *testing.T) {
 
 func TestSubmitISO_EmptyURL(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.SubmitISO(context.Background(), "", "main")
@@ -44,7 +44,7 @@ func TestSubmitISO_EmptyURL(t *testing.T) {
 
 func TestSubmitISO_EmptyBranch(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.SubmitISO(context.Background(), "http://repo.git", "")
@@ -54,9 +54,9 @@ func TestSubmitISO_EmptyBranch(t *testing.T) {
 
 func TestISOStatus_Success(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{isoStatus: entity.ISOStatus{PipelineID: "iso-123", JobStatus: "DONE", ISOStatus: "SUCCESS"}},
+		&mockChiefAPI{isoStatus: domain.ISOStatus{PipelineID: "iso-123", JobStatus: "DONE", ISOStatus: "SUCCESS"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	status, err := svc.ISOStatus(context.Background(), "iso-123")
@@ -66,9 +66,9 @@ func TestISOStatus_Success(t *testing.T) {
 
 func TestISOStatus_LoadFromStore(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{isoID: "stored-iso"},
-		&mockChiefAPI{isoStatus: entity.ISOStatus{PipelineID: "stored-iso", JobStatus: "BUILDING"}},
+		&mockChiefAPI{isoStatus: domain.ISOStatus{PipelineID: "stored-iso", JobStatus: "BUILDING"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	status, err := svc.ISOStatus(context.Background(), "")
@@ -78,7 +78,7 @@ func TestISOStatus_LoadFromStore(t *testing.T) {
 
 func TestISOStatus_PipelineIDMissing(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
@@ -88,7 +88,7 @@ func TestISOStatus_PipelineIDMissing(t *testing.T) {
 
 func TestISOLog_Success(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		&mockChiefAPI{fetchLogResp: "ISO build log content"},
 		nil, nil, nil, nil, nil, nil, nil, "",
@@ -100,7 +100,7 @@ func TestISOLog_Success(t *testing.T) {
 
 func TestISOLog_NotFound(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		&mockChiefAPI{fetchLogErr: httputil.HTTPStatusError{StatusCode: 404}},
 		nil, nil, nil, nil, nil, nil, nil, "",

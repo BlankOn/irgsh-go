@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/urfave/cli"
 )
@@ -132,7 +132,7 @@ func buildApp(svc *usecase.CLIUsecase, version string) *cli.App {
 
 func configAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		cfg := entity.Config{
+		cfg := domain.Config{
 			ChiefAddress:         c.String("chief"),
 			MaintainerSigningKey: c.String("key"),
 		}
@@ -146,7 +146,7 @@ func configAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 
 func packageSubmitAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		params := entity.SubmitParams{
+		params := domain.SubmitParams{
 			PackageURL:     c.String("package"),
 			SourceURL:      c.String("source"),
 			Component:      c.String("component"),

@@ -1,4 +1,4 @@
-package entity
+package domain
 
 type ISOSubmission struct {
 	RepoURL string `json:"repoUrl"`

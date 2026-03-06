@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +18,7 @@ func TestFileConfigStore_SaveAndLoad(t *testing.T) {
 
 	store := repository.NewFileConfigStore(tmpDir)
 
-	cfg := entity.Config{
+	cfg := domain.Config{
 		ChiefAddress:         "http://chief.example.com",
 		MaintainerSigningKey: "ABCDEF1234567890",
 	}

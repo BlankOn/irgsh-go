@@ -1,4 +1,4 @@
-package entity
+package domain
 
 type VersionResponse struct {
 	Version string `json:"version"`

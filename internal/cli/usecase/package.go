@@ -15,7 +15,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 
 	"github.com/google/uuid"
 )
@@ -29,20 +29,20 @@ func sq(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
-func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitParams) (entity.SubmitResponse, error) {
+func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error) {
 	cfg, err := u.Config.Load()
 	if err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	// Validate chief connectivity (unless ignoring checks)
 	if !params.IgnoreChecks {
 		versionResp, err := u.Chief.GetVersion(ctx)
 		if err != nil {
-			return entity.SubmitResponse{}, fmt.Errorf("failed to connect to chief: %w", err)
+			return domain.SubmitResponse{}, fmt.Errorf("failed to connect to chief: %w", err)
 		}
 		if versionResp.Version != u.Version {
-			return entity.SubmitResponse{}, fmt.Errorf("client version mismatch: local=%s, chief=%s. Please update your irgsh-cli", u.Version, versionResp.Version)
+			return domain.SubmitResponse{}, fmt.Errorf("client version mismatch: local=%s, chief=%s. Please update your irgsh-cli", u.Version, versionResp.Version)
 		}
 	}
 
@@ -64,14 +64,14 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	if params.SourceURL != "" {
 		srcURL, err := url.Parse(params.SourceURL)
 		if err != nil || srcURL.Host == "" || (srcURL.Scheme != "http" && srcURL.Scheme != "https") {
-			return entity.SubmitResponse{}, errors.New("--source must be a valid http or https URL")
+			return domain.SubmitResponse{}, errors.New("--source must be a valid http or https URL")
 		}
 	}
 	if params.PackageURL == "" {
-		return entity.SubmitResponse{}, errors.New("--package should not be empty")
+		return domain.SubmitResponse{}, errors.New("--package should not be empty")
 	}
 	if pkgURL, err := url.Parse(params.PackageURL); err != nil || pkgURL.Host == "" || (pkgURL.Scheme != "http" && pkgURL.Scheme != "https") {
-		return entity.SubmitResponse{}, errors.New("--package must be a valid http or https URL")
+		return domain.SubmitResponse{}, errors.New("--package must be a valid http or https URL")
 	}
 
 	// Experimental prompt
@@ -79,17 +79,17 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	if !isExperimental {
 		confirmed, err := u.Prompter.Confirm("Experimental flag is not set which means the package will be injected to official dev repository. Are you sure you want to continue to submit and build this package?")
 		if err != nil {
-			return entity.SubmitResponse{}, err
+			return domain.SubmitResponse{}, err
 		}
 		if !confirmed {
-			return entity.SubmitResponse{}, errors.New("submission cancelled by user")
+			return domain.SubmitResponse{}, errors.New("submission cancelled by user")
 		}
 	}
 
 	tmpID := uuid.New().String()
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	tmpBase := filepath.Join(homeDir, ".irgsh", "tmp")
 	tmpDir := filepath.Join(tmpBase, tmpID)
@@ -103,8 +103,8 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		if err != nil {
 			// Only fall back to tarball download if the repo/branch was not found.
 			// Other errors (e.g. network, permission) should propagate immediately.
-			if !errors.Is(err, entity.ErrRepoOrBranchNotFound) {
-				return entity.SubmitResponse{}, err
+			if !errors.Is(err, domain.ErrRepoOrBranchNotFound) {
+				return domain.SubmitResponse{}, err
 			}
 			fmt.Println(err.Error())
 			// Try as downloadable tarball
@@ -112,26 +112,26 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 			log.Println("Downloading the tarball " + downloadableTarballURL)
 			dlReq, dlErr := http.NewRequestWithContext(ctx, http.MethodGet, downloadableTarballURL, nil)
 			if dlErr != nil {
-				return entity.SubmitResponse{}, dlErr
+				return domain.SubmitResponse{}, dlErr
 			}
 			resp, dlErr := http.DefaultClient.Do(dlReq)
 			if dlErr != nil {
-				return entity.SubmitResponse{}, dlErr
+				return domain.SubmitResponse{}, dlErr
 			}
 			defer resp.Body.Close()
 
 			if mkErr := os.MkdirAll(tmpDir, 0755); mkErr != nil {
-				return entity.SubmitResponse{}, mkErr
+				return domain.SubmitResponse{}, mkErr
 			}
 
 			tarballName := path.Base(downloadableTarballURL)
 			out, createErr := os.Create(filepath.Join(tmpDir, tarballName))
 			if createErr != nil {
-				return entity.SubmitResponse{}, createErr
+				return domain.SubmitResponse{}, createErr
 			}
 			defer out.Close()
 			if _, cpErr := out.ReadFrom(resp.Body); cpErr != nil {
-				return entity.SubmitResponse{}, cpErr
+				return domain.SubmitResponse{}, cpErr
 			}
 		}
 	}
@@ -140,7 +140,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	// Clone package repo
 	err = u.RepoSync.Sync(params.PackageURL, packageBranch, filepath.Join(tmpDir, "package"))
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	packageDir := filepath.Join(tmpDir, "package")
@@ -151,30 +151,30 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Getting package name...")
 	packageName, err := u.Debian.ExtractPackageName(controlPath)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	if packageName == "" {
-		return entity.SubmitResponse{}, errors.New("repository does not contain debian spec directory")
+		return domain.SubmitResponse{}, errors.New("repository does not contain debian spec directory")
 	}
 	if !safeDebianName.MatchString(packageName) {
-		return entity.SubmitResponse{}, fmt.Errorf("invalid package name %q: contains unsafe characters", packageName)
+		return domain.SubmitResponse{}, fmt.Errorf("invalid package name %q: contains unsafe characters", packageName)
 	}
 	log.Println("Package name: " + packageName)
 
 	log.Println("Getting package version...")
 	packageVersion, err := u.Debian.ExtractVersion(changelogPath)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	if !safeDebianName.MatchString(packageVersion) {
-		return entity.SubmitResponse{}, fmt.Errorf("invalid package version %q: contains unsafe characters", packageVersion)
+		return domain.SubmitResponse{}, fmt.Errorf("invalid package version %q: contains unsafe characters", packageVersion)
 	}
 	log.Println("Package version: " + packageVersion)
 
 	log.Println("Getting package extended version...")
 	packageExtendedVersion, err := u.Debian.ExtractExtendedVersion(changelogPath)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	if packageExtendedVersion == packageVersion {
 		packageExtendedVersion = ""
@@ -184,21 +184,21 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Getting package last maintainer...")
 	packageLastMaintainer, err := u.Debian.ExtractChangelogMaintainer(changelogPath)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	log.Println(packageLastMaintainer)
 
 	log.Println("Getting uploaders...")
 	uploaders, err := u.Debian.ExtractUploaders(controlPath)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	// Get maintainer identity from GPG key
-	log.Println("Getting maintainer identity...")
+	log.Println("Getting maintainer iddomain...")
 	maintainerIdentity, err := u.GPG.GetIdentity(cfg.MaintainerSigningKey)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	// Validate identity matches
@@ -206,12 +206,12 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		if strings.TrimSpace(uploaders) != strings.TrimSpace(maintainerIdentity) {
 			log.Println("The uploader in the debian/control: " + uploaders)
 			log.Println("Your signing key identity: " + maintainerIdentity)
-			return entity.SubmitResponse{}, errors.New("the uploaders value in the debian/control does not matched with your identity")
+			return domain.SubmitResponse{}, errors.New("the uploaders value in the debian/control does not matched with your identity")
 		}
 		if strings.TrimSpace(packageLastMaintainer) != strings.TrimSpace(maintainerIdentity) {
 			log.Println("The last maintainer in the debian/changelog: " + packageLastMaintainer)
 			log.Println("Your signing key identity: " + maintainerIdentity)
-			return entity.SubmitResponse{}, errors.New("the last maintainer in the debian/changelog does not matched with your identity")
+			return domain.SubmitResponse{}, errors.New("the last maintainer in the debian/changelog does not matched with your identity")
 		}
 	}
 
@@ -232,7 +232,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 			packageName, packageVersion,
 		)
 		if _, shellErr := u.Shell.Output(cmdStr); shellErr != nil {
-			return entity.SubmitResponse{}, fmt.Errorf("failed to create orig tarball: %w", shellErr)
+			return domain.SubmitResponse{}, fmt.Errorf("failed to create orig tarball: %w", shellErr)
 		}
 	}
 
@@ -240,7 +240,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Renaming workdir...")
 	renameCmd := fmt.Sprintf("cd %s && mv package %s", sq(tmpDir), packageNameVersion)
 	if err := u.Shell.Run(renameCmd); err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("failed to rename workdir: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("failed to rename workdir: %w", err)
 	}
 
 	workDir := filepath.Join(tmpDir, packageNameVersion)
@@ -248,13 +248,13 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	// dpkg-source --build
 	log.Println("Building source package...")
 	if err := u.Debian.BuildSource(workDir); err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("dpkg-source failed: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("dpkg-source failed: %w", err)
 	}
 
 	// debsign
 	log.Println("Signing the dsc file...")
 	if err := u.Debian.Sign(tmpDir, cfg.MaintainerSigningKey); err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("debsign failed: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("debsign failed: %w", err)
 	}
 
 	// dpkg-genbuildinfo
@@ -264,7 +264,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		log.Println("Trying debuild before dpkg-genbuildinfo...")
 		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", sq(workDir))
 		if shellErr := u.Shell.RunInteractive(debuildCmd); shellErr != nil {
-			return entity.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %v): %w", shellErr, err)
+			return domain.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %v): %w", shellErr, err)
 		}
 	}
 
@@ -272,7 +272,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Generating changes file...")
 	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes", sq(workDir))
 	if err := u.Shell.RunInteractive(genchangesCmd); err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("dpkg-genchanges failed: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("dpkg-genchanges failed: %w", err)
 	}
 
 	// Lintian
@@ -282,7 +282,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		lintianOut, lintianErr := u.Shell.Output(lintianCmd)
 		log.Println(lintianOut)
 		if lintianErr != nil || strings.Contains(lintianOut, "E:") {
-			return entity.SubmitResponse{}, errors.New("failed to pass lintian")
+			return domain.SubmitResponse{}, errors.New("failed to pass lintian")
 		}
 	}
 
@@ -290,24 +290,24 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Moving generated files to signed dir...")
 	moveCmd := fmt.Sprintf("cd %s && mkdir signed && mv *.xz ./signed/ || true && mv *.dsc ./signed/ && mv *.changes ./signed/", sq(tmpDir))
 	if err := u.Shell.Run(moveCmd); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	// Clean up package dir
 	log.Println("Cleaning up...")
 	if err := u.Shell.Run("rm -rf " + sq(filepath.Join(tmpDir, "package"))); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	// Compress
 	log.Println("Compressing...")
 	compressCmd := fmt.Sprintf("cd %s && tar -zcvf ../%s.tar.gz .", sq(tmpDir), tmpID)
 	if err := u.Shell.Run(compressCmd); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	// Build submission
-	submission := entity.Submission{
+	submission := domain.Submission{
 		PackageName:            packageName,
 		PackageVersion:         packageVersion,
 		PackageExtendedVersion: packageExtendedVersion,
@@ -323,7 +323,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	}
 	jsonByte, err := json.Marshal(submission)
 	if err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("failed to marshal submission: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("failed to marshal submission: %w", err)
 	}
 
 	// Sign auth token
@@ -332,10 +332,10 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	tokenPath := filepath.Join(tmpDir, "token")
 	tokenSigPath := filepath.Join(tmpDir, "token.sig")
 	if err := os.WriteFile(tokenPath, []byte(tokenContent), 0600); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	if err := u.GPG.ClearSign(tokenPath, tokenSigPath, cfg.MaintainerSigningKey); err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("failed to sign auth token: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("failed to sign auth token: %w", err)
 	}
 
 	// Upload
@@ -348,7 +348,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 		}
 	})
 	if err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("upload failed: %w", err)
+		return domain.SubmitResponse{}, fmt.Errorf("upload failed: %w", err)
 	}
 	fmt.Println()
 
@@ -357,10 +357,10 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	log.Println("Submitting...")
 	submitResp, err := u.Chief.SubmitPackage(ctx, submission)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	if submitResp.Error != "" {
-		return entity.SubmitResponse{}, errors.New(submitResp.Error)
+		return domain.SubmitResponse{}, errors.New(submitResp.Error)
 	}
 
 	fmt.Println("Submission succeeded. Pipeline ID:")
@@ -374,16 +374,16 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params entity.SubmitPara
 	return submitResp, nil
 }
 
-func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (entity.PackageStatus, error) {
+func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.PackageStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.PackageStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	if pipelineID == "" {
 		var err error
 		pipelineID, err = u.Pipelines.LoadPackageID()
 		if err != nil || pipelineID == "" {
-			return entity.PackageStatus{}, ErrPipelineIDMissing
+			return domain.PackageStatus{}, ErrPipelineIDMissing
 		}
 	}
 

@@ -13,13 +13,13 @@ import (
 	"path"
 	"time"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 // configLoader is the subset of ConfigStore needed by HTTPChiefClient.
 type configLoader interface {
-	Load() (entity.Config, error)
+	Load() (domain.Config, error)
 }
 
 // HTTPChiefClient implements usecase.ChiefAPI using net/http.
@@ -50,31 +50,31 @@ func checkResponse(resp *http.Response) error {
 	return httputil.HTTPStatusError{StatusCode: resp.StatusCode}
 }
 
-func (c *HTTPChiefClient) GetVersion(ctx context.Context) (entity.VersionResponse, error) {
+func (c *HTTPChiefClient) GetVersion(ctx context.Context) (domain.VersionResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.VersionResponse{}, err
+		return domain.VersionResponse{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/version", nil)
 	if err != nil {
-		return entity.VersionResponse{}, err
+		return domain.VersionResponse{}, err
 	}
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.VersionResponse{}, err
+		return domain.VersionResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkResponse(resp); err != nil {
-		return entity.VersionResponse{}, err
+		return domain.VersionResponse{}, err
 	}
 
-	var v entity.VersionResponse
+	var v domain.VersionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return entity.VersionResponse{}, err
+		return domain.VersionResponse{}, err
 	}
 	return v, nil
 }
@@ -95,21 +95,21 @@ func (pw *progressWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress func(uploaded, total int64)) (entity.UploadResponse, error) {
+func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress func(uploaded, total int64)) (domain.UploadResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.UploadResponse{}, err
+		return domain.UploadResponse{}, err
 	}
 
 	blobFile, err := os.Open(blobPath)
 	if err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to open blob file: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to open blob file: %w", err)
 	}
 	defer blobFile.Close()
 
 	tokenFile, err := os.Open(tokenPath)
 	if err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to open token file: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to open token file: %w", err)
 	}
 	defer tokenFile.Close()
 
@@ -118,22 +118,22 @@ func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenP
 
 	blobPart, err := writer.CreateFormFile("blob", path.Base(blobPath))
 	if err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to create blob form field: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to create blob form field: %w", err)
 	}
 	if _, err := io.Copy(blobPart, blobFile); err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to copy blob file: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to copy blob file: %w", err)
 	}
 
 	tokenPart, err := writer.CreateFormFile("token", path.Base(tokenPath))
 	if err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to create token form field: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to create token form field: %w", err)
 	}
 	if _, err := io.Copy(tokenPart, tokenFile); err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to copy token file: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to copy token file: %w", err)
 	}
 
 	if err := writer.Close(); err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to close multipart writer: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
 	totalSize := int64(body.Len())
@@ -142,178 +142,178 @@ func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenP
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/submission-upload", progressReader)
 	if err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to create request: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.ContentLength = totalSize
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to send request: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return entity.UploadResponse{}, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
+		return domain.UploadResponse{}, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var upload entity.UploadResponse
+	var upload domain.UploadResponse
 	if err := json.NewDecoder(resp.Body).Decode(&upload); err != nil {
-		return entity.UploadResponse{}, fmt.Errorf("failed to decode upload response: %w", err)
+		return domain.UploadResponse{}, fmt.Errorf("failed to decode upload response: %w", err)
 	}
 	return upload, nil
 }
 
-func (c *HTTPChiefClient) SubmitPackage(ctx context.Context, submission entity.Submission) (entity.SubmitResponse, error) {
+func (c *HTTPChiefClient) SubmitPackage(ctx context.Context, submission domain.Submission) (domain.SubmitResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	jsonBytes, err := json.Marshal(submission)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/submit", bytes.NewReader(jsonBytes))
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkResponse(resp); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
-	var sr entity.SubmitResponse
+	var sr domain.SubmitResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	return sr, nil
 }
 
-func (c *HTTPChiefClient) SubmitISO(ctx context.Context, submission entity.ISOSubmission) (entity.SubmitResponse, error) {
+func (c *HTTPChiefClient) SubmitISO(ctx context.Context, submission domain.ISOSubmission) (domain.SubmitResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	jsonBytes, err := json.Marshal(submission)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/build-iso", bytes.NewReader(jsonBytes))
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkResponse(resp); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 
-	var sr entity.SubmitResponse
+	var sr domain.SubmitResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	return sr, nil
 }
 
-func (c *HTTPChiefClient) GetPackageStatus(ctx context.Context, pipelineID string) (entity.PackageStatus, error) {
+func (c *HTTPChiefClient) GetPackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.PackageStatus{}, err
+		return domain.PackageStatus{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/status?uuid="+url.QueryEscape(pipelineID), nil)
 	if err != nil {
-		return entity.PackageStatus{}, err
+		return domain.PackageStatus{}, err
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.PackageStatus{}, err
+		return domain.PackageStatus{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkResponse(resp); err != nil {
-		return entity.PackageStatus{}, err
+		return domain.PackageStatus{}, err
 	}
 
-	var ps entity.PackageStatus
+	var ps domain.PackageStatus
 	if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
-		return entity.PackageStatus{}, err
+		return domain.PackageStatus{}, err
 	}
 	return ps, nil
 }
 
-func (c *HTTPChiefClient) GetISOStatus(ctx context.Context, pipelineID string) (entity.ISOStatus, error) {
+func (c *HTTPChiefClient) GetISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.ISOStatus{}, err
+		return domain.ISOStatus{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/iso-status?uuid="+url.QueryEscape(pipelineID), nil)
 	if err != nil {
-		return entity.ISOStatus{}, err
+		return domain.ISOStatus{}, err
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.ISOStatus{}, err
+		return domain.ISOStatus{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkResponse(resp); err != nil {
-		return entity.ISOStatus{}, err
+		return domain.ISOStatus{}, err
 	}
 
-	var is entity.ISOStatus
+	var is domain.ISOStatus
 	if err := json.NewDecoder(resp.Body).Decode(&is); err != nil {
-		return entity.ISOStatus{}, err
+		return domain.ISOStatus{}, err
 	}
 	return is, nil
 }
 
-func (c *HTTPChiefClient) Retry(ctx context.Context, pipelineID string) (entity.RetryResponse, error) {
+func (c *HTTPChiefClient) Retry(ctx context.Context, pipelineID string) (domain.RetryResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
-		return entity.RetryResponse{}, err
+		return domain.RetryResponse{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/retry?uuid="+url.QueryEscape(pipelineID), nil)
 	if err != nil {
-		return entity.RetryResponse{}, err
+		return domain.RetryResponse{}, err
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return entity.RetryResponse{}, err
+		return domain.RetryResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkResponse(resp); err != nil {
-		return entity.RetryResponse{}, err
+		return domain.RetryResponse{}, err
 	}
 
-	var rr entity.RetryResponse
+	var rr domain.RetryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&rr); err != nil {
-		return entity.RetryResponse{}, err
+		return domain.RetryResponse{}, err
 	}
 	return rr, nil
 }

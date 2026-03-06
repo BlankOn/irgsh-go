@@ -1,4 +1,4 @@
-package entity
+package domain
 
 type GitHubReleaseAsset struct {
 	Name               string `json:"name"`

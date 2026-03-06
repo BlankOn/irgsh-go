@@ -4,21 +4,21 @@ import (
 	"context"
 	"io"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
 
 // mockConfigStore implements usecase.ConfigStore for testing.
 type mockConfigStore struct {
-	config entity.Config
+	config domain.Config
 	err    error
-	saved  *entity.Config
+	saved  *domain.Config
 }
 
-func (m *mockConfigStore) Load() (entity.Config, error) {
+func (m *mockConfigStore) Load() (domain.Config, error) {
 	return m.config, m.err
 }
 
-func (m *mockConfigStore) Save(cfg entity.Config) error {
+func (m *mockConfigStore) Save(cfg domain.Config) error {
 	m.saved = &cfg
 	return m.err
 }
@@ -61,49 +61,49 @@ func (m *mockPipelineStore) LoadRetryID() (string, error) {
 
 // mockChiefAPI implements usecase.ChiefAPI for testing.
 type mockChiefAPI struct {
-	version      entity.VersionResponse
+	version      domain.VersionResponse
 	versionErr   error
-	uploadResp   entity.UploadResponse
+	uploadResp   domain.UploadResponse
 	uploadErr    error
-	submitResp   entity.SubmitResponse
+	submitResp   domain.SubmitResponse
 	submitErr    error
-	isoResp      entity.SubmitResponse
+	isoResp      domain.SubmitResponse
 	isoErr       error
-	pkgStatus    entity.PackageStatus
+	pkgStatus    domain.PackageStatus
 	pkgStatusErr error
-	isoStatus    entity.ISOStatus
+	isoStatus    domain.ISOStatus
 	isoStatusErr error
-	retryResp    entity.RetryResponse
+	retryResp    domain.RetryResponse
 	retryErr     error
 	fetchLogResp string
 	fetchLogErr  error
 }
 
-func (m *mockChiefAPI) GetVersion(_ context.Context) (entity.VersionResponse, error) {
+func (m *mockChiefAPI) GetVersion(_ context.Context) (domain.VersionResponse, error) {
 	return m.version, m.versionErr
 }
 
-func (m *mockChiefAPI) UploadSubmission(_ context.Context, _, _ string, _ func(int64, int64)) (entity.UploadResponse, error) {
+func (m *mockChiefAPI) UploadSubmission(_ context.Context, _, _ string, _ func(int64, int64)) (domain.UploadResponse, error) {
 	return m.uploadResp, m.uploadErr
 }
 
-func (m *mockChiefAPI) SubmitPackage(_ context.Context, _ entity.Submission) (entity.SubmitResponse, error) {
+func (m *mockChiefAPI) SubmitPackage(_ context.Context, _ domain.Submission) (domain.SubmitResponse, error) {
 	return m.submitResp, m.submitErr
 }
 
-func (m *mockChiefAPI) SubmitISO(_ context.Context, _ entity.ISOSubmission) (entity.SubmitResponse, error) {
+func (m *mockChiefAPI) SubmitISO(_ context.Context, _ domain.ISOSubmission) (domain.SubmitResponse, error) {
 	return m.isoResp, m.isoErr
 }
 
-func (m *mockChiefAPI) GetPackageStatus(_ context.Context, _ string) (entity.PackageStatus, error) {
+func (m *mockChiefAPI) GetPackageStatus(_ context.Context, _ string) (domain.PackageStatus, error) {
 	return m.pkgStatus, m.pkgStatusErr
 }
 
-func (m *mockChiefAPI) GetISOStatus(_ context.Context, _ string) (entity.ISOStatus, error) {
+func (m *mockChiefAPI) GetISOStatus(_ context.Context, _ string) (domain.ISOStatus, error) {
 	return m.isoStatus, m.isoStatusErr
 }
 
-func (m *mockChiefAPI) Retry(_ context.Context, _ string) (entity.RetryResponse, error) {
+func (m *mockChiefAPI) Retry(_ context.Context, _ string) (domain.RetryResponse, error) {
 	return m.retryResp, m.retryErr
 }
 
@@ -196,13 +196,13 @@ func (m *mockGPGSigner) ClearSign(_, _, _ string) error {
 
 // mockReleaseFetcher implements usecase.ReleaseFetcher for testing.
 type mockReleaseFetcher struct {
-	release entity.GitHubRelease
+	release domain.GitHubRelease
 	err     error
 	body    io.ReadCloser
 	dlErr   error
 }
 
-func (m *mockReleaseFetcher) FetchLatest(_ context.Context) (entity.GitHubRelease, error) {
+func (m *mockReleaseFetcher) FetchLatest(_ context.Context) (domain.GitHubRelease, error) {
 	return m.release, m.err
 }
 

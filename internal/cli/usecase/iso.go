@@ -5,36 +5,36 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
 
-func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (entity.SubmitResponse, error) {
+func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	if repoURL == "" {
-		return entity.SubmitResponse{}, errors.New("--lb-url is required")
+		return domain.SubmitResponse{}, errors.New("--lb-url is required")
 	}
 	if branch == "" {
-		return entity.SubmitResponse{}, errors.New("--lb-branch is required")
+		return domain.SubmitResponse{}, errors.New("--lb-branch is required")
 	}
 
 	fmt.Printf("Submitting ISO build job...\n")
 	fmt.Printf("Repository: %s\n", repoURL)
 	fmt.Printf("Branch: %s\n", branch)
 
-	submission := entity.ISOSubmission{
+	submission := domain.ISOSubmission{
 		RepoURL: repoURL,
 		Branch:  branch,
 	}
 
 	resp, err := u.Chief.SubmitISO(ctx, submission)
 	if err != nil {
-		return entity.SubmitResponse{}, err
+		return domain.SubmitResponse{}, err
 	}
 	if resp.Error != "" {
-		return entity.SubmitResponse{}, errors.New(resp.Error)
+		return domain.SubmitResponse{}, errors.New(resp.Error)
 	}
 
 	fmt.Println("ISO build submitted successfully!")
@@ -47,16 +47,16 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (ent
 	return resp, nil
 }
 
-func (u *CLIUsecase) ISOStatus(ctx context.Context, pipelineID string) (entity.ISOStatus, error) {
+func (u *CLIUsecase) ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.ISOStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.ISOStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
 	if pipelineID == "" {
 		pipelineID, err = u.Pipelines.LoadISOID()
 		if err != nil || pipelineID == "" {
-			return entity.ISOStatus{}, ErrPipelineIDMissing
+			return domain.ISOStatus{}, ErrPipelineIDMissing
 		}
 	}
 

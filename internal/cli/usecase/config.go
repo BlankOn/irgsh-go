@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/url"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
 
-func (u *CLIUsecase) SaveConfig(cfg entity.Config) error {
+func (u *CLIUsecase) SaveConfig(cfg domain.Config) error {
 	if cfg.ChiefAddress == "" {
 		return errors.New("chief address should not be empty")
 	}

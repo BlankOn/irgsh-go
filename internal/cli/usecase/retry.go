@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
 
-func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (entity.RetryResponse, error) {
+func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error) {
 	if _, err := u.Config.Load(); err != nil {
-		return entity.RetryResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.RetryResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
 	if pipelineID == "" {
 		pipelineID, err = u.Pipelines.LoadRetryID()
 		if err != nil || pipelineID == "" {
-			return entity.RetryResponse{}, ErrPipelineIDMissing
+			return domain.RetryResponse{}, ErrPipelineIDMissing
 		}
 	}
 
@@ -26,10 +26,10 @@ func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (enti
 
 	resp, err := u.Chief.Retry(ctx, pipelineID)
 	if err != nil {
-		return entity.RetryResponse{}, err
+		return domain.RetryResponse{}, err
 	}
 	if resp.Error != "" {
-		return entity.RetryResponse{}, errors.New(resp.Error)
+		return domain.RetryResponse{}, errors.New(resp.Error)
 	}
 
 	fmt.Println("Pipeline " + resp.PipelineID + " has been queued for retry")

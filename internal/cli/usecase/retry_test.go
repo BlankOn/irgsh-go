@@ -5,16 +5,16 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/blankon/irgsh-go/internal/cli/entity"
+	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRetryPipeline_Success(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{retryResp: entity.RetryResponse{PipelineID: "retry-456"}},
+		&mockChiefAPI{retryResp: domain.RetryResponse{PipelineID: "retry-456"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	resp, err := svc.RetryPipeline(context.Background(), "old-123")
@@ -33,7 +33,7 @@ func TestRetryPipeline_ConfigMissing(t *testing.T) {
 
 func TestRetryPipeline_PipelineIDMissing(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
 		nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
@@ -43,9 +43,9 @@ func TestRetryPipeline_PipelineIDMissing(t *testing.T) {
 
 func TestRetryPipeline_LoadFromStore(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{retryID: "stored-retry"},
-		&mockChiefAPI{retryResp: entity.RetryResponse{PipelineID: "new-retry"}},
+		&mockChiefAPI{retryResp: domain.RetryResponse{PipelineID: "new-retry"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	resp, err := svc.RetryPipeline(context.Background(), "")
@@ -55,9 +55,9 @@ func TestRetryPipeline_LoadFromStore(t *testing.T) {
 
 func TestRetryPipeline_ServerError(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: entity.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{retryResp: entity.RetryResponse{Error: "job not found"}},
+		&mockChiefAPI{retryResp: domain.RetryResponse{Error: "job not found"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.RetryPipeline(context.Background(), "old-123")
