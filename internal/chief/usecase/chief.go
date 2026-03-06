@@ -12,9 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RichardKnop/machinery/v1"
-	"github.com/RichardKnop/machinery/v1/backends/result"
-	"github.com/RichardKnop/machinery/v1/tasks"
 	"github.com/google/uuid"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
@@ -31,7 +28,7 @@ const maxLogSize = 10 << 20
 
 type ChiefUsecase struct {
 	config             config.IrgshConfig
-	server             *machinery.Server
+	taskQueue          TaskQueue
 	monitoringRegistry *monitoring.Registry
 	storage            *chiefrepository.Storage
 	gpg                *chiefrepository.GPG
@@ -40,7 +37,7 @@ type ChiefUsecase struct {
 
 func NewChiefUsecase(
 	cfg config.IrgshConfig,
-	server *machinery.Server,
+	taskQueue TaskQueue,
 	registry *monitoring.Registry,
 	storage *chiefrepository.Storage,
 	gpg *chiefrepository.GPG,
@@ -48,7 +45,7 @@ func NewChiefUsecase(
 ) *ChiefUsecase {
 	return &ChiefUsecase{
 		config:             cfg,
-		server:             server,
+		taskQueue:          taskQueue,
 		monitoringRegistry: registry,
 		storage:            storage,
 		gpg:                gpg,
@@ -480,10 +477,9 @@ func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
 				if storage.IsTerminalState(job.State) || job.State == "UNKNOWN" {
 					// Use stored build/repo states as-is
 				} else {
-					buildState, repoState, currentStage := monitoring.GetJobStagesFromMachinery(
-						s.server.GetBackend(),
-						job.TaskUUID,
-					)
+					buildState := s.taskQueue.GetTaskState("build", job.TaskUUID)
+					repoState := s.taskQueue.GetTaskState("repo", job.TaskUUID)
+					currentStage := domain.DeriveCurrentStage(buildState, repoState)
 
 					// If machinery returns empty for both, data has expired
 					if buildState == "" && repoState == "" {
@@ -764,29 +760,8 @@ func (s *ChiefUsecase) SubmitPackage(submission domain.Submission) (domain.Submi
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	buildSignature := tasks.Signature{
-		Name: "build",
-		UUID: submission.TaskUUID,
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: string(jsonStr),
-			},
-		},
-	}
-
-	repoSignature := tasks.Signature{
-		Name: "repo",
-		UUID: submission.TaskUUID,
-	}
-
-	chain, err := tasks.NewChain(&buildSignature, &repoSignature)
-	if err != nil {
-		log.Printf("Could not create chain: %v\n", err)
-		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
-	}
-	if _, err = s.server.SendChain(chain); err != nil {
-		log.Printf("Could not send chain: %v\n", err)
+	if err := s.taskQueue.SendBuildChain(submission.TaskUUID, jsonStr); err != nil {
+		log.Printf("Could not send build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
@@ -814,45 +789,22 @@ func (s *ChiefUsecase) SubmitPackage(submission domain.Submission) (domain.Submi
 }
 
 func (s *ChiefUsecase) BuildStatus(UUID string) (domain.BuildStatusResponse, error) {
-	buildSignature := tasks.Signature{
-		Name: "build",
-		UUID: UUID,
-	}
-	buildResult := result.NewAsyncResult(&buildSignature, s.server.GetBackend())
-	buildResult.Touch()
-	buildState := buildResult.GetState()
-
-	repoSignature := tasks.Signature{
-		Name: "repo",
-		UUID: UUID,
-	}
-	repoResult := result.NewAsyncResult(&repoSignature, s.server.GetBackend())
-	repoResult.Touch()
-	repoState := repoResult.GetState()
-
-	pipelineState := domain.DeriveBuildPipelineState(buildState.State, repoState.State)
+	buildState := s.taskQueue.GetTaskState("build", UUID)
+	repoState := s.taskQueue.GetTaskState("repo", UUID)
+	pipelineState := domain.DeriveBuildPipelineState(buildState, repoState)
 
 	return domain.BuildStatusResponse{
 		PipelineID:  UUID,
 		JobStatus:   pipelineState,
-		BuildStatus: buildState.State,
-		RepoStatus:  repoState.State,
+		BuildStatus: buildState,
+		RepoStatus:  repoState,
 		State:       pipelineState,
 	}, nil
 }
 
 func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
-	isoSignature := tasks.Signature{
-		Name: "iso",
-		UUID: UUID,
-	}
-	isoResult := result.NewAsyncResult(&isoSignature, s.server.GetBackend())
-	isoResult.Touch()
-	isoState := isoResult.GetState()
-
-	isoStatusStr := isoState.State
+	isoStatusStr := s.taskQueue.GetTaskState("iso", UUID)
 	jobStatus := domain.DeriveISOPipelineState(isoStatusStr)
-
 	return jobStatus, isoStatusStr, nil
 }
 
@@ -935,30 +887,8 @@ func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (domain.SubmitPayloadRe
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
 	}
 
-	buildSignature := tasks.Signature{
-		Name: "build",
-		UUID: submission.TaskUUID,
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: string(jsonStr),
-			},
-		},
-	}
-
-	repoSignature := tasks.Signature{
-		Name: "repo",
-		UUID: submission.TaskUUID,
-	}
-
-	chain, err := tasks.NewChain(&buildSignature, &repoSignature)
-	if err != nil {
-		log.Printf("Could not create chain: %v\n", err)
-		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to create retry task chain"}`)
-	}
-	_, err = s.server.SendChain(chain)
-	if err != nil {
-		log.Println("Could not send chain : " + err.Error())
+	if err := s.taskQueue.SendBuildChain(submission.TaskUUID, jsonStr); err != nil {
+		log.Printf("Could not send retry build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
 	}
 
@@ -1100,17 +1030,7 @@ func (s *ChiefUsecase) BuildISO(submission domain.ISOSubmission) (domain.SubmitP
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	signature := tasks.Signature{
-		Name: "iso",
-		UUID: submission.TaskUUID,
-		Args: []tasks.Arg{
-			{
-				Type:  "string",
-				Value: string(jsonStr),
-			},
-		},
-	}
-	if _, err := s.server.SendTask(&signature); err != nil {
+	if err := s.taskQueue.SendISOTask(submission.TaskUUID, jsonStr); err != nil {
 		log.Printf("Could not send ISO task: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}

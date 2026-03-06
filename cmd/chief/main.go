@@ -105,9 +105,10 @@ func main() {
 			log.Fatalf("Could not create server: %v", err)
 		}
 
+		taskQueue := chiefrepository.NewMachineryTaskQueue(server)
 		chiefService = chiefusecase.NewChiefUsecase(
 			irgshConfig,
-			server,
+			taskQueue,
 			monitoringRegistry,
 			chiefStorage,
 			chiefGPG,

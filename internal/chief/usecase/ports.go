@@ -1,13 +1,21 @@
 package usecase
 
 // Ports (interfaces) consumed by the chief usecase layer.
-//
-// These will be wired in Phase 4 when the ChiefUsecase god object is split
-// into focused services. For now they document the contracts.
 
 import (
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
+
+// TaskQueue abstracts the distributed task queue (machinery).
+type TaskQueue interface {
+	// SendBuildChain queues a build -> repo task chain.
+	SendBuildChain(taskUUID string, payload []byte) error
+	// SendISOTask queues a single ISO build task.
+	SendISOTask(taskUUID string, payload []byte) error
+	// GetTaskState returns the current state string for a task.
+	// taskName is "build", "repo", or "iso".
+	GetTaskState(taskName, taskUUID string) string
+}
 
 // GPGVerifier handles GPG key listing and signature verification.
 type GPGVerifier interface {

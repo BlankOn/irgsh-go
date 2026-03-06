@@ -44,3 +44,16 @@ func DeriveISOPipelineState(isoState string) string {
 		return isoState
 	}
 }
+
+// DeriveCurrentStage determines which pipeline stage is active based on
+// the build and repo task states. Used by the dashboard to label jobs.
+func DeriveCurrentStage(buildState, repoState string) string {
+	switch {
+	case buildState == "SUCCESS" && repoState == "SUCCESS":
+		return "completed"
+	case buildState == "SUCCESS":
+		return "repo"
+	default:
+		return "build"
+	}
+}
