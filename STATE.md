@@ -34,16 +34,16 @@ imports. This aligns with the go-clean-arch v4 convention.
 
 | Task | Status |
 |------|--------|
-| Unexport `CLIUsecase` struct fields | todo |
-| Define `CLIService` interface in `cmd/cli/handlers.go` | todo |
-| Fix `http.DefaultClient` without timeout in `package.go` | todo |
-| Fix `checkResponse` body discard in `chief_client.go` | todo |
-| URL-encode `FetchLog` path in `chief_client.go` | todo |
-| Replace fragile `genchangesCmd` shell pipeline with `filepath.Glob` | todo |
-| Separate optional `.xz` move from required commands (`\|\| true` fix) | todo |
-| Shell-quote `packageName`/`packageVersion` in orig tarball creation | todo |
-| Wire signal context in `cmd/cli/handlers.go` | todo |
-| Verify: `go build && go test -race ./...` | todo |
+| Unexport `CLIUsecase` struct fields | done |
+| Define `CLIService` interface in `cmd/cli/handlers.go` | done |
+| Fix `http.DefaultClient` without timeout in `package.go` | done |
+| Fix `checkResponse` body discard in `chief_client.go` | done |
+| URL-encode `FetchLog` path in `chief_client.go` | done |
+| Replace fragile `genchangesCmd` shell pipeline with `filepath.Glob` | done |
+| Separate optional `.xz` move from required commands (`\|\| true` fix) | done |
+| Shell-quote `packageName`/`packageVersion` in orig tarball creation | done |
+| Wire signal context in `cmd/cli/handlers.go` | done |
+| Verify: `go build && go test -race ./...` | done |
 
 ### Phase 3: Chief Domain & Ports
 
