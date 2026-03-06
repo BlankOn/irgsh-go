@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 
@@ -14,6 +16,9 @@ var version string
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
 	usr, err := user.Current()
 	if err != nil {
@@ -40,7 +45,7 @@ func main() {
 	)
 
 	// Build CLI app with handlers
-	app := buildApp(svc, version)
+	app := buildApp(sigCtx, svc, version)
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}

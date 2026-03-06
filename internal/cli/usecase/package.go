@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
 
@@ -30,19 +31,19 @@ func sq(s string) string {
 }
 
 func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error) {
-	cfg, err := u.Config.Load()
+	cfg, err := u.config.Load()
 	if err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	// Validate chief connectivity (unless ignoring checks)
 	if !params.IgnoreChecks {
-		versionResp, err := u.Chief.GetVersion(ctx)
+		versionResp, err := u.chief.GetVersion(ctx)
 		if err != nil {
 			return domain.SubmitResponse{}, fmt.Errorf("failed to connect to chief: %w", err)
 		}
-		if versionResp.Version != u.Version {
-			return domain.SubmitResponse{}, fmt.Errorf("client version mismatch: local=%s, chief=%s. Please update your irgsh-cli", u.Version, versionResp.Version)
+		if versionResp.Version != u.version {
+			return domain.SubmitResponse{}, fmt.Errorf("client version mismatch: local=%s, chief=%s. Please update your irgsh-cli", u.version, versionResp.Version)
 		}
 	}
 
@@ -77,7 +78,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	// Experimental prompt
 	isExperimental := params.IsExperimental
 	if !isExperimental {
-		confirmed, err := u.Prompter.Confirm("Experimental flag is not set which means the package will be injected to official dev repository. Are you sure you want to continue to submit and build this package?")
+		confirmed, err := u.prompter.Confirm("Experimental flag is not set which means the package will be injected to official dev repository. Are you sure you want to continue to submit and build this package?")
 		if err != nil {
 			return domain.SubmitResponse{}, err
 		}
@@ -99,7 +100,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	var downloadableTarballURL string
 	if params.SourceURL != "" {
 		fmt.Println("sourceUrl: " + params.SourceURL)
-		err = u.RepoSync.Sync(params.SourceURL, sourceBranch, filepath.Join(tmpDir, "source"))
+		err = u.repoSync.Sync(params.SourceURL, sourceBranch, filepath.Join(tmpDir, "source"))
 		if err != nil {
 			// Only fall back to tarball download if the repo/branch was not found.
 			// Other errors (e.g. network, permission) should propagate immediately.
@@ -114,7 +115,8 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 			if dlErr != nil {
 				return domain.SubmitResponse{}, dlErr
 			}
-			resp, dlErr := http.DefaultClient.Do(dlReq)
+			dlClient := &http.Client{Timeout: 5 * time.Minute}
+			resp, dlErr := dlClient.Do(dlReq)
 			if dlErr != nil {
 				return domain.SubmitResponse{}, dlErr
 			}
@@ -138,7 +140,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	fmt.Println("packageUrl: " + params.PackageURL)
 
 	// Clone package repo
-	err = u.RepoSync.Sync(params.PackageURL, packageBranch, filepath.Join(tmpDir, "package"))
+	err = u.repoSync.Sync(params.PackageURL, packageBranch, filepath.Join(tmpDir, "package"))
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -149,7 +151,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 	// Extract metadata
 	log.Println("Getting package name...")
-	packageName, err := u.Debian.ExtractPackageName(controlPath)
+	packageName, err := u.debian.ExtractPackageName(controlPath)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -162,7 +164,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	log.Println("Package name: " + packageName)
 
 	log.Println("Getting package version...")
-	packageVersion, err := u.Debian.ExtractVersion(changelogPath)
+	packageVersion, err := u.debian.ExtractVersion(changelogPath)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -172,7 +174,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	log.Println("Package version: " + packageVersion)
 
 	log.Println("Getting package extended version...")
-	packageExtendedVersion, err := u.Debian.ExtractExtendedVersion(changelogPath)
+	packageExtendedVersion, err := u.debian.ExtractExtendedVersion(changelogPath)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -182,21 +184,21 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	log.Println("Package extended version: " + packageExtendedVersion)
 
 	log.Println("Getting package last maintainer...")
-	packageLastMaintainer, err := u.Debian.ExtractChangelogMaintainer(changelogPath)
+	packageLastMaintainer, err := u.debian.ExtractChangelogMaintainer(changelogPath)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
 	log.Println(packageLastMaintainer)
 
 	log.Println("Getting uploaders...")
-	uploaders, err := u.Debian.ExtractUploaders(controlPath)
+	uploaders, err := u.debian.ExtractUploaders(controlPath)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
 
 	// Get maintainer identity from GPG key
-	log.Println("Getting maintainer iddomain...")
-	maintainerIdentity, err := u.GPG.GetIdentity(cfg.MaintainerSigningKey)
+	log.Println("Getting maintainer identity...")
+	maintainerIdentity, err := u.gpg.GetIdentity(cfg.MaintainerSigningKey)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -231,7 +233,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 			origFileName, packageName, packageVersion,
 			packageName, packageVersion,
 		)
-		if _, shellErr := u.Shell.Output(cmdStr); shellErr != nil {
+		if _, shellErr := u.shell.Output(cmdStr); shellErr != nil {
 			return domain.SubmitResponse{}, fmt.Errorf("failed to create orig tarball: %w", shellErr)
 		}
 	}
@@ -239,7 +241,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	// Rename package dir for debuild
 	log.Println("Renaming workdir...")
 	renameCmd := fmt.Sprintf("cd %s && mv package %s", sq(tmpDir), packageNameVersion)
-	if err := u.Shell.Run(renameCmd); err != nil {
+	if err := u.shell.Run(renameCmd); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("failed to rename workdir: %w", err)
 	}
 
@@ -247,31 +249,39 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 	// dpkg-source --build
 	log.Println("Building source package...")
-	if err := u.Debian.BuildSource(workDir); err != nil {
+	if err := u.debian.BuildSource(workDir); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("dpkg-source failed: %w", err)
 	}
 
 	// debsign
 	log.Println("Signing the dsc file...")
-	if err := u.Debian.Sign(tmpDir, cfg.MaintainerSigningKey); err != nil {
+	if err := u.debian.Sign(tmpDir, cfg.MaintainerSigningKey); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("debsign failed: %w", err)
 	}
 
 	// dpkg-genbuildinfo
 	log.Println("Generating buildinfo file...")
-	if err := u.Debian.GenBuildInfo(workDir); err != nil {
+	if err := u.debian.GenBuildInfo(workDir); err != nil {
 		// Some packages need debuild first; try that
 		log.Println("Trying debuild before dpkg-genbuildinfo...")
 		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", sq(workDir))
-		if shellErr := u.Shell.RunInteractive(debuildCmd); shellErr != nil {
+		if shellErr := u.shell.RunInteractive(debuildCmd); shellErr != nil {
 			return domain.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %v): %w", shellErr, err)
 		}
 	}
 
 	// dpkg-genchanges
 	log.Println("Generating changes file...")
-	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges > ../$(ls .. | grep dsc | tr -d \".dsc\")_source.changes", sq(workDir))
-	if err := u.Shell.RunInteractive(genchangesCmd); err != nil {
+	dscMatches, err := filepath.Glob(filepath.Join(tmpDir, "*.dsc"))
+	if err != nil {
+		return domain.SubmitResponse{}, fmt.Errorf("failed to find .dsc file: %w", err)
+	}
+	if len(dscMatches) == 0 {
+		return domain.SubmitResponse{}, errors.New("no .dsc file found after dpkg-source")
+	}
+	dscBase := strings.TrimSuffix(filepath.Base(dscMatches[0]), ".dsc")
+	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges > %s", sq(workDir), sq(filepath.Join(tmpDir, dscBase+"_source.changes")))
+	if err := u.shell.RunInteractive(genchangesCmd); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("dpkg-genchanges failed: %w", err)
 	}
 
@@ -279,7 +289,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	if !params.IgnoreChecks {
 		log.Println("Lintian test...")
 		lintianCmd := fmt.Sprintf("cd %s && lintian --profile blankon 2>&1", sq(workDir))
-		lintianOut, lintianErr := u.Shell.Output(lintianCmd)
+		lintianOut, lintianErr := u.shell.Output(lintianCmd)
 		log.Println(lintianOut)
 		if lintianErr != nil || strings.Contains(lintianOut, "E:") {
 			return domain.SubmitResponse{}, errors.New("failed to pass lintian")
@@ -288,21 +298,23 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 	// Move signed files
 	log.Println("Moving generated files to signed dir...")
-	moveCmd := fmt.Sprintf("cd %s && mkdir signed && mv *.xz ./signed/ || true && mv *.dsc ./signed/ && mv *.changes ./signed/", sq(tmpDir))
-	if err := u.Shell.Run(moveCmd); err != nil {
+	moveCmd := fmt.Sprintf("cd %s && mkdir signed && mv *.dsc ./signed/ && mv *.changes ./signed/", sq(tmpDir))
+	if err := u.shell.Run(moveCmd); err != nil {
 		return domain.SubmitResponse{}, err
 	}
+	// .xz files only exist for source-built packages; ignore if absent
+	_ = u.shell.Run(fmt.Sprintf("cd %s && mv *.xz ./signed/", sq(tmpDir)))
 
 	// Clean up package dir
 	log.Println("Cleaning up...")
-	if err := u.Shell.Run("rm -rf " + sq(filepath.Join(tmpDir, "package"))); err != nil {
+	if err := u.shell.Run("rm -rf " + sq(filepath.Join(tmpDir, "package"))); err != nil {
 		return domain.SubmitResponse{}, err
 	}
 
 	// Compress
 	log.Println("Compressing...")
 	compressCmd := fmt.Sprintf("cd %s && tar -zcvf ../%s.tar.gz .", sq(tmpDir), tmpID)
-	if err := u.Shell.Run(compressCmd); err != nil {
+	if err := u.shell.Run(compressCmd); err != nil {
 		return domain.SubmitResponse{}, err
 	}
 
@@ -334,14 +346,14 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	if err := os.WriteFile(tokenPath, []byte(tokenContent), 0600); err != nil {
 		return domain.SubmitResponse{}, err
 	}
-	if err := u.GPG.ClearSign(tokenPath, tokenSigPath, cfg.MaintainerSigningKey); err != nil {
+	if err := u.gpg.ClearSign(tokenPath, tokenSigPath, cfg.MaintainerSigningKey); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("failed to sign auth token: %w", err)
 	}
 
 	// Upload
 	log.Println("Uploading blob...")
 	blobPath := filepath.Join(tmpBase, tmpID+".tar.gz")
-	uploadResp, err := u.Chief.UploadSubmission(ctx, blobPath, tokenSigPath, func(uploaded, total int64) {
+	uploadResp, err := u.chief.UploadSubmission(ctx, blobPath, tokenSigPath, func(uploaded, total int64) {
 		if total > 0 {
 			percentage := float64(uploaded) / float64(total) * 100
 			fmt.Printf("\rUploading: %.2f%% (%d/%d bytes)", percentage, uploaded, total)
@@ -355,7 +367,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	// Submit
 	submission.Tarball = uploadResp.ID
 	log.Println("Submitting...")
-	submitResp, err := u.Chief.SubmitPackage(ctx, submission)
+	submitResp, err := u.chief.SubmitPackage(ctx, submission)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -367,7 +379,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	fmt.Println(submitResp.PipelineID)
 
 	// Persist pipeline ID
-	if err := u.Pipelines.SavePackageID(submitResp.PipelineID); err != nil {
+	if err := u.pipelines.SavePackageID(submitResp.PipelineID); err != nil {
 		log.Printf("warning: failed to save pipeline ID: %v", err)
 	}
 
@@ -375,29 +387,29 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 }
 
 func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error) {
-	if _, err := u.Config.Load(); err != nil {
+	if _, err := u.config.Load(); err != nil {
 		return domain.PackageStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	if pipelineID == "" {
 		var err error
-		pipelineID, err = u.Pipelines.LoadPackageID()
+		pipelineID, err = u.pipelines.LoadPackageID()
 		if err != nil || pipelineID == "" {
 			return domain.PackageStatus{}, ErrPipelineIDMissing
 		}
 	}
 
 	fmt.Println("Checking the status of " + pipelineID + " ...")
-	return u.Chief.GetPackageStatus(ctx, pipelineID)
+	return u.chief.GetPackageStatus(ctx, pipelineID)
 }
 
 func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error) {
-	if _, loadErr := u.Config.Load(); loadErr != nil {
+	if _, loadErr := u.config.Load(); loadErr != nil {
 		return "", "", fmt.Errorf("%w: %v", ErrConfigMissing, loadErr)
 	}
 
 	if pipelineID == "" {
-		pipelineID, err = u.Pipelines.LoadPackageID()
+		pipelineID, err = u.pipelines.LoadPackageID()
 		if err != nil || pipelineID == "" {
 			return "", "", ErrPipelineIDMissing
 		}
@@ -406,7 +418,7 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 	fmt.Println("Fetching the logs of " + pipelineID + " ...")
 
 	// Check if pipeline is finished
-	status, err := u.Chief.GetPackageStatus(ctx, pipelineID)
+	status, err := u.chief.GetPackageStatus(ctx, pipelineID)
 	if err != nil {
 		return "", "", err
 	}
@@ -414,7 +426,7 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 		return "", "", errors.New("the pipeline is not finished yet")
 	}
 
-	buildLog, err = u.Chief.FetchLog(ctx, pipelineID+".build.log")
+	buildLog, err = u.chief.FetchLog(ctx, pipelineID+".build.log")
 	if err != nil {
 		if isHTTPNotFound(err) {
 			return "", "", errors.New("builder log is not found. The worker/pipeline may have terminated ungracefully")
@@ -422,7 +434,7 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 		return "", "", err
 	}
 
-	repoLog, err = u.Chief.FetchLog(ctx, pipelineID+".repo.log")
+	repoLog, err = u.chief.FetchLog(ctx, pipelineID+".repo.log")
 	if err != nil {
 		if isHTTPNotFound(err) {
 			return "", "", errors.New("repo log is not found. The worker/pipeline may have terminated ungracefully")

@@ -10,13 +10,13 @@ import (
 )
 
 func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error) {
-	if _, err := u.Config.Load(); err != nil {
+	if _, err := u.config.Load(); err != nil {
 		return domain.RetryResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
 	if pipelineID == "" {
-		pipelineID, err = u.Pipelines.LoadRetryID()
+		pipelineID, err = u.pipelines.LoadRetryID()
 		if err != nil || pipelineID == "" {
 			return domain.RetryResponse{}, ErrPipelineIDMissing
 		}
@@ -24,7 +24,7 @@ func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (doma
 
 	fmt.Println("Retrying pipeline " + pipelineID + " ...")
 
-	resp, err := u.Chief.Retry(ctx, pipelineID)
+	resp, err := u.chief.Retry(ctx, pipelineID)
 	if err != nil {
 		return domain.RetryResponse{}, err
 	}
@@ -34,7 +34,7 @@ func (u *CLIUsecase) RetryPipeline(ctx context.Context, pipelineID string) (doma
 
 	fmt.Println("Pipeline " + resp.PipelineID + " has been queued for retry")
 
-	if err := u.Pipelines.SaveRetryID(resp.PipelineID); err != nil {
+	if err := u.pipelines.SaveRetryID(resp.PipelineID); err != nil {
 		log.Printf("warning: failed to save retry pipeline ID: %v", err)
 	}
 

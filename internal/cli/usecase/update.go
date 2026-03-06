@@ -8,7 +8,7 @@ import (
 )
 
 func (u *CLIUsecase) UpdateCLI(ctx context.Context) error {
-	release, err := u.Releases.FetchLatest(ctx)
+	release, err := u.releases.FetchLatest(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch latest release: %w", err)
 	}
@@ -27,19 +27,19 @@ func (u *CLIUsecase) UpdateCLI(ctx context.Context) error {
 	log.Println(downloadURL)
 	log.Println("Self-updating...")
 
-	body, err := u.Releases.Download(ctx, downloadURL)
+	body, err := u.releases.Download(ctx, downloadURL)
 	if err != nil {
 		return fmt.Errorf("failed to download update: %w", err)
 	}
 	defer body.Close()
 
-	if err := u.Updater.Apply(body); err != nil {
+	if err := u.updater.Apply(body); err != nil {
 		return fmt.Errorf("failed to apply update: %w", err)
 	}
 
 	// Symlink and verify
 	cmdStr := "ln -sf /usr/bin/irgsh-cli /usr/bin/irgsh && /usr/bin/irgsh-cli --version"
-	output, err := u.Shell.Output(cmdStr)
+	output, err := u.shell.Output(cmdStr)
 	if err != nil {
 		log.Printf("post-update symlink failed: %v", err)
 	} else {

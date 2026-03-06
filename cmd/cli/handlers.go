@@ -5,11 +5,23 @@ import (
 	"fmt"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
-	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/urfave/cli"
 )
 
-func buildApp(svc *usecase.CLIUsecase, version string) *cli.App {
+// CLIService defines the operations available to CLI command handlers.
+type CLIService interface {
+	SaveConfig(cfg domain.Config) error
+	SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error)
+	PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
+	PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error)
+	SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error)
+	ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
+	ISOLog(ctx context.Context, pipelineID string) (string, error)
+	RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error)
+	UpdateCLI(ctx context.Context) error
+}
+
+func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 	app := cli.NewApp()
 	app.Name = "irgsh-go"
 	app.Usage = "irgsh-go distributed packager"
@@ -70,24 +82,24 @@ func buildApp(svc *usecase.CLIUsecase, version string) *cli.App {
 					Usage: "Force overwrite existing package version in repository",
 				},
 			},
-			Action: packageSubmitAction(svc),
+			Action: packageSubmitAction(ctx, svc),
 			Subcommands: []cli.Command{
 				{
 					Name:   "status",
 					Usage:  "Check status of a package build pipeline",
-					Action: packageStatusAction(svc),
+					Action: packageStatusAction(ctx, svc),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of a package build pipeline",
-					Action: packageLogAction(svc),
+					Action: packageLogAction(ctx, svc),
 				},
 			},
 		},
 		{
 			Name:   "retry",
 			Usage:  "Retry a failed pipeline",
-			Action: retryAction(svc),
+			Action: retryAction(ctx, svc),
 		},
 		{
 			Name:  "livebuild",
@@ -106,31 +118,31 @@ func buildApp(svc *usecase.CLIUsecase, version string) *cli.App {
 							Usage: "Live build git branch name (required)",
 						},
 					},
-					Action: livebuildSubmitAction(svc),
+					Action: livebuildSubmitAction(ctx, svc),
 				},
 				{
 					Name:   "status",
 					Usage:  "Check status of an ISO build pipeline",
-					Action: livebuildStatusAction(svc),
+					Action: livebuildStatusAction(ctx, svc),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of an ISO build pipeline",
-					Action: livebuildLogAction(svc),
+					Action: livebuildLogAction(ctx, svc),
 				},
 			},
 		},
 		{
 			Name:   "update",
 			Usage:  "Update the irgsh-cli tool",
-			Action: updateAction(svc),
+			Action: updateAction(ctx, svc),
 		},
 	}
 
 	return app
 }
 
-func configAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func configAction(svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		cfg := domain.Config{
 			ChiefAddress:         c.String("chief"),
@@ -144,7 +156,7 @@ func configAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	}
 }
 
-func packageSubmitAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func packageSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		params := domain.SubmitParams{
 			PackageURL:     c.String("package"),
@@ -156,15 +168,15 @@ func packageSubmitAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 			IgnoreChecks:   c.Bool("ignore-checks"),
 			ForceVersion:   c.Bool("force-version"),
 		}
-		_, err := svc.SubmitPackage(context.Background(), params)
+		_, err := svc.SubmitPackage(ctx, params)
 		return err
 	}
 }
 
-func packageStatusAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func packageStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
-		status, err := svc.PackageStatus(context.Background(), pipelineID)
+		status, err := svc.PackageStatus(ctx, pipelineID)
 		if err != nil {
 			return err
 		}
@@ -175,10 +187,10 @@ func packageStatusAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	}
 }
 
-func packageLogAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func packageLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
-		buildLog, repoLog, err := svc.PackageLog(context.Background(), pipelineID)
+		buildLog, repoLog, err := svc.PackageLog(ctx, pipelineID)
 		if err != nil {
 			return err
 		}
@@ -188,17 +200,17 @@ func packageLogAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	}
 }
 
-func livebuildSubmitAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func livebuildSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		_, err := svc.SubmitISO(context.Background(), c.String("lb-url"), c.String("lb-branch"))
+		_, err := svc.SubmitISO(ctx, c.String("lb-url"), c.String("lb-branch"))
 		return err
 	}
 }
 
-func livebuildStatusAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func livebuildStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
-		status, err := svc.ISOStatus(context.Background(), pipelineID)
+		status, err := svc.ISOStatus(ctx, pipelineID)
 		if err != nil {
 			return err
 		}
@@ -208,10 +220,10 @@ func livebuildStatusAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	}
 }
 
-func livebuildLogAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func livebuildLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
-		logResult, err := svc.ISOLog(context.Background(), pipelineID)
+		logResult, err := svc.ISOLog(ctx, pipelineID)
 		if err != nil {
 			return err
 		}
@@ -220,16 +232,16 @@ func livebuildLogAction(svc *usecase.CLIUsecase) cli.ActionFunc {
 	}
 }
 
-func retryAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func retryAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
-		_, err := svc.RetryPipeline(context.Background(), pipelineID)
+		_, err := svc.RetryPipeline(ctx, pipelineID)
 		return err
 	}
 }
 
-func updateAction(svc *usecase.CLIUsecase) cli.ActionFunc {
+func updateAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		return svc.UpdateCLI(context.Background())
+		return svc.UpdateCLI(ctx)
 	}
 }

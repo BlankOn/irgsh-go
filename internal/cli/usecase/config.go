@@ -18,5 +18,5 @@ func (u *CLIUsecase) SaveConfig(cfg domain.Config) error {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return errors.New("chief address must be a valid URL with scheme and host")
 	}
-	return u.Config.Save(cfg)
+	return u.config.Save(cfg)
 }

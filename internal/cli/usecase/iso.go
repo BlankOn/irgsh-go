@@ -9,7 +9,7 @@ import (
 )
 
 func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error) {
-	if _, err := u.Config.Load(); err != nil {
+	if _, err := u.config.Load(); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
@@ -29,7 +29,7 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (dom
 		Branch:  branch,
 	}
 
-	resp, err := u.Chief.SubmitISO(ctx, submission)
+	resp, err := u.chief.SubmitISO(ctx, submission)
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
@@ -40,7 +40,7 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (dom
 	fmt.Println("ISO build submitted successfully!")
 	fmt.Println("Pipeline ID: " + resp.PipelineID)
 
-	if err := u.Pipelines.SaveISOID(resp.PipelineID); err != nil {
+	if err := u.pipelines.SaveISOID(resp.PipelineID); err != nil {
 		fmt.Printf("warning: failed to save pipeline ID: %v\n", err)
 	}
 
@@ -48,30 +48,30 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (dom
 }
 
 func (u *CLIUsecase) ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error) {
-	if _, err := u.Config.Load(); err != nil {
+	if _, err := u.config.Load(); err != nil {
 		return domain.ISOStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
 	if pipelineID == "" {
-		pipelineID, err = u.Pipelines.LoadISOID()
+		pipelineID, err = u.pipelines.LoadISOID()
 		if err != nil || pipelineID == "" {
 			return domain.ISOStatus{}, ErrPipelineIDMissing
 		}
 	}
 
 	fmt.Println("Checking the status of " + pipelineID + " ...")
-	return u.Chief.GetISOStatus(ctx, pipelineID)
+	return u.chief.GetISOStatus(ctx, pipelineID)
 }
 
 func (u *CLIUsecase) ISOLog(ctx context.Context, pipelineID string) (string, error) {
-	if _, err := u.Config.Load(); err != nil {
+	if _, err := u.config.Load(); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrConfigMissing, err)
 	}
 
 	var err error
 	if pipelineID == "" {
-		pipelineID, err = u.Pipelines.LoadISOID()
+		pipelineID, err = u.pipelines.LoadISOID()
 		if err != nil || pipelineID == "" {
 			return "", ErrPipelineIDMissing
 		}
@@ -79,7 +79,7 @@ func (u *CLIUsecase) ISOLog(ctx context.Context, pipelineID string) (string, err
 
 	fmt.Println("Fetching the logs of " + pipelineID + " ...")
 
-	logResult, err := u.Chief.FetchLog(ctx, pipelineID+".iso.log")
+	logResult, err := u.chief.FetchLog(ctx, pipelineID+".iso.log")
 	if err != nil {
 		if isHTTPNotFound(err) {
 			return "", errors.New("ISO log is not found. The worker/pipeline may have terminated ungracefully")
