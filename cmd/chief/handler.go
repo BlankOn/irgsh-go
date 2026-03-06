@@ -59,7 +59,7 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(useErr.Code)
 		// Already JSON — write directly
-		if msg[0] == '{' {
+		if len(msg) > 0 && msg[0] == '{' {
 			io.WriteString(w, msg)
 		} else {
 			json.NewEncoder(w).Encode(map[string]string{"error": msg})
