@@ -33,7 +33,7 @@ var (
 	monitoringRegistry   *monitoring.Registry
 	storageDB            *storage.DB
 
-	chiefService *chiefusecase.ChiefUsecase
+	chiefService ChiefService
 	chiefStorage *chiefrepository.Storage
 	chiefGPG     *chiefrepository.GPG
 )

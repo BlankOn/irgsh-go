@@ -11,6 +11,22 @@ import (
 	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
+// ChiefService defines the operations the HTTP handlers require.
+type ChiefService interface {
+	GetVersion() string
+	RenderIndexHTML() (string, error)
+	GetMaintainers() []domain.Maintainer
+	ListMaintainersRaw() (string, error)
+	SubmitPackage(domain.Submission) (domain.SubmitPayloadResponse, error)
+	RetryPipeline(string) (domain.SubmitPayloadResponse, error)
+	BuildStatus(string) (domain.BuildStatusResponse, error)
+	ISOStatus(string) (string, string, error)
+	BuildISO(domain.ISOSubmission) (domain.SubmitPayloadResponse, error)
+	UploadArtifact(string, io.Reader) error
+	UploadLog(string, string, io.Reader) error
+	UploadSubmission([]byte, io.Reader) (string, error)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
