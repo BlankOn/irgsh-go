@@ -181,6 +181,9 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	if packageExtendedVersion == packageVersion {
 		packageExtendedVersion = ""
 	}
+	if packageExtendedVersion != "" && !safeDebianName.MatchString(packageExtendedVersion) {
+		return domain.SubmitResponse{}, fmt.Errorf("invalid package extended version %q: contains unsafe characters", packageExtendedVersion)
+	}
 	log.Println("Package extended version: " + packageExtendedVersion)
 
 	log.Println("Getting package last maintainer...")
