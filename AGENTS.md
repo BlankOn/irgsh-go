@@ -34,42 +34,42 @@ graph LR
 ## Directory Structure
 
 ```mermaid
-graph TD
-    root[irgsh-go] --> cmd
-    root --> internal
-    root --> pkg
-    root --> utils
+graph LR
+    root["irgsh-go/"] --- cmd["cmd/"]
+    root --- internal["internal/"]
+    root --- pkg["pkg/"]
+    root --- utils["utils/"]
 
-    cmd --> cmd_chief["chief/<br><small>Central server</small>"]
-    cmd --> cmd_builder["builder/<br><small>Build worker</small>"]
-    cmd --> cmd_repo["repo/<br><small>Repository manager</small>"]
-    cmd --> cmd_iso["iso/<br><small>ISO builder</small>"]
-    cmd --> cmd_cli["cli/<br><small>Client CLI</small>"]
+    cmd --- cmd_chief["chief/"]
+    cmd --- cmd_builder["builder/"]
+    cmd --- cmd_repo["repo/"]
+    cmd --- cmd_iso["iso/"]
+    cmd --- cmd_cli["cli/"]
 
-    internal --> chief
-    internal --> cli
-    internal --> config["config/<br><small>Configuration</small>"]
-    internal --> monitoring["monitoring/<br><small>Health tracking, metrics</small>"]
-    internal --> notification["notification/<br><small>Webhook notifications</small>"]
-    internal --> artifact["artifact/<br><small>Artifact storage</small>"]
-    internal --> storage["storage/<br><small>SQLite persistence</small>"]
+    internal --- chief["chief/"]
+    internal --- cli["cli/"]
+    internal --- config["config/"]
+    internal --- monitoring["monitoring/"]
+    internal --- notification["notification/"]
+    internal --- artifact["artifact/"]
+    internal --- storage["storage/"]
 
-    chief --> chief_domain["domain/<br><small>Submission, Maintainer, status</small>"]
-    chief --> chief_usecase["usecase/<br><small>Business logic, port interfaces</small>"]
-    chief --> chief_repo["repository/<br><small>GPG, Storage adapters</small>"]
+    chief --- chief_domain["domain/"]
+    chief --- chief_usecase["usecase/"]
+    chief --- chief_repo["repository/"]
 
-    cli --> cli_domain["domain/<br><small>Config, Pipeline, responses</small>"]
-    cli --> cli_usecase["usecase/<br><small>Business logic</small>"]
-    cli --> cli_repo["repository/<br><small>HTTP, Git, Shell adapters</small>"]
+    cli --- cli_domain["domain/"]
+    cli --- cli_usecase["usecase/"]
+    cli --- cli_repo["repository/"]
 
-    pkg --> httputil["httputil/<br><small>JSON response helpers</small>"]
-    pkg --> systemutil["systemutil/<br><small>Command execution, log streaming</small>"]
+    pkg --- httputil["httputil/"]
+    pkg --- systemutil["systemutil/"]
 
-    utils --> config_yaml["config.yaml"]
-    utils --> scripts["scripts/"]
-    utils --> systemctl["systemctl/"]
-    utils --> reprepro["reprepro-template/"]
-    utils --> docker["docker/"]
+    utils --- config_yaml["config.yaml"]
+    utils --- scripts["scripts/"]
+    utils --- systemctl["systemctl/"]
+    utils --- reprepro["reprepro-template/"]
+    utils --- docker["docker/"]
 ```
 
 | Path | Description |
