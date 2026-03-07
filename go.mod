@@ -6,7 +6,6 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/hpcloud/tail v1.0.0
-	github.com/imroc/req v0.2.3
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/manifoldco/promptui v0.3.2
 	github.com/stretchr/testify v1.9.0
@@ -91,6 +90,4 @@ require (
 	modernc.org/memory v1.8.0 // indirect
 )
 
-go 1.21
-
-toolchain go1.24.9
+go 1.23

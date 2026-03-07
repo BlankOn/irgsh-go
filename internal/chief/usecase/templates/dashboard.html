@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="10">
+    <title>IRGSH Chief</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: #333;
+            color: #fff;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .logo {
+            font-size: 14px;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+        .nav {
+            margin-top: 10px;
+        }
+        .nav a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .summary {
+            background: #fff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4CAF50;
+            display: inline-block;
+        }
+        .summary-item {
+            display: inline-block;
+            margin-right: 30px;
+            font-size: 14px;
+            vertical-align: top;
+        }
+        .summary-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th {
+            background: #333;
+            color: #fff;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+            font-size: 11px;
+        }
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+        .status-online {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .status-offline {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: #ff9800;
+            font-weight: bold;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .badge-builder {
+            background: #2196F3;
+            color: white;
+        }
+        .badge-repo {
+            background: #FF9800;
+            color: white;
+        }
+        .badge-iso {
+            background: #9C27B0;
+            color: white;
+        }
+        .metric {
+            font-size: 11px;
+            color: #666;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 20px 0 10px 0;
+            color: #333;
+        }
+        .refresh-info {
+            color: #666;
+            font-size: 11px;
+            margin-top: 20px;
+        }
+        .empty-state {
+            background: #fff;
+            padding: 40px;
+            text-align: center;
+            color: #999;
+        }
+        @keyframes spin-gear {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning-gear {
+            vertical-align: middle;
+            animation: spin-gear 2s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>irgsh-chief {{.Version}}</div>
+    </div>
+
+<div class="section-title">Package Maintainers</div>
+{{- if .Maintainers}}
+    <table>
+        <thead>
+            <tr>
+                <th>GPG Key</th>
+                <th>Name</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{- range .Maintainers}}
+            <tr>
+                <td style="font-family: monospace;">{{.KeyID}}</td>
+                <td>{{.Name}}</td>
+                <td>{{.Email}}</td>
+            </tr>
+        {{- end}}
+        </tbody>
+    </table>
+{{- else}}
+    <div class="empty-state">No maintainers found</div>
+{{- end}}
+
+{{- if .HasMonitoring}}
+<div class="section-title">Workers</div>
+    <div class="summary">
+        <div class="summary-item">
+            <div class="summary-number">{{.Summary.Total}}</div>
+            <div>Total Instances</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number" style="color: #4CAF50;">{{.Summary.Online}}</div>
+            <div>Online</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number" style="color: #f44336;">{{.Summary.Offline}}</div>
+            <div>Offline</div>
+        </div>
+    {{- range .Summary.ByType}}
+        <div class="summary-item">
+            <div class="summary-number" style="color: #2196F3;">{{.Count}}</div>
+            <div>{{.Name}}</div>
+        </div>
+    {{- end}}
+    </div>
+
+    {{- if .Workers}}
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Uptime</th>
+                <th>Tasks</th>
+                <th>CPU</th>
+                <th>Memory</th>
+                <th>Disk</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{- range .Workers}}
+            <tr>
+                <td><span class="badge {{.BadgeClass}}">{{.Type}}</span></td>
+                <td>{{.Hostname}}</td>
+                <td><span class="{{.StatusClass}}">{{.Status}}</span></td>
+                <td>{{.Uptime}}</td>
+                <td>{{.ActiveTasks}} / {{.Concurrency}}</td>
+                <td class="metric">{{.CPU}} / 100</td>
+                <td class="metric">{{.Memory}}</td>
+                <td class="metric">{{.Disk}}</td>
+            </tr>
+        {{- end}}
+        </tbody>
+    </table>
+    {{- else}}
+    <div class="empty-state">No worker instances found</div>
+    {{- end}}
+
+    {{- if .Jobs}}
+<div class="section-title">Recent Packaging Jobs</div>
+    <div style="margin-bottom: 10px;">
+        <label for="statusFilter" style="margin-right: 5px;">Filter by status:</label>
+        <select id="statusFilter" onchange="filterJobsByStatus(this.value)" style="padding: 4px 8px; font-size: 0.95em;">
+            <option value="all">All</option>
+            <option value="DONE">DONE</option>
+            <option value="FAILED">FAILED</option>
+            <option value="PENDING">PENDING</option>
+            <option value="UNKNOWN">UNKNOWN</option>
+        </select>
+    </div>
+    <table id="packagingJobsTable">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Package</th>
+                <th>Version</th>
+                <th>Maintainer</th>
+                <th>Component</th>
+                <th>Build</th>
+                <th>Repo</th>
+                <th>Status</th>
+                <th>UUID</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{- range .Jobs}}
+            <tr data-status="{{.FilterStatus}}">
+                <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span style="font-size: 0.85em; color: #666;">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
+                <td>{{.PackageVersion}}</td>
+                <td>{{.Maintainer}}</td>
+                <td>{{.Component}}</td>
+                <td><span class="{{.BuildStageClass}}">{{.BuildStateText}}</span><br><a href="/logs/{{.TaskUUID}}.build.log" target="_blank" style="font-size:0.85em;">log</a></td>
+                <td><span class="{{.RepoStageClass}}">{{.RepoStateText}}</span><br><a href="/logs/{{.TaskUUID}}.repo.log" target="_blank" style="font-size:0.85em;">log</a></td>
+                <td>
+                    {{- if .ShowSpinner}}
+                    <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    {{- else}}
+                    <span class="{{.StatusClass}}">{{.StatusText}}</span>
+                    {{- end}}
+                </td>
+                <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
+            </tr>
+        {{- end}}
+        </tbody>
+    </table>
+    {{- end}}
+
+    {{- if .ISOJobs}}
+<div class="section-title">Recent ISO Build Jobs</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Repository</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>UUID</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{- range .ISOJobs}}
+            <tr>
+                <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                <td>{{.RepoURL}}</td>
+                <td>{{.Branch}}</td>
+                <td><span class="{{.StatusClass}}">{{.State}}</span></td>
+                <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
+            </tr>
+        {{- end}}
+        </tbody>
+    </table>
+    {{- end}}
+{{- end}}
+
+    <div class="refresh-info">
+        Page auto-refreshes every 10 seconds
+    </div>
+    <script>
+    function filterJobsByStatus(status) {
+        var table = document.getElementById('packagingJobsTable');
+        if (!table) return;
+        var rows = table.getElementsByTagName('tr');
+        for (var i = 1; i < rows.length; i++) {
+            var row = rows[i];
+            if (status === 'all' || row.getAttribute('data-status') === status) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    }
+    </script>
+</body>
+</html>

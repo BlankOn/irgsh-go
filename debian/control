@@ -15,8 +15,7 @@ Depends: ${shlibs:Depends},
          ${misc:Depends},
          adduser
 Recommends: gpg,
-            devscripts,
-            redis-server | redis
+            devscripts
 Suggests: pbuilder,
           debootstrap,
           reprepro,

@@ -1,0 +1,67 @@
+services:
+  redis:
+    image: redis:7-alpine
+    networks: [irgsh]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+  chief:
+    image: irgsh-e2e
+    command: irgsh-chief
+    environment:
+      IRGSH_CONFIG_PATH: /etc/irgsh/config.yaml
+    volumes:
+      - ./config.yaml:/etc/irgsh/config.yaml:ro
+      - /tmp/irgsh-e2e/chief:/tmp/irgsh-e2e/chief
+      - /tmp/irgsh-e2e/gnupg:/tmp/irgsh-e2e/gnupg
+    ports:
+      - "8080:8080"
+    networks: [irgsh]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/v1/version"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  builder:
+    image: irgsh-e2e
+    command: irgsh-builder
+    environment:
+      IRGSH_CONFIG_PATH: /etc/irgsh/config.yaml
+    volumes:
+      - ./config.yaml:/etc/irgsh/config.yaml:ro
+      # Same path on host and in container so Docker volume mounts work
+      # when builder runs "docker run -v /tmp/irgsh-e2e/builder/...".
+      - /tmp/irgsh-e2e/builder:/tmp/irgsh-e2e/builder
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    networks: [irgsh]
+    depends_on:
+      chief:
+        condition: service_healthy
+
+  repo:
+    image: irgsh-e2e
+    command: ["irgsh-repo", "--config", "/etc/irgsh/config.yaml"]
+    environment:
+      IRGSH_CONFIG_PATH: /etc/irgsh/config.yaml
+      GNUPGHOME: /tmp/irgsh-e2e/gnupg
+    volumes:
+      - ./config.yaml:/etc/irgsh/config.yaml:ro
+      - /tmp/irgsh-e2e/repo:/tmp/irgsh-e2e/repo
+      - /tmp/irgsh-e2e/gnupg:/tmp/irgsh-e2e/gnupg
+    ports:
+      - "8082:8082"
+    networks: [irgsh]
+    depends_on:
+      chief:
+        condition: service_healthy
+
+networks:
+  irgsh:

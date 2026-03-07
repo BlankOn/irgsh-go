@@ -1,14 +1,16 @@
 package notification
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 // LogBaseURL is the base URL for accessing build/repo logs
@@ -23,14 +25,14 @@ type WebhookPayload struct {
 
 // JobNotificationInfo contains job details for notification
 type JobNotificationInfo struct {
-	PackageName     string
-	PackageVersion  string
-	Maintainer      string
-	IsExperimental  bool
-	SourceURL       string
-	SourceBranch    string
-	PackageURL      string
-	PackageBranch   string
+	PackageName    string
+	PackageVersion string
+	Maintainer     string
+	IsExperimental bool
+	SourceURL      string
+	SourceBranch   string
+	PackageURL     string
+	PackageBranch  string
 }
 
 // SendWebhook sends a notification to the configured webhook URL
@@ -46,11 +48,6 @@ func SendWebhook(webhookURL, title, message string) error {
 		Message: message,
 	}
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal notification payload: %v", err)
-	}
-
 	client := &http.Client{
 		Timeout: 2 * time.Minute,
 	}
@@ -58,40 +55,24 @@ func SendWebhook(webhookURL, title, message string) error {
 	maxRetries := 3
 	var lastErr error
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(jsonData))
-		if err != nil {
-			return fmt.Errorf("failed to create notification request: %v", err)
+	err := httputil.PostJSONWithRetry(context.Background(), client, webhookURL, payload, maxRetries, 5*time.Second, func(attempt, maxAttempts int, err error) {
+		var statusErr httputil.HTTPStatusError
+		if errors.As(err, &statusErr) {
+			lastErr = fmt.Errorf("notification webhook returned non-success status (attempt %d/%d): %d", attempt, maxAttempts, statusErr.StatusCode)
+		} else {
+			lastErr = fmt.Errorf("failed to send notification (attempt %d/%d): %v", attempt, maxAttempts, err)
 		}
-
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to send notification (attempt %d/%d): %v", attempt, maxRetries, err)
-			log.Printf("%v", lastErr)
-			if attempt < maxRetries {
-				time.Sleep(5 * time.Second) // Wait 5 seconds before retry
-			}
-			continue
+		log.Printf("%v", lastErr)
+	})
+	if err != nil {
+		if lastErr != nil {
+			return lastErr
 		}
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			resp.Body.Close()
-			lastErr = fmt.Errorf("notification webhook returned non-success status (attempt %d/%d): %d", attempt, maxRetries, resp.StatusCode)
-			log.Printf("%v", lastErr)
-			if attempt < maxRetries {
-				time.Sleep(5 * time.Second) // Wait 5 seconds before retry
-			}
-			continue
-		}
-
-		resp.Body.Close()
-		log.Printf("Notification sent successfully: %s", title)
-		return nil
+		return err
 	}
 
-	return lastErr
+	log.Printf("Notification sent successfully: %s", title)
+	return nil
 }
 
 // extractRepoName extracts username/repo from a git URL
