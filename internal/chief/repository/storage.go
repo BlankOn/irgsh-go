@@ -45,7 +45,7 @@ func (s *Storage) SubmissionSignaturePath(taskUUID string) string {
 func (s *Storage) ExtractSubmission(taskUUID string) error {
 	tarball := filepath.Join(s.SubmissionsDir(), taskUUID+".tar.gz")
 	dir := filepath.Join(s.SubmissionsDir(), taskUUID)
-	return exec.Command("tar", "--no-absolute-names", "-xvf", tarball, "-C", dir).Run()
+	return exec.Command("tar", "-xvf", tarball, "-C", dir).Run()
 }
 
 func (s *Storage) CopyFileWithSudo(src, dst string) error {

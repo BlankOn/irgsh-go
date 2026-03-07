@@ -36,7 +36,7 @@ cleanup() {
     echo "=== Stopping services ==="
     $COMPOSE down --remove-orphans 2>/dev/null || true
     echo "=== Removing e2e data ==="
-    sudo rm -rf "$E2E_DIR"
+    rm -rf "$E2E_DIR"
     echo "=== Removing Docker image ==="
     docker rmi "$IMAGE_NAME" 2>/dev/null || true
     docker rmi pbocker 2>/dev/null || true
@@ -54,8 +54,7 @@ docker build -t "$IMAGE_NAME" -f Dockerfile "$PROJECT_ROOT"
 
 # ---- Step 2: Create data directories ----
 echo "=== Step 2: Preparing data directories ==="
-sudo mkdir -p "$E2E_DIR"/{chief,builder,repo,gnupg,iso}
-sudo chmod -R 777 "$E2E_DIR"
+mkdir -p "$E2E_DIR"/{chief,builder,repo,gnupg,iso}
 
 # ---- Step 3: Generate GPG key ----
 echo "=== Step 3: Generating GPG key ==="
