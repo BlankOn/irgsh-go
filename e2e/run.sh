@@ -36,7 +36,12 @@ cleanup() {
     echo "=== Stopping services ==="
     $COMPOSE down --remove-orphans 2>/dev/null || true
     echo "=== Removing e2e data ==="
-    rm -rf "$E2E_DIR"
+    # Some files are root-owned (created by pbuilder inside Docker).
+    # Use a container to remove them so cleanup works without sudo.
+    if [ -d "$E2E_DIR" ]; then
+        docker run --rm -v "$E2E_DIR:$E2E_DIR" "$IMAGE_NAME" rm -rf "$E2E_DIR" 2>/dev/null \
+            || rm -rf "$E2E_DIR"
+    fi
     echo "=== Removing Docker image ==="
     docker rmi "$IMAGE_NAME" 2>/dev/null || true
     docker rmi pbocker 2>/dev/null || true
