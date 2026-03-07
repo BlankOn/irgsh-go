@@ -32,7 +32,7 @@ release:
 	cp -rf utils/systemctl/* irgsh-go/lib/systemd/system
 	cp -rf utils/scripts/init.sh irgsh-go/usr/share/irgsh/init.sh
 	cp -rf utils/scripts/iso-build.sh irgsh-go/usr/share/irgsh/iso-build.sh
-	cp -rf -R utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
+	cp -rf utils/reprepro-template irgsh-go/usr/share/irgsh/reprepro-template
 	tar -zcvf release.tar.gz irgsh-go
 	mkdir -p target
 	mv release.tar.gz target/
@@ -77,12 +77,9 @@ build-install: release
 	sudo systemctl start irgsh-repo
 
 test:
-	mkdir -p tmp
-	go test -race -coverprofile=coverage.txt -covermode=atomic ./cmd/builder
-	go test -race -coverprofile=coverage.txt -covermode=atomic ./cmd/iso
-	go test -race -coverprofile=coverage.txt -covermode=atomic ./cmd/repo
+	go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
-coverage:test
+coverage: test
 	go tool cover -html=coverage.txt
 
 client: load-gpg

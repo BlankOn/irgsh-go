@@ -99,13 +99,13 @@ Split the 1294-line `ChiefUsecase` god object into focused services.
 
 | Task | Status |
 |------|--------|
-| Update CLAUDE.md directory structure | todo |
-| Update CLAUDE.md test file locations | todo |
-| Document submission type coupling (CLI vs chief) | todo |
-| Fix Makefile test target to `go test ./...` | todo |
-| Fix coverage reporting (single invocation) | todo |
-| Remove redundant `cp -rf -R` flags | todo |
-| Verify: `go build && go test -race ./...` | todo |
+| Update CLAUDE.md directory structure | done |
+| Update CLAUDE.md test file locations | done |
+| Document submission type coupling (CLI vs chief) | done |
+| Fix Makefile test target to `go test ./...` | done |
+| Fix coverage reporting (single invocation) | done |
+| Remove redundant `cp -rf -R` flags | done |
+| Verify: `go build && go test -race ./...` | done |
 
 ---
 

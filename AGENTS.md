@@ -58,6 +58,8 @@ graph LR
     chief --- chief_usecase["usecase/"]
     chief --- chief_repo["repository/"]
 
+    chief_usecase --- chief_templates["templates/"]
+
     cli --- cli_domain["domain/"]
     cli --- cli_usecase["usecase/"]
     cli --- cli_repo["repository/"]
@@ -66,10 +68,12 @@ graph LR
     pkg --- systemutil["systemutil/"]
 
     utils --- config_yaml["config.yaml"]
+    utils --- assets["assets/"]
     utils --- scripts["scripts/"]
     utils --- systemctl["systemctl/"]
     utils --- reprepro["reprepro-template/"]
     utils --- docker["docker/"]
+    utils --- init_dir["init/"]
 ```
 
 | Path | Description |
@@ -79,17 +83,17 @@ graph LR
 | `cmd/repo/` | Repository manager using reprepro (port 8082) |
 | `cmd/iso/` | ISO image builder (port 8083) |
 | `cmd/cli/` | Client CLI tool for package maintainers |
-| `internal/chief/domain/` | Chief domain types: `Submission`, `ISOSubmission`, `Maintainer`, `BuildStatusResponse`, status derivation, ID validation |
-| `internal/chief/usecase/` | Chief business logic (`ChiefUsecase`) and port interfaces (`GPGVerifier`, `FileStorage`, `JobStore`, etc.) |
-| `internal/chief/repository/` | Chief repository adapters: `GPG` (signature verification), `Storage` (on-disk file management) |
-| `internal/cli/domain/` | CLI domain types: `Config`, `Pipeline`, API response structs |
-| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): submit, status, update, log |
-| `internal/cli/repository/` | CLI repository adapters: `HTTPChiefClient`, `GitRepoSync`, `ShellDebianPackager`, `ShellGPGSigner`, etc. |
+| `internal/chief/domain/` | Chief domain types: `Submission`, `ISOSubmission`, `Maintainer`, `SubmitPayloadResponse`, `BuildStatusResponse`, status derivation, ID validation |
+| `internal/chief/usecase/` | Chief business logic split into services (`ChiefUsecase`, `MaintainerService`, `StatusService`, `SubmissionService`, `UploadService`, `DashboardService`), port interfaces (`TaskQueue`, `GPGVerifier`, `FileStorage`, `JobStore`, `ISOJobStore`, `InstanceRegistry`), and embedded dashboard template |
+| `internal/chief/repository/` | Chief repository adapters: `GPG` (signature verification), `Storage` (on-disk file management), `Machinery` (task queue) |
+| `internal/cli/domain/` | CLI domain types: `Config`, `Submission`, `SubmitParams`, `ISOSubmission`, API response structs (`PackageStatus`, `ISOStatus`, `SubmitResponse`, etc.) |
+| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): config, package submit/status/log, ISO submit/status/log, retry, update; port interfaces (`ConfigStore`, `PipelineStore`, `ChiefAPI`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, etc.) |
+| `internal/cli/repository/` | CLI repository adapters: `HTTPChiefClient`, `ConfigStore`, `PipelineStore`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, `ReleaseFetcher`, `UpdateApplier`, `Prompter` |
 | `internal/config/` | Configuration loading and validation from YAML |
 | `internal/monitoring/` | Worker health tracking, heartbeats, job history, instance registry |
 | `internal/notification/` | Webhook POST notifications on job completion |
 | `internal/artifact/` | Artifact storage using repo/service/endpoint pattern |
-| `internal/storage/` | SQLite database for persistent job data |
+| `internal/storage/` | SQLite database for persistent job and ISO job data |
 | `pkg/httputil/` | JSON response helpers, `HTTPError`, `HTTPStatusError`, retry utilities |
 | `pkg/systemutil/` | Shell command execution and log streaming |
 | `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile |
@@ -159,6 +163,22 @@ When `notification.webhook_url` is configured, POST requests are sent on job com
 4. Chief queues repo task
 5. Repo downloads artifacts, injects into reprepro repository
 
+### Wire Format Coupling
+The CLI and chief define parallel `Submission`/`ISOSubmission` structs with matching
+`json:"..."` tags but no shared Go type. The CLI types are strict subsets of the chief
+types (chief adds server-assigned `TaskUUID` and `Timestamp` fields). Response types
+(`PackageStatus`, `SubmitResponse`, etc.) are also independently defined in each domain
+package.
+
+Builder and repo receive serialized submissions via the machinery task queue and unmarshal
+into `map[string]interface{}`, accessing fields by string key with no compile-time safety.
+
+Changes to the wire format must be coordinated manually across all four components:
+- `internal/cli/domain/submission.go` (CLI sends)
+- `internal/chief/domain/submission.go` (chief receives)
+- `cmd/builder/builder.go` (builder consumes via map)
+- `cmd/repo/repo.go` (repo consumes via map)
+
 ## Testing
 
 ```bash
@@ -168,10 +188,21 @@ make test
 # Generate coverage report
 make coverage
 
-# Test files location
-cmd/builder/builder_test.go
-cmd/builder/init_test.go
-cmd/repo/repo_test.go
+# Test files are co-located with source throughout the codebase:
+cmd/builder/builder_test.go          # integration (requires -tags integration)
+cmd/builder/init_test.go             # integration (requires -tags integration)
+cmd/repo/repo_test.go                # integration (requires -tags integration)
+internal/artifact/repo/file_impl_test.go
+internal/artifact/service/artifact_test.go
+internal/cli/repository/config_store_test.go
+internal/cli/repository/pipeline_store_test.go
+internal/cli/usecase/config_test.go
+internal/cli/usecase/iso_test.go
+internal/cli/usecase/mocks_test.go
+internal/cli/usecase/package_test.go
+internal/cli/usecase/retry_test.go
+internal/storage/iso_jobs_test.go
+internal/storage/jobs_test.go
 pkg/httputil/response_test.go
 ```
 
@@ -184,9 +215,11 @@ pkg/httputil/response_test.go
 4. Access via `irgshConfig.Section.Field`
 
 ### Adding a New API Endpoint (Chief)
-1. Add handler function in `cmd/chief/handler.go`
-2. Register route in `serve()` function in `cmd/chief/main.go`
-3. Use `httputil.ResponseJSON()` for responses
+1. Add method to the appropriate service in `internal/chief/usecase/`
+2. Add method to `ChiefService` interface in `cmd/chief/handler.go`
+3. Add handler function in `cmd/chief/handler.go`
+4. Register route in `serve()` function in `cmd/chief/main.go`
+5. Use `httputil.ResponseJSON()` for responses
 
 ### Adding Worker Functionality
 1. Implement function in component's main package (e.g., `cmd/builder/builder.go`)

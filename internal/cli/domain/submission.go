@@ -1,6 +1,7 @@
 package domain
 
 // Submission is the wire format sent to the chief API.
+// The JSON tags must stay in sync with internal/chief/domain/submission.go.
 type Submission struct {
 	PackageName            string `json:"packageName"`
 	PackageVersion         string `json:"packageVersion"`

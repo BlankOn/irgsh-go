@@ -3,6 +3,7 @@ package domain
 import "time"
 
 // Submission represents a package build submission from a maintainer.
+// The JSON tags must stay in sync with internal/cli/domain/submission.go.
 type Submission struct {
 	TaskUUID               string    `json:"taskUUID"`
 	Timestamp              time.Time `json:"timestamp"`
@@ -22,6 +23,7 @@ type Submission struct {
 }
 
 // ISOSubmission represents an ISO build request.
+// The JSON tags must stay in sync with internal/cli/domain/iso.go.
 type ISOSubmission struct {
 	TaskUUID  string    `json:"taskUUID"`
 	Timestamp time.Time `json:"timestamp"`
