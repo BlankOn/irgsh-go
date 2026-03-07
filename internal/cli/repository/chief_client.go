@@ -48,6 +48,7 @@ func checkResponse(resp *http.Response) error {
 		return nil
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	io.Copy(io.Discard, resp.Body) // drain remainder for connection reuse
 	return httputil.HTTPStatusError{StatusCode: resp.StatusCode, Body: string(body)}
 }
 
@@ -155,7 +156,8 @@ func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenP
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		io.Copy(io.Discard, resp.Body) // drain remainder for connection reuse
 		return domain.UploadResponse{}, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -344,5 +346,6 @@ func (c *HTTPChiefClient) FetchLog(ctx context.Context, logPath string) (string,
 	if err != nil {
 		return "", err
 	}
+	io.Copy(io.Discard, resp.Body) // drain remainder for connection reuse
 	return string(body), nil
 }

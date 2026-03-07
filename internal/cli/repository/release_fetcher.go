@@ -35,6 +35,7 @@ func (f *GitHubReleaseFetcher) FetchLatest(ctx context.Context) (domain.GitHubRe
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, resp.Body) // drain for connection reuse
 		return domain.GitHubRelease{}, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 

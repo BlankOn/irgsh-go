@@ -33,7 +33,7 @@ func sq(s string) string {
 func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error) {
 	cfg, err := u.config.Load()
 	if err != nil {
-		return domain.SubmitResponse{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.SubmitResponse{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
 
 	// Validate chief connectivity (unless ignoring checks)
@@ -269,7 +269,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		log.Println("Trying debuild before dpkg-genbuildinfo...")
 		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", sq(workDir))
 		if shellErr := u.shell.RunInteractive(debuildCmd); shellErr != nil {
-			return domain.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %v): %w", shellErr, err)
+			return domain.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %w): %w", shellErr, err)
 		}
 	}
 
@@ -391,7 +391,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error) {
 	if _, err := u.config.Load(); err != nil {
-		return domain.PackageStatus{}, fmt.Errorf("%w: %v", ErrConfigMissing, err)
+		return domain.PackageStatus{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
 
 	if pipelineID == "" {
@@ -408,7 +408,7 @@ func (u *CLIUsecase) PackageStatus(ctx context.Context, pipelineID string) (doma
 
 func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error) {
 	if _, loadErr := u.config.Load(); loadErr != nil {
-		return "", "", fmt.Errorf("%w: %v", ErrConfigMissing, loadErr)
+		return "", "", fmt.Errorf("%w: %w", ErrConfigMissing, loadErr)
 	}
 
 	if pipelineID == "" {
