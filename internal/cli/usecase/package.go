@@ -107,7 +107,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 			if !errors.Is(err, domain.ErrRepoOrBranchNotFound) {
 				return domain.SubmitResponse{}, err
 			}
-			fmt.Println(err.Error())
+			log.Println(err)
 			// Try as downloadable tarball
 			downloadableTarballURL = strings.TrimSuffix(params.SourceURL, "\n")
 			log.Println("Downloading the tarball " + downloadableTarballURL)

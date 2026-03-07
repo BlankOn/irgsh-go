@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -88,7 +87,7 @@ func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain
 
 	jsonStr, err := json.Marshal(submission)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
