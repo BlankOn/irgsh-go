@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
@@ -30,8 +31,12 @@ func NewChiefUsecase(
 	storage *chiefrepository.Storage,
 	gpg *chiefrepository.GPG,
 	version string,
-) *ChiefUsecase {
+) (*ChiefUsecase, error) {
 	maintainerSvc := NewMaintainerService(gpg)
+	dashSvc, err := newDashboardSvc(version, taskQueue, maintainerSvc, registry)
+	if err != nil {
+		return nil, fmt.Errorf("init dashboard service: %w", err)
+	}
 	return &ChiefUsecase{
 		config:             cfg,
 		taskQueue:          taskQueue,
@@ -43,8 +48,8 @@ func NewChiefUsecase(
 		uploadSvc:          NewUploadService(storage, gpg),
 		statusSvc:          NewStatusService(taskQueue),
 		submissionSvc:      newSubmissionSvc(taskQueue, storage, gpg, registry),
-		dashboardSvc:       newDashboardSvc(version, taskQueue, maintainerSvc, registry),
-	}
+		dashboardSvc:       dashSvc,
+	}, nil
 }
 
 // newSubmissionSvc constructs a SubmissionService, avoiding a non-nil
@@ -59,7 +64,7 @@ func newSubmissionSvc(tq TaskQueue, st FileStorage, gpg GPGVerifier, reg *monito
 	return NewSubmissionService(tq, st, gpg, js, is)
 }
 
-func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) *DashboardService {
+func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
 	var ir InstanceRegistry
 	var js JobStore
 	var is ISOJobStore
@@ -80,8 +85,8 @@ func (s *ChiefUsecase) GetMaintainers() []domain.Maintainer {
 	return s.maintainerSvc.GetMaintainers()
 }
 
-func (s *ChiefUsecase) RenderIndexHTML() (string, error) {
-	return s.dashboardSvc.RenderIndexHTML()
+func (s *ChiefUsecase) RenderIndexHTML(w io.Writer) error {
+	return s.dashboardSvc.RenderIndexHTML(w)
 }
 
 func (s *ChiefUsecase) SubmitPackage(submission domain.Submission) (domain.SubmitPayloadResponse, error) {

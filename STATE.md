@@ -90,10 +90,10 @@ Split the 1294-line `ChiefUsecase` god object into focused services.
 
 | Task | Status |
 |------|--------|
-| Create `DashboardData` struct for template rendering | todo |
-| Convert `RenderIndexHTML` to `html/template` | todo |
-| Embed template via `//go:embed` | todo |
-| Verify: `go build && go test -race ./...` | todo |
+| Create `DashboardData` struct for template rendering | done |
+| Convert `RenderIndexHTML` to `html/template` | done |
+| Embed template via `//go:embed` | done |
+| Verify: `go build && go test -race ./...` | done |
 
 ### Phase 7: Documentation & CI
 

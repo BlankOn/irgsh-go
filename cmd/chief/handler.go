@@ -14,7 +14,7 @@ import (
 // ChiefService defines the operations the HTTP handlers require.
 type ChiefService interface {
 	GetVersion() string
-	RenderIndexHTML() (string, error)
+	RenderIndexHTML(w io.Writer) error
 	GetMaintainers() []domain.Maintainer
 	ListMaintainersRaw() (string, error)
 	SubmitPackage(domain.Submission) (domain.SubmitPayloadResponse, error)
@@ -71,12 +71,9 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	html, err := chiefService.RenderIndexHTML()
-	if err != nil {
-		writeUsecaseError(w, err)
-		return
+	if err := chiefService.RenderIndexHTML(w); err != nil {
+		log.Printf("dashboard render error: %v", err)
 	}
-	io.WriteString(w, html)
 }
 
 func PackageSubmitHandler(w http.ResponseWriter, r *http.Request) {

@@ -1,16 +1,94 @@
 package usecase
 
 import (
+	_ "embed"
 	"fmt"
-	"html"
+	"html/template"
+	"io"
 	"log"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/internal/storage"
 )
+
+//go:embed templates/dashboard.html
+var dashboardTmplStr string
+
+// View models for the dashboard template.
+
+type DashboardData struct {
+	Version       string
+	Maintainers   []domain.Maintainer
+	HasMonitoring bool
+	Summary       SummaryView
+	Workers       []WorkerView
+	Jobs          []JobView
+	ISOJobs       []ISOJobView
+}
+
+type SummaryView struct {
+	Total   int
+	Online  int
+	Offline int
+	ByType  []TypeCount
+}
+
+type TypeCount struct {
+	Name  string
+	Count int
+}
+
+type WorkerView struct {
+	Type        string
+	BadgeClass  string
+	Hostname    string
+	Status      string
+	StatusClass string
+	Uptime      string
+	ActiveTasks int
+	Concurrency int
+	CPU         string
+	Memory      string
+	Disk        string
+}
+
+type RepoLink struct {
+	URL   string
+	Label string
+}
+
+type JobView struct {
+	FilterStatus   string
+	TimeFormatted  string
+	TimeRelative   string
+	PackageName    string
+	PackageVersion string
+	Maintainer     string
+	Component      string
+	IsExperimental bool
+	RepoLinks      []RepoLink
+	BuildStageClass string
+	BuildStateText  string
+	RepoStageClass  string
+	RepoStateText   string
+	StatusClass    string
+	StatusText     string
+	ShowSpinner    bool
+	TaskUUID       string
+}
+
+type ISOJobView struct {
+	TimeFormatted string
+	TimeRelative  string
+	RepoURL       string
+	Branch        string
+	State         string
+	StatusClass   string
+	TaskUUID      string
+}
 
 // DashboardService renders the chief dashboard HTML.
 type DashboardService struct {
@@ -20,6 +98,7 @@ type DashboardService struct {
 	registry      InstanceRegistry
 	jobStore      JobStore
 	isoStore      ISOJobStore
+	tmpl          *template.Template
 }
 
 func NewDashboardService(
@@ -29,7 +108,11 @@ func NewDashboardService(
 	registry InstanceRegistry,
 	jobStore JobStore,
 	isoStore ISOJobStore,
-) *DashboardService {
+) (*DashboardService, error) {
+	tmpl, err := template.New("dashboard").Parse(dashboardTmplStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse dashboard template: %w", err)
+	}
 	return &DashboardService{
 		version:       version,
 		taskQueue:     taskQueue,
@@ -37,614 +120,309 @@ func NewDashboardService(
 		registry:      registry,
 		jobStore:      jobStore,
 		isoStore:      isoStore,
-	}
+		tmpl:          tmpl,
+	}, nil
 }
 
-func (d *DashboardService) RenderIndexHTML() (string, error) {
-	out := `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="10">
-    <title>IRGSH Chief</title>
-    <style>
-        body {
-            font-family: monospace;
-            margin: 20px;
-            background-color: #f5f5f5;
-        }
-        .header {
-            background: #333;
-            color: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .logo {
-            font-size: 14px;
-            line-height: 1.2;
-            margin-bottom: 10px;
-        }
-        .nav {
-            margin-top: 10px;
-        }
-        .nav a {
-            color: #4CAF50;
-            text-decoration: none;
-            margin-right: 10px;
-        }
-        .nav a:hover {
-            text-decoration: underline;
-        }
-        .summary {
-            background: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 4px solid #4CAF50;
-            display: inline-block;
-        }
-        .summary-item {
-            display: inline-block;
-            margin-right: 30px;
-            font-size: 14px;
-            vertical-align: top;
-        }
-        .summary-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        th {
-            background: #333;
-            color: #fff;
-            padding: 12px;
-            text-align: left;
-            font-size: 12px;
-        }
-        td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #ddd;
-            font-size: 11px;
-        }
-        tr:hover {
-            background-color: #f9f9f9;
-        }
-        .status-online {
-            color: #4CAF50;
-            font-weight: bold;
-        }
-        .status-offline {
-            color: #f44336;
-            font-weight: bold;
-        }
-        .status-warning {
-            color: #ff9800;
-            font-weight: bold;
-        }
-        .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: bold;
-        }
-        .badge-builder {
-            background: #2196F3;
-            color: white;
-        }
-        .badge-repo {
-            background: #FF9800;
-            color: white;
-        }
-        .badge-iso {
-            background: #9C27B0;
-            color: white;
-        }
-        .metric {
-            font-size: 11px;
-            color: #666;
-        }
-        .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            color: #333;
-        }
-        .refresh-info {
-            color: #666;
-            font-size: 11px;
-            margin-top: 20px;
-        }
-        .empty-state {
-            background: #fff;
-            padding: 40px;
-            text-align: center;
-            color: #999;
-        }
-        @keyframes spin-gear {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        .spinning-gear {
-            vertical-align: middle;
-            animation: spin-gear 2s linear infinite;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div>irgsh-chief ` + html.EscapeString(d.version) + `</div>
-    </div>
-`
+func (d *DashboardService) RenderIndexHTML(w io.Writer) error {
+	data := d.buildDashboardData()
+	return d.tmpl.Execute(w, data)
+}
 
-	out += `<div class="section-title">Package Maintainers</div>`
+func (d *DashboardService) buildDashboardData() DashboardData {
+	data := DashboardData{
+		Version:     d.version,
+		Maintainers: d.maintainerSvc.GetMaintainers(),
+	}
 
-	maintainers := d.maintainerSvc.GetMaintainers()
-	if len(maintainers) > 0 {
-		out += `
-		<table>
-			<thead>
-				<tr>
-					<th>GPG Key</th>
-					<th>Name</th>
-					<th>Email</th>
-				</tr>
-			</thead>
-			<tbody>`
+	if d.registry == nil {
+		return data
+	}
+	data.HasMonitoring = true
 
-		for _, m := range maintainers {
-			out += fmt.Sprintf(`
-				<tr>
-					<td style="font-family: monospace;">%s</td>
-					<td>%s</td>
-					<td>%s</td>
-				</tr>`,
-				html.EscapeString(m.KeyID),
-				html.EscapeString(m.Name),
-				html.EscapeString(m.Email),
-			)
-		}
-
-		out += `
-			</tbody>
-		</table>`
+	instances, err := d.registry.ListInstances("", "")
+	if err != nil {
+		log.Printf("Failed to list instances: %v\n", err)
 	} else {
-		out += `<div class="empty-state">No maintainers found</div>`
-	}
-
-	if d.registry != nil {
-		instances, err := d.registry.ListInstances("", "")
+		summary, err := d.registry.GetSummary()
 		if err != nil {
-			log.Printf("Failed to list instances: %v\n", err)
-		} else {
-			summary, err := d.registry.GetSummary()
-			if err != nil {
-				log.Printf("Failed to get summary: %v\n", err)
-			}
-
-			out += `<div class="section-title">Workers</div>`
-
-			out += fmt.Sprintf(`
-    <div class="summary">
-        <div class="summary-item">
-            <div class="summary-number">%d</div>
-            <div>Total Instances</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-number" style="color: #4CAF50;">%d</div>
-            <div>Online</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-number" style="color: #f44336;">%d</div>
-            <div>Offline</div>
-        </div>
-`, summary.Total, summary.Online, summary.Offline)
-
-			for typeName, count := range summary.ByType {
-				out += fmt.Sprintf(`
-        <div class="summary-item">
-            <div class="summary-number" style="color: #2196F3;">%d</div>
-            <div>%s</div>
-        </div>
-`, count, html.EscapeString(typeName))
-			}
-
-			out += `
-    </div>
-`
-
-			if len(instances) > 0 {
-				out += `
-    <table>
-        <thead>
-            <tr>
-                <th>Type</th>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Uptime</th>
-                <th>Tasks</th>
-                <th>CPU</th>
-                <th>Memory</th>
-                <th>Disk</th>
-            </tr>
-        </thead>
-        <tbody>`
-
-				for _, instance := range instances {
-					badgeClass := "badge badge-builder"
-					switch instance.InstanceType {
-					case monitoring.InstanceTypeRepo:
-						badgeClass = "badge badge-repo"
-					case monitoring.InstanceTypeISO:
-						badgeClass = "badge badge-iso"
-					}
-
-					statusClass := "status-offline"
-					if instance.Status == monitoring.StatusOnline {
-						statusClass = "status-online"
-					}
-
-					uptime := time.Since(instance.StartTime)
-					uptimeStr := formatDuration(uptime)
-
-					cpuStr := fmt.Sprintf("%.1f", instance.CPUUsage)
-
-					memStr := monitoring.FormatBytes(instance.MemoryUsage)
-					if instance.MemoryTotal > 0 {
-						memStr += " / " + monitoring.FormatBytes(instance.MemoryTotal)
-					}
-
-					diskStr := monitoring.FormatBytes(instance.DiskUsage)
-					if instance.DiskTotal > 0 {
-						diskStr += " / " + monitoring.FormatBytes(instance.DiskTotal)
-					}
-
-					out += fmt.Sprintf(`
-            <tr>
-                <td><span class="%s">%s</span></td>
-                <td>%s</td>
-                <td><span class="%s">%s</span></td>
-                <td>%s</td>
-                <td>%d / %d</td>
-                <td class="metric">%s / 100</td>
-                <td class="metric">%s</td>
-                <td class="metric">%s</td>
-            </tr>`,
-						badgeClass,
-						html.EscapeString(string(instance.InstanceType)),
-						html.EscapeString(instance.Hostname),
-						statusClass,
-						html.EscapeString(string(instance.Status)),
-						uptimeStr,
-						instance.ActiveTasks,
-						instance.Concurrency,
-						cpuStr,
-						memStr,
-						diskStr,
-					)
-				}
-
-				out += `
-        </tbody>
-    </table>
-`
-			} else {
-				out += `<div class="empty-state">No worker instances found</div>`
-			}
+			log.Printf("Failed to get summary: %v\n", err)
 		}
-
-		d.renderPackagingJobs(&out)
-		d.renderISOJobs(&out)
+		data.Summary = buildSummaryView(summary)
+		data.Workers = buildWorkerViews(instances)
 	}
+	data.Jobs = d.buildJobViews()
+	data.ISOJobs = d.buildISOJobViews()
 
-	out += `
-    <div class="refresh-info">
-        Page auto-refreshes every 10 seconds
-    </div>
-    <script>
-    function filterJobsByStatus(status) {
-        var table = document.getElementById('packagingJobsTable');
-        if (!table) return;
-        var rows = table.getElementsByTagName('tr');
-        for (var i = 1; i < rows.length; i++) {
-            var row = rows[i];
-            if (status === 'all' || row.getAttribute('data-status') === status) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        }
-    }
-    </script>
-</body>
-</html>
-`
-
-	return out, nil
+	return data
 }
 
-func (d *DashboardService) renderPackagingJobs(out *string) {
+func buildSummaryView(s monitoring.InstanceSummary) SummaryView {
+	sv := SummaryView{
+		Total:   s.Total,
+		Online:  s.Online,
+		Offline: s.Offline,
+	}
+	for name, count := range s.ByType {
+		sv.ByType = append(sv.ByType, TypeCount{Name: name, Count: count})
+	}
+	sort.Slice(sv.ByType, func(i, j int) bool {
+		return sv.ByType[i].Name < sv.ByType[j].Name
+	})
+	return sv
+}
+
+func buildWorkerViews(instances []*monitoring.InstanceInfo) []WorkerView {
+	views := make([]WorkerView, 0, len(instances))
+	for _, inst := range instances {
+		badgeClass := "badge-builder"
+		switch inst.InstanceType {
+		case monitoring.InstanceTypeRepo:
+			badgeClass = "badge-repo"
+		case monitoring.InstanceTypeISO:
+			badgeClass = "badge-iso"
+		}
+
+		statusClass := "status-offline"
+		if inst.Status == monitoring.StatusOnline {
+			statusClass = "status-online"
+		}
+
+		memStr := monitoring.FormatBytes(inst.MemoryUsage)
+		if inst.MemoryTotal > 0 {
+			memStr += " / " + monitoring.FormatBytes(inst.MemoryTotal)
+		}
+
+		diskStr := monitoring.FormatBytes(inst.DiskUsage)
+		if inst.DiskTotal > 0 {
+			diskStr += " / " + monitoring.FormatBytes(inst.DiskTotal)
+		}
+
+		views = append(views, WorkerView{
+			Type:        string(inst.InstanceType),
+			BadgeClass:  badgeClass,
+			Hostname:    inst.Hostname,
+			Status:      string(inst.Status),
+			StatusClass: statusClass,
+			Uptime:      formatDuration(time.Since(inst.StartTime)),
+			ActiveTasks: inst.ActiveTasks,
+			Concurrency: inst.Concurrency,
+			CPU:         fmt.Sprintf("%.1f", inst.CPUUsage),
+			Memory:      memStr,
+			Disk:        diskStr,
+		})
+	}
+	return views
+}
+
+func (d *DashboardService) buildJobViews() []JobView {
 	if d.jobStore == nil {
-		return
+		return nil
 	}
 	jobs, err := d.jobStore.GetRecentJobs(50)
 	if err != nil {
 		log.Printf("Failed to list jobs: %v\n", err)
-		return
+		return nil
 	}
 	if len(jobs) == 0 {
-		return
+		return nil
 	}
 
-	*out += `<div class="section-title">Recent Packaging Jobs</div>`
-	*out += `
-			<div style="margin-bottom: 10px;">
-				<label for="statusFilter" style="margin-right: 5px;">Filter by status:</label>
-				<select id="statusFilter" onchange="filterJobsByStatus(this.value)" style="padding: 4px 8px; font-size: 0.95em;">
-					<option value="all">All</option>
-					<option value="DONE">DONE</option>
-					<option value="FAILED">FAILED</option>
-					<option value="PENDING">PENDING</option>
-					<option value="UNKNOWN">UNKNOWN</option>
-				</select>
-			</div>
-			<table id="packagingJobsTable">
-				<thead>
-					<tr>
-						<th>Timestamp</th>
-						<th>Package</th>
-						<th>Version</th>
-						<th>Maintainer</th>
-						<th>Component</th>
-						<th>Build</th>
-						<th>Repo</th>
-						<th>Status</th>
-						<th>UUID</th>
-					</tr>
-				</thead>
-				<tbody>`
+	d.resolveJobStates(jobs)
 
 	jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
 	if locErr != nil {
 		jakartaLoc = time.UTC
 	}
 
-	stageClass := func(state string) string {
-		switch state {
-		case "SUCCESS":
-			return "status-online"
-		case "FAILURE":
-			return "status-offline"
-		case "STARTED", "RECEIVED":
-			return "status-warning"
+	views := make([]JobView, 0, len(jobs))
+	for _, job := range jobs {
+		views = append(views, buildJobView(job, jakartaLoc))
+	}
+	return views
+}
+
+func (d *DashboardService) resolveJobStates(jobs []*storage.JobInfo) {
+	for _, job := range jobs {
+		if storage.IsTerminalState(job.State) || job.State == "UNKNOWN" {
+			continue
+		}
+
+		buildState := d.taskQueue.GetTaskState("build", job.TaskUUID)
+		repoState := d.taskQueue.GetTaskState("repo", job.TaskUUID)
+
+		// If machinery returns empty for both, data has expired
+		if buildState == "" && repoState == "" {
+			continue
+		}
+
+		currentStage := domain.DeriveCurrentStage(buildState, repoState)
+		job.BuildState = buildState
+		job.RepoState = repoState
+		job.CurrentStage = currentStage
+
+		var overallState string
+		switch {
+		case buildState == "FAILURE":
+			overallState = "FAILED"
+		case buildState == "SUCCESS" && repoState == "SUCCESS":
+			overallState = "DONE"
+		case buildState == "SUCCESS" && repoState == "FAILURE":
+			overallState = "FAILED"
 		default:
-			return ""
+			overallState = "PENDING"
+		}
+
+		job.State = overallState
+
+		if storage.IsTerminalState(overallState) {
+			d.jobStore.UpdateJobStages(job.TaskUUID, buildState, repoState, currentStage)
+			d.jobStore.UpdateJobState(job.TaskUUID, overallState)
 		}
 	}
+}
 
-	for _, job := range jobs {
-		// Skip machinery query for terminal states -- trust SQLite
-		if storage.IsTerminalState(job.State) || job.State == "UNKNOWN" {
-			// Use stored build/repo states as-is
-		} else {
-			buildState := d.taskQueue.GetTaskState("build", job.TaskUUID)
-			repoState := d.taskQueue.GetTaskState("repo", job.TaskUUID)
-			currentStage := domain.DeriveCurrentStage(buildState, repoState)
+func buildJobView(job *storage.JobInfo, loc *time.Location) JobView {
+	statusClass := ""
+	statusText := job.State
+	filterStatus := job.State
+	showSpinner := false
 
-			// If machinery returns empty for both, data has expired
-			if buildState == "" && repoState == "" {
-				// Keep current SQLite state
-			} else {
-				job.BuildState = buildState
-				job.RepoState = repoState
-				job.CurrentStage = currentStage
-
-				var overallState string
-				if buildState == "FAILURE" {
-					overallState = "FAILED"
-				} else if buildState == "SUCCESS" && repoState == "SUCCESS" {
-					overallState = "DONE"
-				} else if buildState == "SUCCESS" && repoState == "FAILURE" {
-					overallState = "FAILED"
-				} else if buildState == "SUCCESS" && (repoState == "PENDING" || repoState == "RECEIVED" || repoState == "STARTED") {
-					overallState = "PENDING"
-				} else if buildState != "" {
-					overallState = "PENDING"
-				} else {
-					overallState = "PENDING"
-				}
-
-				job.State = overallState
-
-				// Persist terminal states to SQLite so they survive Redis TTL expiry
-				if storage.IsTerminalState(overallState) {
-					d.jobStore.UpdateJobStages(job.TaskUUID, buildState, repoState, currentStage)
-					d.jobStore.UpdateJobState(job.TaskUUID, overallState)
-				}
-			}
+	switch job.State {
+	case "DONE":
+		statusClass = "status-online"
+	case "FAILED":
+		statusClass = "status-offline"
+		if job.BuildState == "FAILURE" {
+			statusText = "FAILED (build)"
+		} else if job.RepoState == "FAILURE" {
+			statusText = "FAILED (repo)"
 		}
+	case "PENDING":
+		if time.Since(job.SubmittedAt) > 24*time.Hour {
+			statusClass = "status-offline"
+			statusText = "STALLED"
+		} else {
+			showSpinner = true
+		}
+		filterStatus = "PENDING"
+	case "UNKNOWN":
+		statusClass = "status-offline"
+		statusText = "UNKNOWN"
+	default:
+		showSpinner = true
+		filterStatus = "PENDING"
+	}
 
+	buildStateText := job.BuildState
+	if buildStateText == "" {
+		buildStateText = "-"
+	}
+	repoStateText := job.RepoState
+	if repoStateText == "" {
+		repoStateText = "-"
+	}
+
+	var repoLinks []RepoLink
+	if job.SourceURL != "" {
+		branchText := job.SourceBranch
+		if branchText == "" {
+			branchText = "default"
+		}
+		repoLinks = append(repoLinks, RepoLink{
+			URL:   job.SourceURL + "/tree/" + branchText,
+			Label: "source (" + branchText + ")",
+		})
+	}
+	if job.PackageURL != "" {
+		branchText := job.PackageBranch
+		if branchText == "" {
+			branchText = "default"
+		}
+		repoLinks = append(repoLinks, RepoLink{
+			URL:   job.PackageURL + "/tree/" + branchText,
+			Label: "package (" + branchText + ")",
+		})
+	}
+
+	jakartaTime := job.SubmittedAt.In(loc)
+
+	return JobView{
+		FilterStatus:    filterStatus,
+		TimeFormatted:   jakartaTime.Format("2006-01-02 15:04:05 MST"),
+		TimeRelative:    formatRelativeTime(job.SubmittedAt),
+		PackageName:     job.PackageName,
+		PackageVersion:  job.PackageVersion,
+		Maintainer:      job.Maintainer,
+		Component:       job.Component,
+		IsExperimental:  job.IsExperimental,
+		RepoLinks:       repoLinks,
+		BuildStageClass: stageClass(job.BuildState),
+		BuildStateText:  buildStateText,
+		RepoStageClass:  stageClass(job.RepoState),
+		RepoStateText:   repoStateText,
+		StatusClass:     statusClass,
+		StatusText:      statusText,
+		ShowSpinner:     showSpinner,
+		TaskUUID:        job.TaskUUID,
+	}
+}
+
+func (d *DashboardService) buildISOJobViews() []ISOJobView {
+	if d.isoStore == nil {
+		return nil
+	}
+	isoJobs, err := d.isoStore.GetRecentISOJobs(50)
+	if err != nil {
+		log.Printf("Failed to list ISO jobs: %v\n", err)
+		return nil
+	}
+	if len(isoJobs) == 0 {
+		return nil
+	}
+
+	jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
+	if locErr != nil {
+		jakartaLoc = time.UTC
+	}
+
+	views := make([]ISOJobView, 0, len(isoJobs))
+	for _, job := range isoJobs {
 		statusClass := ""
-		statusText := html.EscapeString(job.State)
-		filterStatus := job.State
 		switch job.State {
-		case "DONE":
+		case "SUCCESS", "DONE":
 			statusClass = "status-online"
-		case "FAILED":
+		case "FAILURE", "FAILED":
 			statusClass = "status-offline"
-			if job.BuildState == "FAILURE" {
-				statusText = "FAILED (build)"
-			} else if job.RepoState == "FAILURE" {
-				statusText = "FAILED (repo)"
-			}
-		case "PENDING":
-			if time.Since(job.SubmittedAt) > 24*time.Hour {
-				statusClass = "status-offline"
-				statusText = "STALLED"
-			} else {
-				statusText = `<svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
-			}
-			filterStatus = "PENDING"
-		case "UNKNOWN":
-			statusClass = "status-offline"
-			statusText = "UNKNOWN"
-		default:
-			statusText = `<svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
-			filterStatus = "PENDING"
+		case "STARTED", "RECEIVED":
+			statusClass = "status-warning"
 		}
 
 		jakartaTime := job.SubmittedAt.In(jakartaLoc)
-		timeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
-			jakartaTime.Format("2006-01-02 15:04:05 MST"),
-			formatRelativeTime(job.SubmittedAt))
-
-		expTag := ""
-		if job.IsExperimental {
-			expTag = " <span style=\"color: #ff9800; font-weight: bold;\">[experimental]</span>"
-		}
-
-		packageCell := html.EscapeString(job.PackageName) + expTag
-		var repoLinks []string
-		if job.SourceURL != "" {
-			branchText := job.SourceBranch
-			if branchText == "" {
-				branchText = "default"
-			}
-			linkURL := job.SourceURL + "/tree/" + branchText
-			repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">source (%s)</a>`, html.EscapeString(linkURL), html.EscapeString(branchText)))
-		}
-		if job.PackageURL != "" {
-			branchText := job.PackageBranch
-			if branchText == "" {
-				branchText = "default"
-			}
-			linkURL := job.PackageURL + "/tree/" + branchText
-			repoLinks = append(repoLinks, fmt.Sprintf(`<a href="%s" target="_blank">package (%s)</a>`, html.EscapeString(linkURL), html.EscapeString(branchText)))
-		}
-		if len(repoLinks) > 0 {
-			packageCell += fmt.Sprintf(`<br><span style="font-size: 0.85em; color: #666;">%s</span>`,
-				strings.Join(repoLinks, ", "))
-		}
-
-		buildStateText := job.BuildState
-		if buildStateText == "" {
-			buildStateText = "-"
-		}
-		repoStateText := job.RepoState
-		if repoStateText == "" {
-			repoStateText = "-"
-		}
-
-		*out += fmt.Sprintf(`
-					<tr data-status="%s">
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td><span class="%s">%s</span><br><a href="/logs/%s.build.log" target="_blank" style="font-size:0.85em;">log</a></td>
-						<td><span class="%s">%s</span><br><a href="/logs/%s.repo.log" target="_blank" style="font-size:0.85em;">log</a></td>
-						<td><span class="%s">%s</span></td>
-						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
-					</tr>`,
-				html.EscapeString(filterStatus),
-				timeStr,
-				packageCell,
-				html.EscapeString(job.PackageVersion),
-				html.EscapeString(job.Maintainer),
-				html.EscapeString(job.Component),
-				stageClass(job.BuildState),
-				html.EscapeString(buildStateText),
-				html.EscapeString(job.TaskUUID),
-				stageClass(job.RepoState),
-				html.EscapeString(repoStateText),
-				html.EscapeString(job.TaskUUID),
-				statusClass,
-				statusText,
-				html.EscapeString(job.TaskUUID),
-			)
+		views = append(views, ISOJobView{
+			TimeFormatted: jakartaTime.Format("2006-01-02 15:04:05 MST"),
+			TimeRelative:  formatRelativeTime(job.SubmittedAt),
+			RepoURL:       job.RepoURL,
+			Branch:        job.Branch,
+			State:         job.State,
+			StatusClass:   statusClass,
+			TaskUUID:      job.TaskUUID,
+		})
 	}
-
-	*out += `
-				</tbody>
-			</table>
-			`
+	return views
 }
 
-func (d *DashboardService) renderISOJobs(out *string) {
-	if d.isoStore == nil {
-		return
+func stageClass(state string) string {
+	switch state {
+	case "SUCCESS":
+		return "status-online"
+	case "FAILURE":
+		return "status-offline"
+	case "STARTED", "RECEIVED":
+		return "status-warning"
+	default:
+		return ""
 	}
-	isoJobs, isoErr := d.isoStore.GetRecentISOJobs(50)
-	if isoErr != nil {
-		log.Printf("Failed to list ISO jobs: %v\n", isoErr)
-		return
-	}
-	if len(isoJobs) == 0 {
-		return
-	}
-
-	*out += `<div class="section-title">Recent ISO Build Jobs</div>`
-	*out += `
-			<table>
-				<thead>
-					<tr>
-						<th>Timestamp</th>
-						<th>Repository</th>
-						<th>Branch</th>
-						<th>Status</th>
-						<th>UUID</th>
-					</tr>
-				</thead>
-				<tbody>`
-
-	jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
-	if locErr != nil {
-		jakartaLoc = time.UTC
-	}
-
-	for _, isoJob := range isoJobs {
-		isoStatusClass := ""
-		switch isoJob.State {
-		case "SUCCESS", "DONE":
-			isoStatusClass = "status-online"
-		case "FAILURE", "FAILED":
-			isoStatusClass = "status-offline"
-		case "STARTED", "RECEIVED":
-			isoStatusClass = "status-warning"
-		}
-
-		isoTime := isoJob.SubmittedAt.In(jakartaLoc)
-		isoTimeStr := fmt.Sprintf("%s<br><span style=\"color: #666; font-size: 0.9em;\">(%s)</span>",
-			isoTime.Format("2006-01-02 15:04:05 MST"),
-			formatRelativeTime(isoJob.SubmittedAt))
-
-		*out += fmt.Sprintf(`
-					<tr>
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td><span class="%s">%s</span></td>
-						<td style="font-family: monospace; font-size: 0.85em;">%s</td>
-					</tr>`,
-				isoTimeStr,
-				html.EscapeString(isoJob.RepoURL),
-				html.EscapeString(isoJob.Branch),
-				isoStatusClass,
-				html.EscapeString(isoJob.State),
-				html.EscapeString(isoJob.TaskUUID),
-			)
-	}
-
-	*out += `
-				</tbody>
-			</table>
-			`
 }
 
 func formatDuration(d time.Duration) string {

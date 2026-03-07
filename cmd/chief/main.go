@@ -94,7 +94,7 @@ func main() {
 		}
 
 		taskQueue := chiefrepository.NewMachineryTaskQueue(server)
-		chiefService = chiefusecase.NewChiefUsecase(
+		svc, err := chiefusecase.NewChiefUsecase(
 			irgshConfig,
 			taskQueue,
 			monitoringRegistry,
@@ -102,6 +102,10 @@ func main() {
 			chiefGPG,
 			version,
 		)
+		if err != nil {
+			log.Fatalf("Failed to initialize chief service: %v\n", err)
+		}
+		chiefService = svc
 
 		httpServer := setupRoutes(irgshConfig, artifactHTTPEndpoint)
 
