@@ -1,0 +1,46 @@
+---
+redis: 'redis://redis:6379'
+
+monitoring:
+  enabled: true
+  heartbeat_interval: 30
+  instance_timeout: 90
+  cleanup_interval: 3600
+
+notification:
+  webhook_url: ''
+
+storage:
+  database_path: '/tmp/irgsh-e2e/chief/irgsh.db'
+  max_jobs: 100
+  max_iso_jobs: 50
+
+chief:
+  address: 'http://chief:8080'
+  workdir: '/tmp/irgsh-e2e/chief'
+  gnupg_dir: '/tmp/irgsh-e2e/gnupg'
+
+builder:
+  workdir: '/tmp/irgsh-e2e/builder'
+  upstream_dist_codename: 'sid'
+  upstream_dist_url: 'http://deb.debian.org/debian'
+
+repo:
+  workdir: '/tmp/irgsh-e2e/repo'
+  dist_name: 'BlankOn'
+  dist_label: 'BlankOn'
+  dist_codename: 'verbeek'
+  dist_components: 'main'
+  dist_supported_architectures: 'amd64 source'
+  dist_version: '12.0'
+  dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
+  dist_signing_key: 'PLACEHOLDER'
+  upstream_name: 'merge.sid'
+  upstream_dist_codename: 'sid'
+  upstream_dist_url: 'http://deb.debian.org/debian'
+  upstream_dist_components: 'main non-free>restricted contrib>extras'
+  gnupg_dir: '/tmp/irgsh-e2e/gnupg'
+
+iso:
+  workdir: '/tmp/irgsh-e2e/iso'
+  outputdir: '/tmp/irgsh-e2e/iso/output'
