@@ -245,11 +245,12 @@ func Repo(payload string) (err error) {
 		return
 	}
 
-	cmdStr = fmt.Sprintf("mkdir -p %s/%s && cd %s/%s/ && reprepro -v -v -v export",
+	cmdStr = fmt.Sprintf("mkdir -p %s/%s && cd %s/%s/ && %s reprepro -v -v -v export",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
+		gnupgDir,
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
@@ -290,6 +291,11 @@ func InitRepo() (err error) {
 	}
 
 	fmt.Println("##### Initializing new repository for " + irgshConfig.Repo.DistCodename)
+
+	gnupgDir := "GNUPGHOME=" + irgshConfig.Repo.GnupgDir
+	if irgshConfig.IsDev {
+		gnupgDir = ""
+	}
 
 	logPath := irgshConfig.Repo.Workdir + "/init.log"
 	go systemutil.StreamLog(logPath)
@@ -401,9 +407,10 @@ func InitRepo() (err error) {
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
+	cmdStr = fmt.Sprintf("cd %s/%s/ && %s reprepro -v -v -v export",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename,
+		gnupgDir,
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
@@ -511,9 +518,10 @@ func InitRepo() (err error) {
 		return
 	}
 
-	cmdStr = fmt.Sprintf("cd %s/%s/ && reprepro -v -v -v export",
+	cmdStr = fmt.Sprintf("cd %s/%s/ && %s reprepro -v -v -v export",
 		irgshConfig.Repo.Workdir,
 		irgshConfig.Repo.DistCodename+"-experimental",
+		gnupgDir,
 	)
 	_, err = systemutil.CmdExec(
 		cmdStr,
