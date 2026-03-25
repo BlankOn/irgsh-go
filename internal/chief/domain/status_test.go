@@ -23,21 +23,22 @@ func TestDeriveBuildPipelineState(t *testing.T) {
 		{"build success, repo success", "SUCCESS", "SUCCESS", StateDone},
 		{"build success, repo failure", "SUCCESS", "FAILURE", StateFailed},
 
-		// build SUCCESS + repo in-progress
-		{"build success, repo pending", "SUCCESS", "PENDING", StateBuilding},
-		{"build success, repo received", "SUCCESS", "RECEIVED", StateBuilding},
-		{"build success, repo started", "SUCCESS", "STARTED", StateBuilding},
-		{"build success, repo empty", "SUCCESS", "", StateBuilding},
+		// build SUCCESS + repo in-progress => REPO
+		{"build success, repo pending", "SUCCESS", "PENDING", StateRepo},
+		{"build success, repo received", "SUCCESS", "RECEIVED", StateRepo},
+		{"build success, repo started", "SUCCESS", "STARTED", StateRepo},
 
-		// build empty => UNKNOWN
-		{"build empty, repo empty", "", "", StateUnknown},
-		{"build empty, repo success", "", "SUCCESS", StateUnknown},
+		// build SUCCESS + repo empty => raw buildState
+		{"build success, repo empty", "SUCCESS", "", "SUCCESS"},
 
-		// build in-progress => BUILDING
-		{"build pending", "PENDING", "", StateBuilding},
-		{"build received", "RECEIVED", "", StateBuilding},
-		{"build started", "STARTED", "", StateBuilding},
-		{"build started, repo empty", "STARTED", "", StateBuilding},
+		// build empty => raw buildState (empty string)
+		{"build empty, repo empty", "", "", ""},
+		{"build empty, repo success", "", "SUCCESS", ""},
+
+		// build in-progress => raw buildState
+		{"build pending", "PENDING", "", "PENDING"},
+		{"build received", "RECEIVED", "", "RECEIVED"},
+		{"build started", "STARTED", "", "STARTED"},
 	}
 
 	for _, tt := range tests {

@@ -167,7 +167,6 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       90 * time.Second,
 	}
 }

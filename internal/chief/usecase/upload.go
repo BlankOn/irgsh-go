@@ -14,9 +14,6 @@ import (
 	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
-// maxLogSize is the maximum size of a log file upload (10 MB).
-const maxLogSize = 10 << 20
-
 // UploadService handles artifact, log, and submission uploads.
 type UploadService struct {
 	storage FileStorage
@@ -95,7 +92,7 @@ func (u *UploadService) UploadLog(id string, logType string, file io.Reader) err
 		return httputil.NewHTTPError(http.StatusInternalServerError, "")
 	}
 
-	fileBytes, err := io.ReadAll(io.LimitReader(file, maxLogSize))
+	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		log.Println(err.Error())
 		return httputil.NewHTTPError(http.StatusBadRequest, "")

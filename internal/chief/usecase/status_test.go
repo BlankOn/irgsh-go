@@ -17,10 +17,10 @@ func TestStatusService_BuildStatus(t *testing.T) {
 		{"both success", "SUCCESS", "SUCCESS", "DONE"},
 		{"build failure", "FAILURE", "", "FAILED"},
 		{"build success, repo failure", "SUCCESS", "FAILURE", "FAILED"},
-		{"build pending", "PENDING", "", "BUILDING"},
-		{"build started", "STARTED", "", "BUILDING"},
-		{"both empty", "", "", "UNKNOWN"},
-		{"build success, repo pending", "SUCCESS", "PENDING", "BUILDING"},
+		{"build pending", "PENDING", "", "PENDING"},
+		{"build started", "STARTED", "", "STARTED"},
+		{"both empty", "", "", ""},
+		{"build success, repo pending", "SUCCESS", "PENDING", "REPO"},
 	}
 
 	for _, tt := range tests {

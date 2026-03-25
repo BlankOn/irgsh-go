@@ -2,14 +2,19 @@ package domain
 
 // Pipeline states returned by the chief API.
 const (
-	StateDone     = "DONE"
-	StateFailed   = "FAILED"
+	StateDone    = "DONE"
+	StateFailed  = "FAILED"
+	StateRepo    = "REPO"
 	StateBuilding = "BUILDING"
 	StateUnknown  = "UNKNOWN"
 )
 
 // DeriveBuildPipelineState maps machinery build+repo task states to a
 // pipeline-level state for the package build flow.
+//
+// When build succeeds and repo is in-progress, returns "REPO".
+// For all other non-terminal cases, returns the raw buildState string
+// to preserve backward compatibility with existing consumers.
 func DeriveBuildPipelineState(buildState, repoState string) string {
 	switch {
 	case buildState == "FAILURE":
@@ -18,13 +23,10 @@ func DeriveBuildPipelineState(buildState, repoState string) string {
 		return StateDone
 	case buildState == "SUCCESS" && repoState == "FAILURE":
 		return StateFailed
-	case buildState == "SUCCESS":
-		// repo is PENDING, RECEIVED, or STARTED
-		return StateBuilding
-	case buildState == "":
-		return StateUnknown
+	case buildState == "SUCCESS" && (repoState == "PENDING" || repoState == "RECEIVED" || repoState == "STARTED"):
+		return StateRepo
 	default:
-		return StateBuilding
+		return buildState
 	}
 }
 
