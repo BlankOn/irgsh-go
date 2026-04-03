@@ -1,0 +1,56 @@
+name: E2E tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Nightly at 03:00 GMT+7 (20:00 UTC)
+    - cron: "0 20 * * *"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify Telegram (start)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MSG="Oh Boy! it's 3AM
+          E2E nightly run starting...
+          Repo: ${{ github.repository }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sf -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${MSG}" || echo "Telegram notification failed"
+
+      - name: Run e2e tests
+        run: ./e2e/run.sh
+
+      - name: Dump service logs
+        if: failure()
+        run: cd e2e && docker compose logs --tail=200
+
+      - name: Cleanup
+        if: always()
+        run: ./e2e/run.sh --cleanup
+
+      - name: Notify Telegram (done)
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            RESULT="[PASSED]"
+          else
+            RESULT="[FAILED]"
+          fi
+          MSG="${RESULT} E2E nightly run finished
+          Repo: ${{ github.repository }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sf -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${MSG}" || echo "Telegram notification failed"

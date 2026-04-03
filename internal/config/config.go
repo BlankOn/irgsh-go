@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -76,69 +75,28 @@ type StorageConfig struct {
 }
 
 // LoadConfigFromPath loads irgsh config from a specific file path
-func LoadConfigFromPath(configPath string) (config IrgshConfig, err error) {
+func LoadConfigFromPath(configPath string) (cfg IrgshConfig, err error) {
 	if configPath == "" {
 		err = fmt.Errorf("config path is required")
 		return
 	}
 
-	yamlFile, err := ioutil.ReadFile(configPath)
+	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
 		return
 	}
 	log.Println("load config from : ", configPath)
 
-	err = yaml.Unmarshal(yamlFile, &config)
+	err = yaml.Unmarshal(yamlFile, &cfg)
 	if err != nil {
 		return
 	}
 
-	isDev := os.Getenv("DEV") == "1"
-	// Set storage defaults
-	if config.Storage.DatabasePath == "" {
-		config.Storage.DatabasePath = "/var/lib/irgsh/chief/irgsh.db"
-	}
-	if config.Storage.MaxJobs == 0 {
-		config.Storage.MaxJobs = 1000
-	}
-	if config.Storage.MaxISOJobs == 0 {
-		config.Storage.MaxISOJobs = 200
-	}
-
-	if isDev {
-		// Since it's in dev env, let's move some path to ./tmp
-		cwd, _ := os.Getwd()
-		tmpDir := cwd + "/tmp/"
-		if _, err := os.Stat(tmpDir); os.IsNotExist(err) {
-			os.Mkdir(tmpDir, 0755)
-		}
-		config.Chief.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
-		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
-		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
-		config.ISO.Workdir = strings.ReplaceAll(config.ISO.Workdir, "/var/lib/", tmpDir)
-		config.Storage.DatabasePath = strings.ReplaceAll(config.Storage.DatabasePath, "/var/lib/", tmpDir)
-	}
-	config.IsDev = isDev
-
-	// Set monitoring defaults
-	if config.Monitoring.HeartbeatInterval == 0 {
-		config.Monitoring.HeartbeatInterval = 30
-	}
-	if config.Monitoring.InstanceTimeout == 0 {
-		config.Monitoring.InstanceTimeout = 90
-	}
-	if config.Monitoring.CleanupInterval == 0 {
-		config.Monitoring.CleanupInterval = 3600 // 1 hour
-	}
-
-	validate := validator.New()
-	err = validate.Struct(config)
-
-	return
+	return cfg, applyDefaults(&cfg)
 }
 
 // LoadConfig load irgsh config from file
-func LoadConfig() (config IrgshConfig, err error) {
+func LoadConfig() (cfg IrgshConfig, err error) {
 	configPaths := []string{
 		"/etc/irgsh/config.yaml",
 		"../../utils/config.yaml",
@@ -146,13 +104,13 @@ func LoadConfig() (config IrgshConfig, err error) {
 	}
 	configPath := os.Getenv("IRGSH_CONFIG_PATH")
 	isDev := os.Getenv("DEV") == "1"
-	yamlFile, err := ioutil.ReadFile(configPath)
+	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
 		// load from predefined configPaths when no IRGSH_CONFIG_PATH set
-		for _, config := range configPaths {
-			yamlFile, err = ioutil.ReadFile(config)
+		for _, p := range configPaths {
+			yamlFile, err = os.ReadFile(p)
 			if err == nil {
-				log.Println("load config from : ", config)
+				log.Println("load config from : ", p)
 				break
 			}
 		}
@@ -161,56 +119,56 @@ func LoadConfig() (config IrgshConfig, err error) {
 		}
 	}
 	if isDev {
-		yamlFile, err = ioutil.ReadFile("./utils/config.yaml")
+		yamlFile, err = os.ReadFile("./utils/config.yaml")
 		if err != nil {
 			return
 		}
 	}
 
-	err = yaml.Unmarshal(yamlFile, &config)
+	err = yaml.Unmarshal(yamlFile, &cfg)
 	if err != nil {
 		return
 	}
 
-	// Set storage defaults
-	if config.Storage.DatabasePath == "" {
-		config.Storage.DatabasePath = "/var/lib/irgsh/chief/irgsh.db"
+	return cfg, applyDefaults(&cfg)
+}
+
+func applyDefaults(cfg *IrgshConfig) error {
+	if cfg.Storage.DatabasePath == "" {
+		cfg.Storage.DatabasePath = "/var/lib/irgsh/chief/irgsh.db"
 	}
-	if config.Storage.MaxJobs == 0 {
-		config.Storage.MaxJobs = 1000
+	if cfg.Storage.MaxJobs == 0 {
+		cfg.Storage.MaxJobs = 1000
 	}
-	if config.Storage.MaxISOJobs == 0 {
-		config.Storage.MaxISOJobs = 200
+	if cfg.Storage.MaxISOJobs == 0 {
+		cfg.Storage.MaxISOJobs = 200
 	}
 
+	isDev := os.Getenv("DEV") == "1"
 	if isDev {
-		// Since it's in dev env, let's move some path to ./tmp
 		cwd, _ := os.Getwd()
 		tmpDir := cwd + "/tmp/"
 		if _, err := os.Stat(tmpDir); os.IsNotExist(err) {
 			os.Mkdir(tmpDir, 0755)
 		}
-		config.Chief.Workdir = strings.ReplaceAll(config.Chief.Workdir, "/var/lib/", tmpDir)
-		config.Builder.Workdir = strings.ReplaceAll(config.Builder.Workdir, "/var/lib/", tmpDir)
-		config.Repo.Workdir = strings.ReplaceAll(config.Repo.Workdir, "/var/lib/", tmpDir)
-		config.ISO.Workdir = strings.ReplaceAll(config.ISO.Workdir, "/var/lib/", tmpDir)
-		config.Storage.DatabasePath = strings.ReplaceAll(config.Storage.DatabasePath, "/var/lib/", tmpDir)
+		cfg.Chief.Workdir = strings.ReplaceAll(cfg.Chief.Workdir, "/var/lib/", tmpDir)
+		cfg.Builder.Workdir = strings.ReplaceAll(cfg.Builder.Workdir, "/var/lib/", tmpDir)
+		cfg.Repo.Workdir = strings.ReplaceAll(cfg.Repo.Workdir, "/var/lib/", tmpDir)
+		cfg.ISO.Workdir = strings.ReplaceAll(cfg.ISO.Workdir, "/var/lib/", tmpDir)
+		cfg.Storage.DatabasePath = strings.ReplaceAll(cfg.Storage.DatabasePath, "/var/lib/", tmpDir)
 	}
-	config.IsDev = isDev
+	cfg.IsDev = isDev
 
-	// Set monitoring defaults
-	if config.Monitoring.HeartbeatInterval == 0 {
-		config.Monitoring.HeartbeatInterval = 30
+	if cfg.Monitoring.HeartbeatInterval == 0 {
+		cfg.Monitoring.HeartbeatInterval = 30
 	}
-	if config.Monitoring.InstanceTimeout == 0 {
-		config.Monitoring.InstanceTimeout = 90
+	if cfg.Monitoring.InstanceTimeout == 0 {
+		cfg.Monitoring.InstanceTimeout = 90
 	}
-	if config.Monitoring.CleanupInterval == 0 {
-		config.Monitoring.CleanupInterval = 3600 // 1 hour
+	if cfg.Monitoring.CleanupInterval == 0 {
+		cfg.Monitoring.CleanupInterval = 3600
 	}
 
 	validate := validator.New()
-	err = validate.Struct(config)
-
-	return
+	return validate.Struct(cfg)
 }

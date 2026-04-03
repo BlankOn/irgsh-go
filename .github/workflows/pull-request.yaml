@@ -6,7 +6,33 @@ on:
       - '*'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install needed apt packages
+      uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+      with:
+        packages: gpg pbuilder debootstrap devscripts python3-apt reprepro make
+        version: 1.0
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.23.x'
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    - name: Vet
+      run: go vet ./...
+    - name: Run tests
+      run: go test -race ./...
+
   build-devel:
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
     - name: Get current date
@@ -17,9 +43,9 @@ jobs:
       with:
         packages: gpg pbuilder debootstrap devscripts python3-apt reprepro make
         version: 1.0
-    - uses: actions/setup-go@v4
+    - uses: actions/setup-go@v5
       with:
-        go-version: '1.13.14'
+        go-version: '1.23.x'
     - uses: actions/cache@v4
       with:
         path: |

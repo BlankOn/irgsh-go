@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	machinery "github.com/RichardKnop/machinery/v1"
@@ -23,8 +25,7 @@ var (
 
 	irgshConfig = config.IrgshConfig{}
 
-	// Monitoring
-	activeTasks int = 0
+	activeTasks atomic.Int32
 )
 
 func main() {
@@ -116,72 +117,21 @@ func main() {
 
 // ISOBuildWithMonitoring wraps the BuildISO function with active task tracking
 func ISOBuildWithMonitoring(payload string) (string, error) {
-	// Increment active tasks
-	activeTasks++
-	defer func() { activeTasks-- }()
+	activeTasks.Add(1)
+	defer activeTasks.Add(-1)
 
-	// Call original BuildISO function
 	return BuildISO(payload)
 }
 
-// startMonitoringHeartbeat sends periodic heartbeats to Redis
 func startMonitoringHeartbeat() {
-	// Create registry client (no SQLite storage needed for workers)
 	ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
-	registry, err := monitoring.NewRegistry(irgshConfig.Redis, ttl, nil, 0, 0)
-	if err != nil {
-		log.Printf("Failed to create monitoring registry: %v\n", err)
-		return
-	}
-	defer registry.Close()
-
-	// Generate instance ID
-	instanceID := monitoring.GenerateInstanceID(monitoring.InstanceTypeISO)
-	startTime := time.Now()
-
 	interval := time.Duration(irgshConfig.Monitoring.HeartbeatInterval) * time.Second
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	log.Printf("Monitoring heartbeat started (instance: %s, interval: %v)\n", instanceID, interval)
-
-	// Send initial heartbeat
-	sendHeartbeat(registry, instanceID, startTime)
-
-	// Send periodic heartbeats
-	for range ticker.C {
-		sendHeartbeat(registry, instanceID, startTime)
-	}
-}
-
-// sendHeartbeat collects metrics and sends them to Redis
-func sendHeartbeat(registry *monitoring.Registry, instanceID string, startTime time.Time) {
-	// Collect system metrics
-	metrics := monitoring.CollectMetrics(irgshConfig.ISO.Workdir)
-
-	// Build instance info
-	instance := monitoring.InstanceInfo{
-		InstanceID:    instanceID,
-		InstanceType:  monitoring.InstanceTypeISO,
-		Hostname:      monitoring.GetHostname(),
-		PID:           os.Getpid(),
-		StartTime:     startTime,
-		LastHeartbeat: time.Now(),
-		Status:        monitoring.StatusOnline,
-		Concurrency:   1, // ISO worker runs with concurrency 1
-		ActiveTasks:   activeTasks,
-		CPUUsage:      metrics.CPUUsage,
-		MemoryUsage:   metrics.MemoryUsage,
-		MemoryTotal:   metrics.MemoryTotal,
-		DiskUsage:     metrics.DiskUsage,
-		DiskTotal:     metrics.DiskTotal,
-		Version:       monitoring.GetVersion(),
-	}
-
-	// Write to Redis
-	if err := registry.UpdateInstance(instance); err != nil {
-		log.Printf("Failed to send heartbeat: %v\n", err)
-	}
+	monitoring.StartHeartbeatLoop(
+		context.Background(),
+		irgshConfig.Redis, ttl,
+		monitoring.InstanceTypeISO, irgshConfig.ISO.Workdir,
+		interval, func() int { return int(activeTasks.Load()) },
+	)
 }
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
