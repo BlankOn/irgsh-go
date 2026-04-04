@@ -1,3 +1,11 @@
+irgsh (1.3.14-2) unstable; urgency=medium
+
+  * Split irgsh-cli into a standalone binary package (Closes: #189)
+  * irgsh package now contains server components only (chief, builder, repo, iso)
+  * irgsh-cli package provides the CLI tool for package maintainers
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 04 Apr 2026 00:00:00 +0700
+
 irgsh (1.3.14-1) unstable; urgency=medium
 
   * Prevent terminal job states from being overwritten after Redis TTL expiry
