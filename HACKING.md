@@ -3,7 +3,7 @@
 ## Requirements
 
 Ensure that you have:
-- Go 1.26 or later
+- Go 1.25 or later
 - Docker
 - These packages installed: `build-essential gpg pbuilder debootstrap devscripts curl reprepro`
 

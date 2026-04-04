@@ -3,7 +3,7 @@ Section: devel
 Priority: optional
 Maintainer: BlankOn Developers <blankon-dev@googlegroups.com>
 Build-Depends: debhelper-compat (= 13),
-               golang-go (>= 2:1.26~)
+               golang-go (>= 2:1.25~)
 Standards-Version: 4.6.0
 Homepage: https://github.com/BlankOn/irgsh-go
 Vcs-Browser: https://github.com/BlankOn/irgsh-go
