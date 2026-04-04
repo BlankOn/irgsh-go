@@ -1,0 +1,15 @@
+[Unit]
+Description=irgsh-iso
+After=irgsh-chief.service
+
+[Container]
+Image=localhost/irgsh-iso:latest
+Volume=/etc/irgsh/config.yaml:/etc/irgsh/config.yaml:ro,z
+Volume=irgsh-data:/var/lib/irgsh:z
+Volume=/var/log/irgsh:/var/log/irgsh:z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

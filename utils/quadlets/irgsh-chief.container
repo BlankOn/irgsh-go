@@ -1,0 +1,18 @@
+[Unit]
+Description=irgsh-chief
+After=irgsh-redis.service
+
+[Container]
+Image=localhost/irgsh-chief:latest
+PublishPort=8080:8080
+Volume=/etc/irgsh/config.yaml:/etc/irgsh/config.yaml:ro,z
+Volume=irgsh-data:/var/lib/irgsh:z
+Volume=/var/log/irgsh:/var/log/irgsh:z
+# GPG keyring for signature verification
+Volume=/var/lib/irgsh/gnupg:/var/lib/irgsh/gnupg:ro,z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

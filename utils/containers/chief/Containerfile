@@ -1,0 +1,17 @@
+FROM golang:1.23-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN go build -ldflags "-X main.version=${VERSION}" -o /bin/irgsh-chief ./cmd/chief
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gnupg \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /bin/irgsh-chief /usr/bin/irgsh-chief
+RUN mkdir -p /var/lib/irgsh/chief /var/log/irgsh /etc/irgsh
+EXPOSE 8080
+ENTRYPOINT ["/usr/bin/irgsh-chief"]

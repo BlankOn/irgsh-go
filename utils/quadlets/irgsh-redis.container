@@ -1,0 +1,14 @@
+[Unit]
+Description=Redis (irgsh task queue)
+After=network-online.target
+
+[Container]
+Image=docker.io/redis:7-alpine
+PublishPort=6379:6379
+Volume=irgsh-redis:/data:z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
