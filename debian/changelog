@@ -6,6 +6,9 @@ irgsh (1.3.14-2) unstable; urgency=medium
   * Add multi-stage Containerfiles for all services under utils/containers/ (Closes: #207)
   * Add Podman Quadlet units for all services under utils/quadlets/
   * cli Containerfile documents GPG agent socket passthrough via --userns=keep-id
+  * Update all Go dependencies to latest versions (Closes: #204)
+  * Upgrade Go toolchain to 1.26; update debian/control Build-Depends accordingly
+  * Fix non-constant format string vet errors in cmd/iso and cmd/repo (Go 1.26 stricter vet)
 
  -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 04 Apr 2026 00:00:00 +0700
 
