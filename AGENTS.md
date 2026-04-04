@@ -73,6 +73,8 @@ graph LR
     utils --- systemctl["systemctl/"]
     utils --- reprepro["reprepro-template/"]
     utils --- docker["docker/"]
+    utils --- containers["containers/"]
+    utils --- quadlets["quadlets/"]
     utils --- init_dir["init/"]
 ```
 
@@ -96,7 +98,7 @@ graph LR
 | `internal/storage/` | SQLite database for persistent job and ISO job data |
 | `pkg/httputil/` | JSON response helpers, `HTTPError`, `HTTPStatusError`, retry utilities |
 | `pkg/systemutil/` | Shell command execution and log streaming |
-| `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile |
+| `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile, Containerfiles (`containers/`), Podman Quadlet units (`quadlets/`) |
 
 ## Build Commands
 

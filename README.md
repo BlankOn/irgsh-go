@@ -27,15 +27,21 @@ The command will install the irgsh binaries, default configuration and daemons. 
 
 ## Package maintainer installation
 
+`irgsh-cli` is available as a standalone Debian package:
+
+```
+sudo apt install irgsh-cli
+```
+
+Alternatively, install from the release script:
+
 ```
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install-cli.sh | bash
 ```
 
-The command will install the irgsh-cli binary to your system.
-
 ## Package maintainer update
 
-Package maintainer can update their irgsh-cli by running the same command as installation or using `sudo irgsh-cli update` to let irgsh-cli updates itself.
+Package maintainer can update their irgsh-cli by reinstalling the package or using `sudo irgsh-cli update` to let irgsh-cli update itself.
 
 ## Components
 
@@ -240,4 +246,4 @@ It may caused either by:
 
 - No sudo needed :heavy_check_mark:
 - Daemonized instances :heavy_check_mark:
-- Dockerized instances (docker-compose)
+- Containerized instances (Podman Quadlets) :heavy_check_mark:
