@@ -1,0 +1,17 @@
+[Unit]
+Description=irgsh-repo
+After=irgsh-chief.service
+
+[Container]
+Image=localhost/irgsh-repo:latest
+Volume=/etc/irgsh/config.yaml:/etc/irgsh/config.yaml:ro,z
+Volume=irgsh-data:/var/lib/irgsh:z
+Volume=/var/log/irgsh:/var/log/irgsh:z
+# GPG keyring for repository signing
+Volume=/var/lib/irgsh/gnupg:/var/lib/irgsh/gnupg:ro,z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

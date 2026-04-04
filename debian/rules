@@ -41,12 +41,13 @@ override_dh_strip:
 	dh_strip --no-automatic-dbgsym
 
 override_dh_auto_install:
-	# Install binaries
+	# Install server binaries
 	install -D -m 0755 bin/irgsh-repo $(CURDIR)/debian/irgsh/usr/bin/irgsh-repo
 	install -D -m 0755 bin/irgsh-chief $(CURDIR)/debian/irgsh/usr/bin/irgsh-chief
 	install -D -m 0755 bin/irgsh-builder $(CURDIR)/debian/irgsh/usr/bin/irgsh-builder
 	install -D -m 0755 bin/irgsh-iso $(CURDIR)/debian/irgsh/usr/bin/irgsh-iso
-	install -D -m 0755 bin/irgsh-cli $(CURDIR)/debian/irgsh/usr/bin/irgsh-cli
+	# Install CLI binary into its own package
+	install -D -m 0755 bin/irgsh-cli $(CURDIR)/debian/irgsh-cli/usr/bin/irgsh-cli
 	# Install systemd service files
 	install -D -m 0644 debian/irgsh-chief.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-chief.service
 	install -D -m 0644 debian/irgsh-builder.service $(CURDIR)/debian/irgsh/lib/systemd/system/irgsh-builder.service

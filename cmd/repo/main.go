@@ -146,7 +146,7 @@ func startMonitoringHeartbeat() {
 }
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "irgsh-repo "+app.Version)
+	fmt.Fprintf(w, "irgsh-repo %s", app.Version)
 }
 
 func serve() {

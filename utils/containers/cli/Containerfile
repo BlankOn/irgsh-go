@@ -1,0 +1,23 @@
+FROM golang:1.26-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN go build -ldflags "-X main.version=${VERSION}" -o /bin/irgsh-cli ./cmd/cli
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gnupg \
+        devscripts \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /bin/irgsh-cli /usr/bin/irgsh-cli
+# GPG agent socket passthrough requires --userns=keep-id so that the UID inside
+# the container matches the host UID. Example usage:
+#
+#   podman run --userns=keep-id \
+#     -v /run/user/$(id -u)/gnupg:/run/user/$(id -u)/gnupg \
+#     -v ~/.irgsh:/root/.irgsh \
+#     localhost/irgsh-cli submit ...
+ENTRYPOINT ["/usr/bin/irgsh-cli"]

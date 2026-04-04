@@ -1,0 +1,19 @@
+[Unit]
+Description=irgsh-builder
+After=irgsh-chief.service
+
+[Container]
+Image=localhost/irgsh-builder:latest
+Volume=/etc/irgsh/config.yaml:/etc/irgsh/config.yaml:ro,z
+Volume=irgsh-data:/var/lib/irgsh:z
+Volume=/var/log/irgsh:/var/log/irgsh:z
+# pbuilder/sbuild inside a rootless container requires nested user namespaces.
+# Podman 5+ supports this. See: https://github.com/BlankOn/irgsh-go/issues/205
+UserNS=keep-id
+SecurityLabelDisable=true
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

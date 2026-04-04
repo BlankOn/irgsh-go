@@ -1,0 +1,19 @@
+FROM golang:1.26-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN go build -ldflags "-X main.version=${VERSION}" -o /bin/irgsh-repo ./cmd/repo
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        reprepro \
+        gnupg \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /bin/irgsh-repo /usr/bin/irgsh-repo
+RUN mkdir -p /var/lib/irgsh/repo /var/log/irgsh /etc/irgsh
+# irgsh-repo requires an explicit config path via -c flag
+ENTRYPOINT ["/usr/bin/irgsh-repo"]
+CMD ["-c", "/etc/irgsh/config.yaml"]
