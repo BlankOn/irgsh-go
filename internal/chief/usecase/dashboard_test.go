@@ -295,7 +295,7 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	}
 	maintainerSvc := NewMaintainerService(gpg)
 
-	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, maintainerSvc, nil, nil, nil)
+	ds, err := NewDashboardService("1.0.0", "", &mockTaskQueue{}, maintainerSvc, nil, nil, nil)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
