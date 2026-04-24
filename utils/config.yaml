@@ -1,47 +1,47 @@
----
-redis: 'redis://localhost:6379'
-
-monitoring:
-  enabled: true
-  heartbeat_interval: 30       # Heartbeat every 30 seconds
-  instance_timeout: 90          # Mark offline after 90 seconds
-  cleanup_interval: 3600        # Cleanup every hour (instances removed after 24h)
-
-notification:
-  webhook_url: ''              # Webhook URL for job notifications (leave empty to disable)
+redis: 'redis://127.0.0.1:6379'
 
 storage:
-  database_path: '/var/lib/irgsh/chief/irgsh.db'  # SQLite database for job persistence
-  max_jobs: 1000               # Maximum number of build jobs to retain
-  max_iso_jobs: 200            # Maximum number of ISO jobs to retain
+    database_path: '/var/lib/irgsh/chief/irgsh.db' # SQLite database for job persistence
+    max_jobs: 1000 # Maximum number of build jobs to retain
+    max_iso_jobs: 200 # Maximum number of ISO jobs to retain
 
 chief:
   address: 'http://localhost:8080'
   workdir: '/var/lib/irgsh/chief'
-  gnupg_dir: '/var/lib/irgsh/gnupg'
+  gnupg_dir: '/var/lib/irgsh/chief/gnupg'
+  # base_url: '/irgsh' # Optional: set this if running under a sub-path
 
 builder:
-  workdir: '/var/lib/irgsh/builder'
-  upstream_dist_codename: 'sid'
-  upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
+    workdir: '/var/lib/irgsh/builder'
+    upstream_dist_codename: 'sid'
+    upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
 
 repo:
-  workdir: '/var/lib/irgsh/repo'
-  dist_name: 'BlankOn'
-  dist_label: 'BlankOn'
-  dist_codename: 'verbeek'
-  dist_components: 'main restricted extras restricted-firmware'
-  dist_supported_architectures: 'amd64 source'
-  dist_version: '12.0'
-  dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
-  dist_signing_key: 'DCE16C7A2805D4F8FCFF2C40FDF9557305CC097B'
-  upstream_name: 'merge.sid'
-  upstream_dist_codename: 'sid'
-  upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
-  upstream_dist_components: 'main non-free>restricted contrib>extras non-free-firmware>restricted-firmware'
-  gnupg_dir: '/var/lib/irgsh/gnupg'
+    workdir: '/var/lib/irgsh/repo'
+    dist_name: 'BlankOn'
+    dist_label: 'BlankOn'
+    dist_codename: 'verbeek'
+    dist_components: 'main restricted extras extras-restricted'
+    dist_supported_architectures: 'amd64 source'
+    dist_version: '12.0'
+    dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
+    dist_signing_key: '55BD65A0B3DA3A59ACA60932E2FE388D53B56A71'
+    upstream_name: 'merge.sid'
+    upstream_dist_codename: 'sid'
+    upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
+    upstream_dist_components: 'main non-free>restricted contrib>extras'
+    gnupg_dir: '/var/lib/irgsh/repo/gnupg'
 
 iso:
-  workdir: '/var/lib/irgsh/iso'
-  outputdir: '/tmp/jahitan'
-  public_base_url: 'http://jahitan.blankonlinux.id'
+    workdir: '/var/lib/irgsh/iso'
+    outputdir: '/var/lib/irgsh/iso/output'
+
+monitoring:
+  enabled: true
+  heartbeat_interval: 30
+  instance_timeout: 90
+  cleanup_interval: 3600
+
+notification:
+  webhook_url: "" # Discord/Slack webhook URL
+  recipient: blankon-gev@googlegroups.com

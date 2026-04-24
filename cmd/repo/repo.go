@@ -29,6 +29,7 @@ func uploadLog(logPath string, id string) {
 func sendRepoNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
+		irgshConfig.Chief.Address,
 		"Repo",
 		taskUUID,
 		status,

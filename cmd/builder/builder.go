@@ -28,6 +28,7 @@ func uploadLog(logPath string, id string) {
 func sendBuildNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
+		irgshConfig.Chief.Address,
 		"Build",
 		taskUUID,
 		status,

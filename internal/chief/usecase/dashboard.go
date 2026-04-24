@@ -21,6 +21,7 @@ var dashboardTmplStr string
 
 type DashboardData struct {
 	Version       string
+	BaseURL       string
 	Maintainers   []domain.Maintainer
 	HasMonitoring bool
 	Summary       SummaryView
@@ -93,6 +94,7 @@ type ISOJobView struct {
 // DashboardService renders the chief dashboard HTML.
 type DashboardService struct {
 	version       string
+	baseURL       string
 	taskQueue     TaskQueue
 	maintainerSvc *MaintainerService
 	registry      InstanceRegistry
@@ -103,6 +105,7 @@ type DashboardService struct {
 
 func NewDashboardService(
 	version string,
+	baseURL string,
 	taskQueue TaskQueue,
 	maintainerSvc *MaintainerService,
 	registry InstanceRegistry,
@@ -115,6 +118,7 @@ func NewDashboardService(
 	}
 	return &DashboardService{
 		version:       version,
+		baseURL:       baseURL,
 		taskQueue:     taskQueue,
 		maintainerSvc: maintainerSvc,
 		registry:      registry,
@@ -132,6 +136,7 @@ func (d *DashboardService) RenderIndexHTML(w io.Writer) error {
 func (d *DashboardService) buildDashboardData() DashboardData {
 	data := DashboardData{
 		Version:     d.version,
+		BaseURL:     d.baseURL,
 		Maintainers: d.maintainerSvc.GetMaintainers(),
 	}
 
