@@ -1,4 +1,4 @@
-redis: '127.0.0.1:6379'
+redis: 'redis://127.0.0.1:6379'
 
 storage:
     database_path: '/var/lib/irgsh/chief/irgsh.db' # SQLite database for job persistence
