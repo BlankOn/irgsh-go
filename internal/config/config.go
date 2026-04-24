@@ -27,6 +27,7 @@ type ChiefConfig struct {
 	Address  string `json:"address" validate:"required"`
 	Workdir  string `json:"workdir" validate:"required"`
 	GnupgDir string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
+	BaseURL  string `json:"base_url"`                  // Base URL path, e.g. /irgsh
 }
 
 type BuilderConfig struct {
@@ -167,6 +168,16 @@ func applyDefaults(cfg *IrgshConfig) error {
 	}
 	if cfg.Monitoring.CleanupInterval == 0 {
 		cfg.Monitoring.CleanupInterval = 3600
+	}
+
+	// Normalize BaseURL
+	if cfg.Chief.BaseURL != "" && cfg.Chief.BaseURL != "/" {
+		if !strings.HasPrefix(cfg.Chief.BaseURL, "/") {
+			cfg.Chief.BaseURL = "/" + cfg.Chief.BaseURL
+		}
+		cfg.Chief.BaseURL = strings.TrimSuffix(cfg.Chief.BaseURL, "/")
+	} else {
+		cfg.Chief.BaseURL = ""
 	}
 
 	validate := validator.New()
