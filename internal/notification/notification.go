@@ -13,10 +13,6 @@ import (
 	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
-// LogBaseURL is the base URL for accessing build/repo logs
-// Change this constant if the IRGSH server URL changes
-const LogBaseURL = "http://irgsh.blankonlinux.id"
-
 // WebhookPayload represents the notification payload sent to webhook
 type WebhookPayload struct {
 	Title   string `json:"title"`
@@ -98,7 +94,7 @@ func extractRepoName(url string) string {
 }
 
 // SendJobNotification sends a job completion notification
-func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo JobNotificationInfo) {
+func SendJobNotification(webhookURL, logBaseURL, jobType, taskUUID, status string, jobInfo JobNotificationInfo) {
 	title := fmt.Sprintf("IRGSH %s Job %s", jobType, status)
 
 	// Add emoji based on status
@@ -179,8 +175,8 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 		case "Repo":
 			logType = "repo"
 		}
-		if logType != "" {
-			logURL := fmt.Sprintf("%s/logs/%s.%s.log", LogBaseURL, taskUUID, logType)
+		if logType != "" && logBaseURL != "" {
+			logURL := fmt.Sprintf("%s/logs/%s.%s.log", logBaseURL, taskUUID, logType)
 			message = fmt.Sprintf("%s\n%s", message, logURL)
 		}
 	}

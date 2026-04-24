@@ -36,6 +36,7 @@ func uploadLog(logPath string, id string) {
 func sendISONotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
+		irgshConfig.Chief.Address,
 		"ISO Build",
 		taskUUID,
 		status,
