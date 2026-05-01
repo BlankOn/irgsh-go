@@ -27,15 +27,21 @@ func uploadLog(logPath string, id string) {
 }
 
 func sendRepoNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
+	logBaseURL := irgshConfig.Chief.PublicURL
+	if logBaseURL == "" {
+		logBaseURL = irgshConfig.Chief.Address
+	}
+	logBaseURL += irgshConfig.Chief.BaseURL
+
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
+		logBaseURL,
 		"Repo",
 		taskUUID,
 		status,
 		jobInfo,
 	)
 }
-
 // Main task wrapper
 func Repo(payload string) (err error) {
 	fmt.Println("##### Submitting the package into the repository")
