@@ -17,6 +17,8 @@ storage:
 
 chief:
   address: 'http://localhost:8080'
+  # base_url: '/irgsh'
+  # public_url: 'http://irgsh.blankonlinux.id'
   workdir: '/var/lib/irgsh/chief'
   gnupg_dir: '/var/lib/irgsh/gnupg'
 
