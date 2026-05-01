@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -24,9 +25,11 @@ type IrgshConfig struct {
 }
 
 type ChiefConfig struct {
-	Address  string `json:"address" validate:"required"`
-	Workdir  string `json:"workdir" validate:"required"`
-	GnupgDir string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
+	Address   string `json:"address" validate:"required"`
+	BaseURL   string `json:"base_url" validate:"baseurl"`
+	PublicURL string `json:"public_url"`
+	Workdir   string `json:"workdir" validate:"required"`
+	GnupgDir  string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
 }
 
 type BuilderConfig struct {
@@ -169,6 +172,23 @@ func applyDefaults(cfg *IrgshConfig) error {
 		cfg.Monitoring.CleanupInterval = 3600
 	}
 
+	normalizeChiefConfig(&cfg.Chief)
+
 	validate := validator.New()
+	validate.RegisterValidation("baseurl", func(fl validator.FieldLevel) bool {
+		re := regexp.MustCompile(`^/[A-Za-z0-9_\-/]*$`)
+		return fl.Field().String() == "" || re.MatchString(fl.Field().String())
+	})
 	return validate.Struct(cfg)
+}
+
+func normalizeChiefConfig(cfg *ChiefConfig) {
+	cfg.Address = strings.TrimSuffix(cfg.Address, "/")
+	cfg.PublicURL = strings.TrimSuffix(cfg.PublicURL, "/")
+
+	b := strings.TrimSuffix(cfg.BaseURL, "/")
+	if b != "" && !strings.HasPrefix(b, "/") {
+		b = "/" + b
+	}
+	cfg.BaseURL = b
 }
