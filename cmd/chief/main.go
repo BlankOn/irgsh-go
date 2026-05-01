@@ -163,8 +163,14 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	submissionFs := http.FileServer(http.Dir(cfg.Chief.Workdir + "/submissions"))
 	mux.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
+	rootMux := http.NewServeMux()
+	if cfg.Chief.BaseURL != "" {
+		rootMux.Handle(cfg.Chief.BaseURL+"/", http.StripPrefix(cfg.Chief.BaseURL, mux))
+	}
+	rootMux.Handle("/", mux)
+
 	return &http.Server{
-		Handler:           mux,
+		Handler:           rootMux,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		IdleTimeout:       90 * time.Second,
