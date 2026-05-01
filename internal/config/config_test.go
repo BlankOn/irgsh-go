@@ -85,3 +85,43 @@ func TestNormalizeChiefConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestBaseURLValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		baseURL string
+		wantErr bool
+	}{
+		{"valid", "/irgsh", false},
+		{"valid nested", "/api/v1", false},
+		{"valid with hyphen", "/irgsh-go", false},
+		{"valid with underscore", "/irgsh_go", false},
+		{"empty", "", false},
+		{"invalid space", "/irgsh go", true},
+		{"invalid query", "/irgsh?a=b", true},
+		{"invalid control", "/irgsh\n", true},
+		{"invalid protocol", "http://irgsh", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &IrgshConfig{
+				Chief: ChiefConfig{
+					Address:  "http://localhost:8080",
+					Workdir:  "/tmp",
+					GnupgDir: "/tmp",
+					BaseURL:  tt.baseURL,
+				},
+				Builder: BuilderConfig{
+					Workdir:              "/tmp",
+					UpstreamDistCodename: "sid",
+					UpstreamDistUrl:      "http://deb.debian.org/debian",
+				},
+			}
+			err := applyDefaults(cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("applyDefaults() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

@@ -112,7 +112,11 @@ func NewDashboardService(
 	jobStore JobStore,
 	isoStore ISOJobStore,
 ) (*DashboardService, error) {
-	tmpl, err := template.New("dashboard").Parse(dashboardTmplStr)
+	tmpl, err := template.New("dashboard").Funcs(template.FuncMap{
+		"baseurl": func(p string) string {
+			return baseURL + p
+		},
+	}).Parse(dashboardTmplStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse dashboard template: %w", err)
 	}
