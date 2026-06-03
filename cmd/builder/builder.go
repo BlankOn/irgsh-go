@@ -26,14 +26,9 @@ func uploadLog(logPath string, id string) {
 }
 
 func sendBuildNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
-	logBaseURL := irgshConfig.Chief.PublicURL
-	if logBaseURL == "" {
-		logBaseURL = irgshConfig.Chief.Address + irgshConfig.Chief.BaseURL
-	}
-
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
-		logBaseURL,
+		irgshConfig.FullBaseURL,
 		"Build",
 		taskUUID,
 		status,

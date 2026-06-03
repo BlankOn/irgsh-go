@@ -24,6 +24,9 @@ type IrgshConfig struct {
 	Storage      StorageConfig      `json:"storage"`
 	IsTest       bool               `json:"is_test"`
 	IsDev        bool               `json:"is_dev"`
+	// FullBaseURL is the externally-reachable base URL for log links, computed
+	// once at load time so workers don't repeat the public_url/base_url check.
+	FullBaseURL string `json:"-"`
 }
 
 type ChiefConfig struct {
@@ -175,6 +178,7 @@ func applyDefaults(cfg *IrgshConfig) error {
 	}
 
 	normalizeChiefConfig(&cfg.Chief)
+	cfg.FullBaseURL = computeFullBaseURL(&cfg.Chief)
 
 	validate := validator.New()
 	if err := validate.RegisterValidation("baseurl", func(fl validator.FieldLevel) bool {
@@ -194,4 +198,14 @@ func normalizeChiefConfig(cfg *ChiefConfig) {
 		b = "/" + b
 	}
 	cfg.BaseURL = b
+}
+
+// computeFullBaseURL returns the externally-reachable base URL for log links.
+// When public_url is set it is treated as the complete external URL; otherwise
+// the internal address is combined with base_url. Expects a normalized config.
+func computeFullBaseURL(cfg *ChiefConfig) string {
+	if cfg.PublicURL != "" {
+		return cfg.PublicURL
+	}
+	return cfg.Address + cfg.BaseURL
 }

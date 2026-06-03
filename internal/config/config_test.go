@@ -87,6 +87,39 @@ func TestNormalizeChiefConfig(t *testing.T) {
 	}
 }
 
+func TestComputeFullBaseURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ChiefConfig
+		want  string
+	}{
+		{
+			name:  "public_url takes precedence",
+			input: ChiefConfig{Address: "http://localhost:8080", BaseURL: "/irgsh", PublicURL: "https://irgsh.id/irgsh"},
+			want:  "https://irgsh.id/irgsh",
+		},
+		{
+			name:  "fallback to address + base_url",
+			input: ChiefConfig{Address: "http://localhost:8080", BaseURL: "/irgsh", PublicURL: ""},
+			want:  "http://localhost:8080/irgsh",
+		},
+		{
+			name:  "fallback with empty base_url",
+			input: ChiefConfig{Address: "http://localhost:8080", BaseURL: "", PublicURL: ""},
+			want:  "http://localhost:8080",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := tt.input
+			if got := computeFullBaseURL(&cfg); got != tt.want {
+				t.Errorf("computeFullBaseURL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBaseURLValidation(t *testing.T) {
 	tests := []struct {
 		name    string

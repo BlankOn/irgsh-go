@@ -34,14 +34,9 @@ func uploadLog(logPath string, id string) {
 }
 
 func sendISONotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
-	logBaseURL := irgshConfig.Chief.PublicURL
-	if logBaseURL == "" {
-		logBaseURL = irgshConfig.Chief.Address + irgshConfig.Chief.BaseURL
-	}
-
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
-		logBaseURL,
+		irgshConfig.FullBaseURL,
 		"ISO Build",
 		taskUUID,
 		status,
