@@ -163,6 +163,8 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	submissionFs := http.FileServer(http.Dir(cfg.Chief.Workdir + "/submissions"))
 	mux.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
+	// rootMux forwards prefixed browser traffic to mux while also keeping mux
+	// reachable at root so workers can call /api/v1/* without config changes.
 	rootMux := http.NewServeMux()
 	if cfg.Chief.BaseURL != "" {
 		rootMux.Handle(cfg.Chief.BaseURL+"/", http.StripPrefix(cfg.Chief.BaseURL, mux))

@@ -11,6 +11,8 @@ import (
 	validator "gopkg.in/go-playground/validator.v9"
 )
 
+var baseURLRegex = regexp.MustCompile(`^/[A-Za-z0-9_\-/]*$`)
+
 type IrgshConfig struct {
 	Redis        string             `json:"redis"`
 	Chief        ChiefConfig        `json:"chief"`
@@ -175,10 +177,11 @@ func applyDefaults(cfg *IrgshConfig) error {
 	normalizeChiefConfig(&cfg.Chief)
 
 	validate := validator.New()
-	validate.RegisterValidation("baseurl", func(fl validator.FieldLevel) bool {
-		re := regexp.MustCompile(`^/[A-Za-z0-9_\-/]*$`)
-		return fl.Field().String() == "" || re.MatchString(fl.Field().String())
-	})
+	if err := validate.RegisterValidation("baseurl", func(fl validator.FieldLevel) bool {
+		return fl.Field().String() == "" || baseURLRegex.MatchString(fl.Field().String())
+	}); err != nil {
+		return err
+	}
 	return validate.Struct(cfg)
 }
 

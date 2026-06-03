@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -121,6 +122,11 @@ func TestBaseURLValidation(t *testing.T) {
 			err := applyDefaults(cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("applyDefaults() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil {
+				if !strings.Contains(strings.ToLower(err.Error()), "baseurl") {
+					t.Errorf("expected error to mention baseurl, got: %v", err)
+				}
 			}
 		})
 	}
