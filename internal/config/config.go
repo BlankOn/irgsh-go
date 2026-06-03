@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	validator "gopkg.in/go-playground/validator.v9"
 )
+
+var baseURLRegex = regexp.MustCompile(`^/[A-Za-z0-9_\-/]*$`)
 
 type IrgshConfig struct {
 	Redis        string             `json:"redis"`
@@ -21,12 +24,17 @@ type IrgshConfig struct {
 	Storage      StorageConfig      `json:"storage"`
 	IsTest       bool               `json:"is_test"`
 	IsDev        bool               `json:"is_dev"`
+	// FullBaseURL is the externally-reachable base URL for log links, computed
+	// once at load time so workers don't repeat the public_url/base_url check.
+	FullBaseURL string `json:"-"`
 }
 
 type ChiefConfig struct {
-	Address  string `json:"address" validate:"required"`
-	Workdir  string `json:"workdir" validate:"required"`
-	GnupgDir string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
+	Address   string `json:"address" validate:"required"`
+	BaseURL   string `json:"base_url" validate:"baseurl"`
+	PublicURL string `json:"public_url"`
+	Workdir   string `json:"workdir" validate:"required"`
+	GnupgDir  string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
 }
 
 type BuilderConfig struct {
@@ -169,6 +177,35 @@ func applyDefaults(cfg *IrgshConfig) error {
 		cfg.Monitoring.CleanupInterval = 3600
 	}
 
+	normalizeChiefConfig(&cfg.Chief)
+	cfg.FullBaseURL = computeFullBaseURL(&cfg.Chief)
+
 	validate := validator.New()
+	if err := validate.RegisterValidation("baseurl", func(fl validator.FieldLevel) bool {
+		return fl.Field().String() == "" || baseURLRegex.MatchString(fl.Field().String())
+	}); err != nil {
+		return err
+	}
 	return validate.Struct(cfg)
+}
+
+func normalizeChiefConfig(cfg *ChiefConfig) {
+	cfg.Address = strings.TrimSuffix(cfg.Address, "/")
+	cfg.PublicURL = strings.TrimSuffix(cfg.PublicURL, "/")
+
+	b := strings.TrimSuffix(cfg.BaseURL, "/")
+	if b != "" && !strings.HasPrefix(b, "/") {
+		b = "/" + b
+	}
+	cfg.BaseURL = b
+}
+
+// computeFullBaseURL returns the externally-reachable base URL for log links.
+// When public_url is set it is treated as the complete external URL; otherwise
+// the internal address is combined with base_url. Expects a normalized config.
+func computeFullBaseURL(cfg *ChiefConfig) string {
+	if cfg.PublicURL != "" {
+		return cfg.PublicURL
+	}
+	return cfg.Address + cfg.BaseURL
 }

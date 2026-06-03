@@ -33,7 +33,7 @@ func NewChiefUsecase(
 	version string,
 ) (*ChiefUsecase, error) {
 	maintainerSvc := NewMaintainerService(gpg)
-	dashSvc, err := newDashboardSvc(version, taskQueue, maintainerSvc, registry)
+	dashSvc, err := newDashboardSvc(version, cfg.Chief.BaseURL, taskQueue, maintainerSvc, registry)
 	if err != nil {
 		return nil, fmt.Errorf("init dashboard service: %w", err)
 	}
@@ -64,7 +64,7 @@ func newSubmissionSvc(tq TaskQueue, st FileStorage, gpg GPGVerifier, reg *monito
 	return NewSubmissionService(tq, st, gpg, js, is)
 }
 
-func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
+func newDashboardSvc(version string, baseURL string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
 	var ir InstanceRegistry
 	var js JobStore
 	var is ISOJobStore
@@ -73,7 +73,7 @@ func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *m
 		js = reg
 		is = reg
 	}
-	return NewDashboardService(version, tq, ms, ir, js, is)
+	return NewDashboardService(version, baseURL, tq, ms, ir, js, is)
 }
 
 // GetVersion returns the version string for use by handlers.
