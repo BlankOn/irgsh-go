@@ -72,6 +72,9 @@ type StorageConfig struct {
 	DatabasePath string `json:"database_path"` // Path to SQLite database file (default: /var/lib/irgsh/chief/irgsh.db)
 	MaxJobs      int    `json:"max_jobs"`      // Maximum number of jobs to retain (default: 1000)
 	MaxISOJobs   int    `json:"max_iso_jobs"`  // Maximum number of ISO jobs to retain (default: 200)
+	// MaxImportJobs is the maximum number of package import jobs to retain
+	// (default: 200)
+	MaxImportJobs int `json:"max_import_jobs"`
 }
 
 // LoadConfigFromPath loads irgsh config from a specific file path
@@ -142,6 +145,9 @@ func applyDefaults(cfg *IrgshConfig) error {
 	}
 	if cfg.Storage.MaxISOJobs == 0 {
 		cfg.Storage.MaxISOJobs = 200
+	}
+	if cfg.Storage.MaxImportJobs == 0 {
+		cfg.Storage.MaxImportJobs = 200
 	}
 
 	isDev := os.Getenv("DEV") == "1"

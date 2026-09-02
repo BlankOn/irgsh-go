@@ -23,6 +23,8 @@ type ChiefService interface {
 	BuildStatus(string) (domain.BuildStatusResponse, error)
 	ISOStatus(string) (string, string, error)
 	BuildISO(domain.ISOSubmission) (domain.SubmitPayloadResponse, error)
+	ImportStatus(string) (string, string, error)
+	ImportPackages(domain.ImportSubmission) (domain.SubmitPayloadResponse, error)
 	UploadArtifact(string, io.Reader) error
 	UploadLog(string, string, io.Reader) error
 	UploadSubmission([]byte, io.Reader) (string, error)
@@ -139,6 +141,50 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 		State:      jobStatus,
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+func ImportStatusHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["uuid"]
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "uuid parameter is required")
+		return
+	}
+	UUID := keys[0]
+
+	jobStatus, importStatus, err := chiefService.ImportStatus(UUID)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	res := struct {
+		PipelineID   string `json:"pipelineId"`
+		JobStatus    string `json:"jobStatus"`
+		ImportStatus string `json:"importStatus"`
+		State        string `json:"state"`
+	}{
+		PipelineID:   UUID,
+		JobStatus:    jobStatus,
+		ImportStatus: importStatus,
+		State:        jobStatus,
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func ImportPackagesHandler(w http.ResponseWriter, r *http.Request) {
+	var submission domain.ImportSubmission
+	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	payload, err := chiefService.ImportPackages(submission)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func RetryHandler(w http.ResponseWriter, r *http.Request) {

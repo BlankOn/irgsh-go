@@ -237,6 +237,68 @@ func (c *HTTPChiefClient) SubmitISO(ctx context.Context, submission domain.ISOSu
 	return sr, nil
 }
 
+func (c *HTTPChiefClient) SubmitImport(ctx context.Context, submission domain.ImportSubmission) (domain.SubmitResponse, error) {
+	base, err := c.baseURL()
+	if err != nil {
+		return domain.SubmitResponse{}, err
+	}
+
+	jsonBytes, err := json.Marshal(submission)
+	if err != nil {
+		return domain.SubmitResponse{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/import", bytes.NewReader(jsonBytes))
+	if err != nil {
+		return domain.SubmitResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return domain.SubmitResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return domain.SubmitResponse{}, err
+	}
+
+	var sr domain.SubmitResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+		return domain.SubmitResponse{}, err
+	}
+	return sr, nil
+}
+
+func (c *HTTPChiefClient) GetImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error) {
+	base, err := c.baseURL()
+	if err != nil {
+		return domain.ImportStatus{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/import-status?uuid="+url.QueryEscape(pipelineID), nil)
+	if err != nil {
+		return domain.ImportStatus{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return domain.ImportStatus{}, err
+	}
+	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return domain.ImportStatus{}, err
+	}
+
+	var is domain.ImportStatus
+	if err := json.NewDecoder(resp.Body).Decode(&is); err != nil {
+		return domain.ImportStatus{}, err
+	}
+	return is, nil
+}
+
 func (c *HTTPChiefClient) GetPackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error) {
 	base, err := c.baseURL()
 	if err != nil {

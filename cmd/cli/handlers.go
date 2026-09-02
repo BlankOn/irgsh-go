@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
+	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/urfave/cli"
 )
 
@@ -17,6 +18,9 @@ type CLIService interface {
 	SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error)
 	ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	ISOLog(ctx context.Context, pipelineID string) (string, error)
+	SubmitImport(ctx context.Context, params domain.ImportParams) (domain.SubmitResponse, error)
+	ImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error)
+	ImportLog(ctx context.Context, pipelineID string) (string, error)
 	RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error)
 	UpdateCLI(ctx context.Context) error
 }
@@ -137,6 +141,57 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			},
 		},
 		{
+			Name:  "import",
+			Usage: "Import already built packages from another Debian repository",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "source",
+					Usage: "Base URL of the Debian repository to import from",
+				},
+				cli.StringFlag{
+					Name:  "dist",
+					Usage: "Suite to import from in the source repository, e.g. sid",
+				},
+				cli.StringFlag{
+					Name:  "source-component",
+					Usage: "Component to look in on the source side (default: main)",
+				},
+				cli.StringFlag{
+					Name:  "package-name",
+					Usage: "Package name(s) to import, comma or space separated",
+				},
+				cli.StringFlag{
+					Name:  "component",
+					Usage: "Component to import into on our side (default: main)",
+				},
+				cli.BoolFlag{
+					Name:  "experimental",
+					Usage: "Import into the experimental repository",
+				},
+				cli.BoolFlag{
+					Name:  "force-version",
+					Usage: "Replace the package version if our repository already has it",
+				},
+				cli.BoolFlag{
+					Name:  "insecure",
+					Usage: "Import from a repository whose Release file cannot be verified",
+				},
+			},
+			Action: importSubmitAction(ctx, svc),
+			Subcommands: []cli.Command{
+				{
+					Name:   "status",
+					Usage:  "Check status of an import pipeline",
+					Action: importStatusAction(ctx, svc),
+				},
+				{
+					Name:   "log",
+					Usage:  "Read the logs of an import pipeline",
+					Action: importLogAction(ctx, svc),
+				},
+			},
+		},
+		{
 			Name:   "update",
 			Usage:  "Update the irgsh-cli tool",
 			Action: updateAction(ctx, svc),
@@ -229,6 +284,48 @@ func livebuildLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		logResult, err := svc.ISOLog(ctx, pipelineID)
+		if err != nil {
+			return err
+		}
+		fmt.Println(logResult)
+		return nil
+	}
+}
+
+func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		params := domain.ImportParams{
+			SourceURL:       c.String("source"),
+			Dist:            c.String("dist"),
+			SourceComponent: c.String("source-component"),
+			PackageNames:    usecase.SplitPackageNames(c.String("package-name")),
+			Component:       c.String("component"),
+			IsExperimental:  c.Bool("experimental"),
+			ForceVersion:    c.Bool("force-version"),
+			Insecure:        c.Bool("insecure"),
+		}
+		_, err := svc.SubmitImport(ctx, params)
+		return err
+	}
+}
+
+func importStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		pipelineID := c.Args().First()
+		status, err := svc.ImportStatus(ctx, pipelineID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Job Status: %s\n", status.JobStatus)
+		fmt.Printf("Import Status: %s\n", status.ImportStatus)
+		return nil
+	}
+}
+
+func importLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		pipelineID := c.Args().First()
+		logResult, err := svc.ImportLog(ctx, pipelineID)
 		if err != nil {
 			return err
 		}

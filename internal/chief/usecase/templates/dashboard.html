@@ -295,6 +295,36 @@
     {{- end}}
 {{- end}}
 
+    {{- if .ImportJobs}}
+<div class="section-title">Recent Package Import Jobs</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Packages</th>
+                <th>Source</th>
+                <th>Suite</th>
+                <th>Component</th>
+                <th>Status</th>
+                <th>UUID</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{- range .ImportJobs}}
+            <tr>
+                <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                <td>{{.Packages}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}</td>
+                <td style="font-size: 0.9em;">{{.SourceURL}}</td>
+                <td>{{.Dist}}</td>
+                <td>{{.Component}}</td>
+                <td><span class="{{.StatusClass}}">{{.State}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=import" target="_blank" style="font-size:0.85em;">log</a></td>
+                <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
+            </tr>
+        {{- end}}
+        </tbody>
+    </table>
+    {{- end}}
+
     <div class="refresh-info">
         Page auto-refreshes every 10 seconds
     </div>

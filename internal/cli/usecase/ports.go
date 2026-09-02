@@ -19,6 +19,8 @@ type PipelineStore interface {
 	SaveISOID(id string) error
 	LoadRetryID() (string, error)
 	SaveRetryID(id string) error
+	LoadImportID() (string, error)
+	SaveImportID(id string) error
 }
 
 type RepoSync interface {
@@ -36,6 +38,8 @@ type ChiefAPI interface {
 	UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress func(uploaded, total int64)) (domain.UploadResponse, error)
 	SubmitPackage(ctx context.Context, submission domain.Submission) (domain.SubmitResponse, error)
 	SubmitISO(ctx context.Context, submission domain.ISOSubmission) (domain.SubmitResponse, error)
+	SubmitImport(ctx context.Context, submission domain.ImportSubmission) (domain.SubmitResponse, error)
+	GetImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error)
 	GetPackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	GetISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	Retry(ctx context.Context, pipelineID string) (domain.RetryResponse, error)

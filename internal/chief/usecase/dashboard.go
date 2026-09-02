@@ -30,6 +30,7 @@ type DashboardData struct {
 	Workers       []WorkerView
 	Jobs          []JobView
 	ISOJobs       []ISOJobView
+	ImportJobs    []ImportJobView
 }
 
 type SummaryView struct {
@@ -64,23 +65,23 @@ type RepoLink struct {
 }
 
 type JobView struct {
-	FilterStatus   string
-	TimeFormatted  string
-	TimeRelative   string
-	PackageName    string
-	PackageVersion string
-	Maintainer     string
-	Component      string
-	IsExperimental bool
-	RepoLinks      []RepoLink
+	FilterStatus    string
+	TimeFormatted   string
+	TimeRelative    string
+	PackageName     string
+	PackageVersion  string
+	Maintainer      string
+	Component       string
+	IsExperimental  bool
+	RepoLinks       []RepoLink
 	BuildStageClass string
 	BuildStateText  string
 	RepoStageClass  string
 	RepoStateText   string
-	StatusClass    string
-	StatusText     string
-	ShowSpinner    bool
-	TaskUUID       string
+	StatusClass     string
+	StatusText      string
+	ShowSpinner     bool
+	TaskUUID        string
 }
 
 type ISOJobView struct {
@@ -93,6 +94,19 @@ type ISOJobView struct {
 	TaskUUID      string
 }
 
+type ImportJobView struct {
+	TimeFormatted  string
+	TimeRelative   string
+	SourceURL      string
+	Dist           string
+	Packages       string
+	Component      string
+	IsExperimental bool
+	State          string
+	StatusClass    string
+	TaskUUID       string
+}
+
 // DashboardService renders the chief dashboard HTML.
 type DashboardService struct {
 	version       string
@@ -101,6 +115,7 @@ type DashboardService struct {
 	registry      InstanceRegistry
 	jobStore      JobStore
 	isoStore      ISOJobStore
+	importStore   ImportJobStore
 	tmpl          *template.Template
 	logViewerTmpl *template.Template
 }
@@ -118,6 +133,7 @@ func NewDashboardService(
 	registry InstanceRegistry,
 	jobStore JobStore,
 	isoStore ISOJobStore,
+	importStore ImportJobStore,
 ) (*DashboardService, error) {
 	tmpl, err := template.New("dashboard").Parse(dashboardTmplStr)
 	if err != nil {
@@ -134,6 +150,7 @@ func NewDashboardService(
 		registry:      registry,
 		jobStore:      jobStore,
 		isoStore:      isoStore,
+		importStore:   importStore,
 		tmpl:          tmpl,
 		logViewerTmpl: logViewerTmpl,
 	}, nil
@@ -173,6 +190,7 @@ func (d *DashboardService) buildDashboardData() DashboardData {
 	}
 	data.Jobs = d.buildJobViews()
 	data.ISOJobs = d.buildISOJobViews()
+	data.ImportJobs = d.buildImportJobViews()
 
 	return data
 }
@@ -430,6 +448,56 @@ func (d *DashboardService) buildISOJobViews() []ISOJobView {
 		})
 	}
 	return views
+}
+
+func (d *DashboardService) buildImportJobViews() []ImportJobView {
+	if d.importStore == nil {
+		return nil
+	}
+	importJobs, err := d.importStore.GetRecentImportJobs(50)
+	if err != nil {
+		log.Printf("Failed to list import jobs: %v\n", err)
+		return nil
+	}
+	if len(importJobs) == 0 {
+		return nil
+	}
+
+	jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
+	if locErr != nil {
+		jakartaLoc = time.UTC
+	}
+
+	views := make([]ImportJobView, 0, len(importJobs))
+	for _, job := range importJobs {
+		jakartaTime := job.SubmittedAt.In(jakartaLoc)
+		views = append(views, ImportJobView{
+			TimeFormatted:  jakartaTime.Format("2006-01-02 15:04:05 MST"),
+			TimeRelative:   formatRelativeTime(job.SubmittedAt),
+			SourceURL:      job.SourceURL,
+			Dist:           job.Dist,
+			Packages:       job.Packages,
+			Component:      job.Component,
+			IsExperimental: job.IsExperimental,
+			State:          job.State,
+			StatusClass:    jobStateClass(job.State),
+			TaskUUID:       job.TaskUUID,
+		})
+	}
+	return views
+}
+
+// jobStateClass maps a job state to the dashboard's status CSS class.
+func jobStateClass(state string) string {
+	switch state {
+	case "SUCCESS", "DONE":
+		return "status-online"
+	case "FAILURE", "FAILED":
+		return "status-offline"
+	case "STARTED", "RECEIVED":
+		return "status-warning"
+	}
+	return ""
 }
 
 func stageClass(state string) string {

@@ -95,7 +95,8 @@ graph LR
 | `internal/monitoring/` | Worker health tracking, heartbeats, job history, instance registry |
 | `internal/notification/` | Webhook POST notifications on job completion |
 | `internal/artifact/` | Artifact storage using repo/service/endpoint pattern |
-| `internal/storage/` | SQLite database for persistent job and ISO job data |
+| `internal/storage/` | SQLite database for persistent job, ISO job and import job data |
+| `internal/logstream/` | Live job log streaming from workers to chief over Redis |
 | `pkg/httputil/` | JSON response helpers, `HTTPError`, `HTTPStatusError`, retry utilities |
 | `pkg/systemutil/` | Shell command execution and log streaming |
 | `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile, Containerfiles (`containers/`), Podman Quadlet units (`quadlets/`) |
@@ -142,7 +143,7 @@ irgsh-repo -c /path/to/config.yaml
 
 ### Task Queue (Machinery)
 Jobs are distributed via Redis using the machinery library:
-- Tasks: `build`, `repo`
+- Tasks: `build`, `repo`, `import`, `iso`
 - Queue: `irgsh`
 - Workers register handlers and process jobs asynchronously
 
@@ -157,6 +158,20 @@ When `notification.webhook_url` is configured, POST requests are sent on job com
 ```json
 {"title": "IRGSH Build Job SUCCESS", "message": "Job ID: xxx\nStatus: SUCCESS\n..."}
 ```
+
+### Import Flow
+`irgsh-cli import` submits a request to import already built packages from an
+external Debian repository. The `import` task is handled by irgsh-repo:
+1. CLI submits `--source`, `--dist` and `--package-name` to chief
+2. Chief queues an `import` task to Redis
+3. Repo worker builds a throwaway apt root pointing at the source repository,
+   resolves each binary package to its source package, then downloads the
+   `.dsc` with its tarballs and every binary built from that source
+4. Repo worker injects them with `reprepro includedsc` / `includedeb`
+
+Unlike the packaging flow, reprepro runs without `--nothingiserror`, so a
+version our repository already carries is skipped rather than failing the job.
+Use `--force-version` to replace it.
 
 ### Pipeline Flow
 1. CLI validates and submits package (GPG signed)
@@ -180,6 +195,12 @@ Changes to the wire format must be coordinated manually across all four componen
 - `internal/chief/domain/submission.go` (chief receives)
 - `cmd/builder/builder.go` (builder consumes via map)
 - `cmd/repo/repo.go` (repo consumes via map)
+
+The import job has its own wire format, unmarshalled into a struct rather than
+a map:
+- `internal/cli/domain/import.go` (CLI sends)
+- `internal/chief/domain/submission.go` (`ImportSubmission`, chief receives)
+- `cmd/repo/import.go` (`importSubmission`, repo consumes)
 
 ## Testing
 

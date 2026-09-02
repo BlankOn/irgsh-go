@@ -28,6 +28,7 @@ func (m *mockConfigStore) Save(cfg domain.Config) error {
 type mockPipelineStore struct {
 	packageID string
 	isoID     string
+	importID  string
 	retryID   string
 	saveErr   error
 	loadErr   error
@@ -51,6 +52,15 @@ func (m *mockPipelineStore) LoadISOID() (string, error) {
 	return m.isoID, m.loadErr
 }
 
+func (m *mockPipelineStore) SaveImportID(id string) error {
+	m.importID = id
+	return m.saveErr
+}
+
+func (m *mockPipelineStore) LoadImportID() (string, error) {
+	return m.importID, m.loadErr
+}
+
 func (m *mockPipelineStore) SaveRetryID(id string) error {
 	m.retryID = id
 	return m.saveErr
@@ -62,22 +72,27 @@ func (m *mockPipelineStore) LoadRetryID() (string, error) {
 
 // mockChiefAPI implements usecase.ChiefAPI for testing.
 type mockChiefAPI struct {
-	version      domain.VersionResponse
-	versionErr   error
-	uploadResp   domain.UploadResponse
-	uploadErr    error
-	submitResp   domain.SubmitResponse
-	submitErr    error
-	isoResp      domain.SubmitResponse
-	isoErr       error
-	pkgStatus    domain.PackageStatus
-	pkgStatusErr error
-	isoStatus    domain.ISOStatus
-	isoStatusErr error
-	retryResp    domain.RetryResponse
-	retryErr     error
-	fetchLogResp string
-	fetchLogErr  error
+	version         domain.VersionResponse
+	versionErr      error
+	uploadResp      domain.UploadResponse
+	uploadErr       error
+	submitResp      domain.SubmitResponse
+	submitErr       error
+	isoResp         domain.SubmitResponse
+	isoErr          error
+	pkgStatus       domain.PackageStatus
+	pkgStatusErr    error
+	isoStatus       domain.ISOStatus
+	isoStatusErr    error
+	importResp      domain.SubmitResponse
+	importErr       error
+	importStatus    domain.ImportStatus
+	importStatusErr error
+	importSubmitted domain.ImportSubmission
+	retryResp       domain.RetryResponse
+	retryErr        error
+	fetchLogResp    string
+	fetchLogErr     error
 }
 
 func (m *mockChiefAPI) GetVersion(_ context.Context) (domain.VersionResponse, error) {
@@ -86,6 +101,15 @@ func (m *mockChiefAPI) GetVersion(_ context.Context) (domain.VersionResponse, er
 
 func (m *mockChiefAPI) UploadSubmission(_ context.Context, _, _ string, _ func(int64, int64)) (domain.UploadResponse, error) {
 	return m.uploadResp, m.uploadErr
+}
+
+func (m *mockChiefAPI) SubmitImport(_ context.Context, submission domain.ImportSubmission) (domain.SubmitResponse, error) {
+	m.importSubmitted = submission
+	return m.importResp, m.importErr
+}
+
+func (m *mockChiefAPI) GetImportStatus(_ context.Context, _ string) (domain.ImportStatus, error) {
+	return m.importStatus, m.importStatusErr
 }
 
 func (m *mockChiefAPI) SubmitPackage(_ context.Context, _ domain.Submission) (domain.SubmitResponse, error) {

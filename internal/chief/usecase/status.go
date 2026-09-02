@@ -32,3 +32,9 @@ func (st *StatusService) ISOStatus(UUID string) (string, string, error) {
 	jobStatus := domain.DeriveISOPipelineState(isoStatusStr)
 	return jobStatus, isoStatusStr, nil
 }
+
+func (st *StatusService) ImportStatus(UUID string) (string, string, error) {
+	importStatusStr := st.taskQueue.GetTaskState("import", UUID)
+	jobStatus := domain.DeriveImportPipelineState(importStatusStr)
+	return jobStatus, importStatusStr, nil
+}

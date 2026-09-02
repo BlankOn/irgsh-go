@@ -43,6 +43,16 @@ func (m *MachineryTaskQueue) SendISOTask(taskUUID string, payload []byte) error 
 	return err
 }
 
+func (m *MachineryTaskQueue) SendImportTask(taskUUID string, payload []byte) error {
+	sig := tasks.Signature{
+		Name: "import",
+		UUID: taskUUID,
+		Args: []tasks.Arg{{Type: "string", Value: string(payload)}},
+	}
+	_, err := m.server.SendTask(&sig)
+	return err
+}
+
 func (m *MachineryTaskQueue) GetTaskState(taskName, taskUUID string) string {
 	sig := tasks.Signature{
 		Name: taskName,

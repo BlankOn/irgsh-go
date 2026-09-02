@@ -33,8 +33,24 @@ CREATE TABLE IF NOT EXISTS iso_jobs (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS import_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_uuid TEXT UNIQUE NOT NULL,
+    source_url TEXT NOT NULL,
+    dist TEXT NOT NULL,
+    packages TEXT NOT NULL,
+    component TEXT NOT NULL DEFAULT 'main',
+    is_experimental BOOLEAN DEFAULT FALSE,
+    submitted_at DATETIME NOT NULL,
+    state TEXT NOT NULL DEFAULT 'PENDING',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_jobs_submitted_at ON jobs(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_task_uuid ON jobs(task_uuid);
 CREATE INDEX IF NOT EXISTS idx_iso_jobs_submitted_at ON iso_jobs(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_iso_jobs_task_uuid ON iso_jobs(task_uuid);
+CREATE INDEX IF NOT EXISTS idx_import_jobs_submitted_at ON import_jobs(submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_import_jobs_task_uuid ON import_jobs(task_uuid);
 `

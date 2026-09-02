@@ -126,6 +126,7 @@ func main() {
 
 		// Wrap Repo task with monitoring
 		server.RegisterTask("repo", RepoWithMonitoring)
+		server.RegisterTask("import", ImportWithMonitoring)
 		// One worker for synchronous
 		worker := server.NewWorker("repo", 1)
 		err = worker.Launch()
@@ -144,6 +145,14 @@ func RepoWithMonitoring(payload string) error {
 	defer activeTasks.Add(-1)
 
 	return Repo(payload)
+}
+
+// ImportWithMonitoring wraps the Import function with active task tracking
+func ImportWithMonitoring(payload string) error {
+	activeTasks.Add(1)
+	defer activeTasks.Add(-1)
+
+	return Import(payload)
 }
 
 func startMonitoringHeartbeat() {
