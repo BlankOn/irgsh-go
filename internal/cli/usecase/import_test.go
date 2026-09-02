@@ -118,3 +118,39 @@ func TestSubmitImport_SigningKeyIdentityUnavailable(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "signing key")
 }
+
+func TestSubmitImport_PassesCheckFlagsThrough(t *testing.T) {
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+
+	_, err := newImportUsecase(t, chief, &mockPipelineStore{}).SubmitImport(context.Background(), domain.ImportParams{
+		SourceURL:          "https://kartolo.sby.datautama.net.id/debian/",
+		Dist:               "sid",
+		PackageNames:       []string{"firefox"},
+		DryRun:             true,
+		IgnoreDependencies: true,
+		Insecure:           true,
+		ForceVersion:       true,
+	})
+	require.NoError(t, err)
+
+	assert.True(t, chief.importSubmitted.DryRun)
+	assert.True(t, chief.importSubmitted.IgnoreDependencies)
+	assert.True(t, chief.importSubmitted.Insecure)
+	assert.True(t, chief.importSubmitted.ForceVersion)
+}
+
+func TestSubmitImport_DefaultsAreConservative(t *testing.T) {
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+
+	_, err := newImportUsecase(t, chief, &mockPipelineStore{}).SubmitImport(context.Background(), domain.ImportParams{
+		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+		Dist:         "sid",
+		PackageNames: []string{"firefox"},
+	})
+	require.NoError(t, err)
+
+	// An import checks dependencies and injects unless told otherwise.
+	assert.False(t, chief.importSubmitted.DryRun)
+	assert.False(t, chief.importSubmitted.IgnoreDependencies)
+	assert.False(t, chief.importSubmitted.Insecure)
+}

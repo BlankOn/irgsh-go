@@ -51,6 +51,11 @@ type ImportSubmission struct {
 	// Maintainer is the identity of whoever triggered the import, taken from
 	// the CLI's configured signing key.
 	Maintainer string `json:"maintainer"`
+	// DryRun fetches and checks the packages without injecting them.
+	DryRun bool `json:"dryRun"`
+	// IgnoreDependencies injects the packages even when they are not
+	// installable on top of our repository.
+	IgnoreDependencies bool `json:"ignoreDependencies"`
 }
 
 // ISOSubmission represents an ISO build request.

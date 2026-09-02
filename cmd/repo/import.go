@@ -29,6 +29,10 @@ type importSubmission struct {
 	// KeyringPath is an optional keyring on the worker to verify the source
 	// repository against, for a repo whose key is not installed system wide.
 	KeyringPath string `json:"keyringPath"`
+	// DryRun fetches and checks the packages without injecting them.
+	DryRun bool `json:"dryRun"`
+	// IgnoreDependencies imports even when the dependency check fails.
+	IgnoreDependencies bool `json:"ignoreDependencies"`
 }
 
 func uploadImportLog(logPath string, id string) {
@@ -119,6 +123,36 @@ func Import(payload string) (err error) {
 		}
 	}
 
+	debFiles, err := filepath.Glob(filepath.Join(apt.downloads, "*.deb"))
+	if err != nil {
+		return fail("Failed to list the downloaded packages", err)
+	}
+	if len(debFiles) == 0 {
+		return fail("Nothing was downloaded", fmt.Errorf("no binary packages were downloaded from %s", submission.SourceURL))
+	}
+
+	// Check the packages against the repository they are going into before
+	// they go into it.
+	if depErr := checkDependencies(logPath, workdir, submission, debFiles); depErr != nil {
+		systemutil.WriteLog(logPath, "##### The imported packages cannot be installed on top of "+
+			irgshConfig.Repo.DistCodename+experimentalSuffix(submission.IsExperimental)+
+			" and its upstream distribution. See the unmet dependencies above.")
+		if !submission.IgnoreDependencies {
+			systemutil.WriteLog(logPath, "##### Import it anyway with: irgsh-cli import --ignore-dependencies ...")
+			err = depErr
+			return fail("The imported packages have unmet dependencies", depErr)
+		}
+		systemutil.WriteLog(logPath, "##### Importing anyway (--ignore-dependencies)")
+	} else {
+		systemutil.WriteLog(logPath, "##### Dependency check passed: the imported packages are installable")
+	}
+
+	if submission.DryRun {
+		systemutil.WriteLog(logPath, "[ IMPORT DONE ] Dry run: nothing was injected into the repository")
+		uploadImportLog(logPath, taskUUID)
+		return nil
+	}
+
 	if err = injectImportedFiles(logPath, workdir, submission, metadata); err != nil {
 		return fail("Failed to inject the imported packages", err)
 	}
@@ -153,15 +187,20 @@ func newAptSandbox(workdir string, submission importSubmission) *aptSandbox {
 
 // aptOpts points every apt directory at the sandbox.
 func (a *aptSandbox) aptOpts() string {
+	return aptOptsFor(a.root, a.submission.Insecure)
+}
+
+// aptOptsFor points every apt directory at an isolated root.
+func aptOptsFor(root string, insecure bool) string {
 	opts := []string{
-		"-o Dir::Etc::sourcelist=" + sq(filepath.Join(a.root, "sources.list")),
+		"-o Dir::Etc::sourcelist=" + sq(filepath.Join(root, "sources.list")),
 		"-o Dir::Etc::sourceparts=/dev/null",
-		"-o Dir::State=" + sq(filepath.Join(a.root, "state")),
-		"-o Dir::State::status=" + sq(filepath.Join(a.root, "state", "status")),
-		"-o Dir::Cache=" + sq(filepath.Join(a.root, "cache")),
+		"-o Dir::State=" + sq(filepath.Join(root, "state")),
+		"-o Dir::State::status=" + sq(filepath.Join(root, "state", "status")),
+		"-o Dir::Cache=" + sq(filepath.Join(root, "cache")),
 		// Verify against the keyrings collected in prepare(), which is what
 		// makes importing from a Debian mirror work out of the box.
-		"-o Dir::Etc::trustedparts=" + sq(a.trustedParts()),
+		"-o Dir::Etc::trustedparts=" + sq(filepath.Join(root, "trusted.gpg.d")),
 		"-o APT::Get::List-Cleanup=false",
 		"-o Acquire::Languages=none",
 		// apt drops to the _apt user for downloads, which cannot read the
@@ -169,7 +208,7 @@ func (a *aptSandbox) aptOpts() string {
 		// unsandboxed.
 		"-o APT::Sandbox::User=root",
 	}
-	if a.submission.Insecure {
+	if insecure {
 		// Explicitly requested by the maintainer with --insecure.
 		opts = append(opts,
 			"-o Acquire::AllowInsecureRepositories=true",
@@ -298,21 +337,26 @@ func missingKeyIDs(output string) []string {
 	return keys
 }
 
-func (a *aptSandbox) prepare(logPath string) error {
-	for _, dir := range []string{
-		filepath.Join(a.root, "state", "lists", "partial"),
-		filepath.Join(a.root, "cache", "archives", "partial"),
-		a.downloads,
-	} {
+// prepareAptRoot lays out an isolated apt root and collects the keyrings it
+// verifies against.
+func prepareAptRoot(root, keyringPath string, extraDirs ...string) (int, error) {
+	dirs := append([]string{
+		filepath.Join(root, "state", "lists", "partial"),
+		filepath.Join(root, "cache", "archives", "partial"),
+	}, extraDirs...)
+	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create %s: %w", dir, err)
+			return 0, fmt.Errorf("failed to create %s: %w", dir, err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(a.root, "state", "status"), nil, 0644); err != nil {
-		return fmt.Errorf("failed to create the apt status file: %w", err)
+	if err := os.WriteFile(filepath.Join(root, "state", "status"), nil, 0644); err != nil {
+		return 0, fmt.Errorf("failed to create the apt status file: %w", err)
 	}
+	return collectKeyrings(systemKeyringDirs, keyringPath, filepath.Join(root, "trusted.gpg.d"))
+}
 
-	keyrings, err := collectKeyrings(systemKeyringDirs, a.submission.KeyringPath, a.trustedParts())
+func (a *aptSandbox) prepare(logPath string) error {
+	keyrings, err := prepareAptRoot(a.root, a.submission.KeyringPath, a.downloads)
 	if err != nil {
 		return err
 	}
@@ -590,4 +634,117 @@ func lastLine(out string) string {
 // sq shell-quotes a string.
 func sq(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+// targetSandbox models the machine a user installs on: our own repository
+// plus the upstream distribution it sits on top of.
+//
+// Importing from a newer suite is the whole point of an import job, and it is
+// also how a repository ends up with a package nobody can install: sid's
+// firefox wants a libc6 that our base does not have. Resolving the imported
+// packages against that pair before injecting them catches it while the
+// repository is still clean.
+type targetSandbox struct {
+	root       string
+	submission importSubmission
+}
+
+func newTargetSandbox(workdir string, submission importSubmission) *targetSandbox {
+	return &targetSandbox{
+		root:       filepath.Join(workdir, "apt-target"),
+		submission: submission,
+	}
+}
+
+func (t *targetSandbox) aptOpts() string {
+	return aptOptsFor(t.root, true)
+}
+
+// upstreamComponents turns the reprepro update syntax used in the repo config
+// ("main non-free>restricted contrib>extras") into plain component names.
+func upstreamComponents(configured string) string {
+	var components []string
+	for _, field := range strings.Fields(configured) {
+		components = append(components, strings.SplitN(field, ">", 2)[0])
+	}
+	if len(components) == 0 {
+		return "main"
+	}
+	return strings.Join(components, " ")
+}
+
+func (t *targetSandbox) prepare(logPath string) error {
+	if _, err := prepareAptRoot(t.root, t.submission.KeyringPath); err != nil {
+		return err
+	}
+
+	dist := irgshConfig.Repo.DistCodename + experimentalSuffix(t.submission.IsExperimental)
+	ourRepo := filepath.Join(irgshConfig.Repo.Workdir, "www")
+
+	var sources []string
+	// Our own repository, if it has been exported at least once.
+	if _, err := os.Stat(filepath.Join(ourRepo, "dists", dist, "Release")); err == nil {
+		components := irgshConfig.Repo.DistComponents
+		if components == "" {
+			components = t.submission.Component
+		}
+		sources = append(sources, fmt.Sprintf("deb [trusted=yes] file://%s %s %s", ourRepo, dist, components))
+	} else {
+		systemutil.WriteLog(logPath, "##### Note: "+dist+" has not been exported yet, "+
+			"so the dependency check only considers the upstream distribution")
+	}
+
+	// The distribution our repository is an overlay on, which is where a user
+	// gets everything we do not carry ourselves.
+	if irgshConfig.Repo.UpstreamDistUrl != "" && irgshConfig.Repo.UpstreamDistCodename != "" {
+		sources = append(sources, fmt.Sprintf("deb %s %s %s",
+			irgshConfig.Repo.UpstreamDistUrl,
+			irgshConfig.Repo.UpstreamDistCodename,
+			upstreamComponents(irgshConfig.Repo.UpstreamDistComponents)))
+	}
+
+	if len(sources) == 0 {
+		return fmt.Errorf("neither an exported repository nor an upstream distribution is configured, " +
+			"so the imported packages cannot be checked")
+	}
+
+	sourcesList := strings.Join(sources, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(t.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
+		return fmt.Errorf("failed to write the target sources list: %w", err)
+	}
+	systemutil.WriteLog(logPath, "##### Checking against\n"+sourcesList)
+
+	_, err := systemutil.CmdExec(
+		fmt.Sprintf("apt-get %s update", t.aptOpts()),
+		"Fetching the package indices of the target repository",
+		logPath,
+	)
+	return err
+}
+
+// simulate asks apt to resolve the downloaded packages against the target,
+// exactly as it would on a user's machine.
+func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
+	var quoted []string
+	for _, deb := range debFiles {
+		quoted = append(quoted, sq(deb))
+	}
+
+	_, err := systemutil.CmdExec(
+		fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s",
+			t.aptOpts(), strings.Join(quoted, " ")),
+		"Simulating the installation of the imported packages",
+		logPath,
+	)
+	return err
+}
+
+// checkDependencies reports whether the imported packages are installable on
+// a machine that has our repository and its upstream distribution.
+func checkDependencies(logPath, workdir string, submission importSubmission, debFiles []string) error {
+	target := newTargetSandbox(workdir, submission)
+	if err := target.prepare(logPath); err != nil {
+		return fmt.Errorf("could not prepare the dependency check: %w", err)
+	}
+	return target.simulate(logPath, debFiles)
 }

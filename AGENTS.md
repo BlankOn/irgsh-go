@@ -167,7 +167,12 @@ external Debian repository. The `import` task is handled by irgsh-repo:
 3. Repo worker builds a throwaway apt root pointing at the source repository,
    resolves each binary package to its source package, then downloads the
    `.dsc` with its tarballs and every binary built from that source
-4. Repo worker injects them with `reprepro includedsc` / `includedeb`
+4. Repo worker simulates installing the downloaded packages against our
+   repository plus its configured upstream distribution (`apt-get --simulate`),
+   and fails the job if they are not installable
+5. Repo worker injects them with `reprepro includedsc` / `includedeb`,
+   supplying `--section`/`--priority` from the source index because a `.dsc`
+   usually carries neither
 
 Unlike the packaging flow, reprepro runs without `--nothingiserror`, so a
 version our repository already carries is skipped rather than failing the job.
@@ -178,6 +183,11 @@ worker, collected from both `/etc/apt/trusted.gpg.d` and `/usr/share/keyrings`
 (a derivative like BlankOn keeps its own key in the former and the Debian
 archive keys in the latter). Use `--keyring <path>` for a repository whose key
 is elsewhere, or `--insecure` to skip verification.
+
+Importing from a newer suite than the repository is based on is how a package
+that nobody can install gets in, so step 4 is on by default: `--dry-run`
+fetches and checks without injecting, and `--ignore-dependencies` injects
+anyway.
 
 ### Pipeline Flow
 1. CLI validates and submits package (GPG signed)

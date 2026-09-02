@@ -14,6 +14,9 @@ type ImportSubmission struct {
 	Insecure        bool     `json:"insecure"`
 	KeyringPath     string   `json:"keyringPath"`
 	Maintainer      string   `json:"maintainer"`
+	DryRun          bool     `json:"dryRun"`
+
+	IgnoreDependencies bool `json:"ignoreDependencies"`
 }
 
 // ImportStatus is the chief response for an import pipeline.
@@ -35,4 +38,7 @@ type ImportParams struct {
 	ForceVersion    bool
 	Insecure        bool
 	KeyringPath     string
+	DryRun          bool
+
+	IgnoreDependencies bool
 }

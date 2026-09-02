@@ -173,3 +173,21 @@ func TestNormalizeSourceMeta(t *testing.T) {
 		})
 	}
 }
+
+// The repo config carries upstream components in reprepro's update syntax,
+// where "sid-component>our-component" maps one onto the other. Only the
+// upstream side is a real component name to fetch.
+func TestUpstreamComponents(t *testing.T) {
+	cases := map[string]string{
+		"main non-free>restricted contrib>extras": "main non-free contrib",
+		"main":                  "main",
+		"main contrib non-free": "main contrib non-free",
+		"":                      "main",
+		"   ":                   "main",
+	}
+	for configured, want := range cases {
+		if got := upstreamComponents(configured); got != want {
+			t.Fatalf("upstreamComponents(%q) = %q, want %q", configured, got, want)
+		}
+	}
+}

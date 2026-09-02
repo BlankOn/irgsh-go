@@ -77,6 +77,12 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 	if params.Insecure {
 		fmt.Println("Warning: --insecure skips verification of the source repository's signature")
 	}
+	if params.DryRun {
+		fmt.Println("Dry run: the packages will be fetched and checked, but not injected")
+	}
+	if params.IgnoreDependencies {
+		fmt.Println("Warning: --ignore-dependencies imports even if the packages are not installable")
+	}
 
 	submission := domain.ImportSubmission{
 		SourceURL:       params.SourceURL,
@@ -89,6 +95,9 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		Insecure:        params.Insecure,
 		KeyringPath:     params.KeyringPath,
 		Maintainer:      maintainer,
+		DryRun:          params.DryRun,
+
+		IgnoreDependencies: params.IgnoreDependencies,
 	}
 
 	resp, err := u.chief.SubmitImport(ctx, submission)

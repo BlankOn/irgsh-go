@@ -180,6 +180,14 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 					Name:  "insecure",
 					Usage: "Import from a repository whose Release file cannot be verified",
 				},
+				cli.BoolFlag{
+					Name:  "dry-run",
+					Usage: "Fetch and dependency-check the packages without injecting them",
+				},
+				cli.BoolFlag{
+					Name:  "ignore-dependencies",
+					Usage: "Import even when the packages are not installable on top of our repository",
+				},
 			},
 			Action: importSubmitAction(ctx, svc),
 			Subcommands: []cli.Command{
@@ -308,6 +316,9 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 			ForceVersion:    c.Bool("force-version"),
 			Insecure:        c.Bool("insecure"),
 			KeyringPath:     c.String("keyring"),
+			DryRun:          c.Bool("dry-run"),
+
+			IgnoreDependencies: c.Bool("ignore-dependencies"),
 		}
 		_, err := svc.SubmitImport(ctx, params)
 		return err
