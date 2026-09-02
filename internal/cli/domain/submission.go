@@ -28,4 +28,5 @@ type SubmitParams struct {
 	IsExperimental bool
 	IgnoreChecks   bool
 	ForceVersion   bool
+	SkipLocalBuild bool
 }

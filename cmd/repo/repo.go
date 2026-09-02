@@ -14,6 +14,12 @@ import (
 
 func uploadLog(logPath string, id string) {
 	// Upload the log to chief
+	if info, err := os.Stat(logPath); err != nil {
+		fmt.Printf("error: log file %s is not uploadable: %v\n", logPath, err)
+		return
+	} else {
+		fmt.Printf("Uploading log file %s (%d bytes) to %s\n", logPath, info.Size(), irgshConfig.Chief.Address)
+	}
 	cmdStr := "curl -v -F 'uploadFile=@" + logPath + "' '" + irgshConfig.Chief.Address + "/api/v1/log-upload?id=" + id + "&type=repo'"
 	fmt.Println(cmdStr)
 	_, err := systemutil.CmdExec(
@@ -22,8 +28,41 @@ func uploadLog(logPath string, id string) {
 		"",
 	)
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Printf("error: failed to upload log file %s: %v\n", logPath, err)
 	}
+}
+
+// describeArtifactDir reports what is actually present on disk for a task, so a
+// failing download or injection step leaves a trace of what the repo worker saw.
+func describeArtifactDir(artifactDir string, taskUUID string) string {
+	target := artifactDir + "/" + taskUUID
+	var b strings.Builder
+	b.WriteString("##### Artifact directory listing: " + target + "\n")
+
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		b.WriteString("  unable to read " + target + ": " + err.Error() + "\n")
+		tarball := target + ".tar.gz"
+		if info, statErr := os.Stat(tarball); statErr == nil {
+			b.WriteString(fmt.Sprintf("  tarball %s exists (%d bytes)\n", tarball, info.Size()))
+		} else {
+			b.WriteString("  tarball " + tarball + " is missing: " + statErr.Error() + "\n")
+		}
+		return b.String()
+	}
+	if len(entries) == 0 {
+		b.WriteString("  (empty)\n")
+		return b.String()
+	}
+	for _, entry := range entries {
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			b.WriteString("  " + entry.Name() + " (unable to stat: " + infoErr.Error() + ")\n")
+			continue
+		}
+		b.WriteString(fmt.Sprintf("  %s\t%d bytes\n", entry.Name(), info.Size()))
+	}
+	return b.String()
 }
 
 func sendRepoNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
@@ -72,6 +111,14 @@ func Repo(payload string) (err error) {
 
 	logPath := irgshConfig.Repo.Workdir + "/artifacts/"
 	logPath += taskUUID + "/repo.log"
+
+	// Create the log file up front so that StreamLog has something to tail and
+	// so early failures still end up in an uploadable log instead of being lost.
+	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
+		fmt.Printf("error: unable to prepare log file %s: %v\n", logPath, prepErr)
+		err = fmt.Errorf("unable to prepare log file %s: %w", logPath, prepErr)
+		return
+	}
 	go systemutil.StreamLog(logPath)
 
 	// Ensure notification is always sent on completion
@@ -83,23 +130,32 @@ func Repo(payload string) (err error) {
 		}
 	}()
 
-	cmdStr := fmt.Sprintf(`mkdir -p %s/artifacts && \
-	cd %s/artifacts/ && \
-	wget %s/artifacts/%s.tar.gz && \
+	artifactURL := fmt.Sprintf("%s/artifacts/%s.tar.gz", irgshConfig.Chief.Address, taskUUID)
+	artifactDir := fmt.Sprintf("%s/artifacts", irgshConfig.Repo.Workdir)
+	cmdStr := fmt.Sprintf(`mkdir -p %s && \
+	cd %s/ && \
+	wget --verbose --tries=3 --timeout=60 %s && \
 	tar -xvf %s.tar.gz`,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Chief.Address,
-		taskUUID,
+		artifactDir,
+		artifactDir,
+		artifactURL,
 		taskUUID,
 	)
-	_, err = systemutil.CmdExec(cmdStr, "Downloading the artifact", logPath)
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		fmt.Sprintf("Downloading the artifact\nSource: %s\nDestination: %s/%s.tar.gz\nExtracting into: %s/%s",
+			artifactURL, artifactDir, taskUUID, artifactDir, taskUUID),
+		logPath,
+	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact from "+artifactURL+": "+err.Error())
+		systemutil.WriteLog(logPath, describeArtifactDir(artifactDir, taskUUID))
 		uploadLog(logPath, taskUUID)
 		return
 	}
+	systemutil.WriteLog(logPath, "##### Artifact downloaded and extracted successfully")
+	systemutil.WriteLog(logPath, describeArtifactDir(artifactDir, taskUUID))
 
 	gnupgDir := "GNUPGHOME=" + irgshConfig.Repo.GnupgDir
 	if irgshConfig.IsDev {

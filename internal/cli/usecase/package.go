@@ -262,19 +262,22 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		return domain.SubmitResponse{}, fmt.Errorf("debsign failed: %w", err)
 	}
 
-	// dpkg-genbuildinfo
-	log.Println("Generating buildinfo file...")
-	if err := u.debian.GenBuildInfo(workDir); err != nil {
-		// Some packages need debuild first; try that
-		log.Println("Trying debuild before dpkg-genbuildinfo...")
-		debuildCmd := fmt.Sprintf("cd %s && debuild -us -uc -b && dpkg-genbuildinfo", sq(workDir))
-		if shellErr := u.shell.RunInteractive(debuildCmd); shellErr != nil {
-			return domain.SubmitResponse{}, fmt.Errorf("dpkg-genbuildinfo failed (debuild fallback also failed: %w): %w", shellErr, err)
+	// Verify the package builds before handing it to the build farm.
+	if !params.SkipLocalBuild {
+		if err := u.verifyLocalBuild(workDir); err != nil {
+			return domain.SubmitResponse{}, err
 		}
+	} else {
+		log.Println("Skipping local build verification (--skip-local-build)")
 	}
 
 	// dpkg-genchanges
-	log.Println("Generating changes file...")
+	//
+	// This is a source-only upload: the binary packages are built remotely by
+	// irgsh-builder from the .dsc, so no .buildinfo is generated here (it is
+	// meaningless without local binary artifacts, and building them locally
+	// would require every build dependency on the maintainer's machine).
+	log.Println("Generating source changes file...")
 	dscMatches, err := filepath.Glob(filepath.Join(tmpDir, "*.dsc"))
 	if err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("failed to find .dsc file: %w", err)
@@ -283,7 +286,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		return domain.SubmitResponse{}, errors.New("no .dsc file found after dpkg-source")
 	}
 	dscBase := strings.TrimSuffix(filepath.Base(dscMatches[0]), ".dsc")
-	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges > %s", sq(workDir), sq(filepath.Join(tmpDir, dscBase+"_source.changes")))
+	genchangesCmd := fmt.Sprintf("cd %s && dpkg-genchanges -S > %s", sq(workDir), sq(filepath.Join(tmpDir, dscBase+"_source.changes")))
 	if err := u.shell.RunInteractive(genchangesCmd); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("dpkg-genchanges failed: %w", err)
 	}
@@ -446,4 +449,47 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 	}
 
 	return buildLog, repoLog, nil
+}
+
+// verifyLocalBuild builds the package locally so that a package which cannot
+// build is rejected here instead of failing later on the build farm.
+//
+// The build runs in a throwaway copy of the tree: a binary build writes
+// debian/files and .deb files, and anything left inside the submission
+// directory would be swept into the tarball uploaded to chief.
+//
+// When the build dependencies are not installed on this machine the local
+// build is not possible and is skipped — the builder resolves build
+// dependencies inside its pbuilder chroot, so requiring them on every
+// maintainer's machine would defeat the point of the build farm.
+func (u *CLIUsecase) verifyLocalBuild(workDir string) error {
+	buildDir := workDir + ".localbuild"
+	defer func() {
+		_ = u.shell.Run("rm -rf " + sq(buildDir))
+	}()
+
+	if err := u.shell.Run(fmt.Sprintf("rm -rf %s && cp -a %s %s", sq(buildDir), sq(workDir), sq(buildDir))); err != nil {
+		return fmt.Errorf("failed to prepare local build directory: %w", err)
+	}
+
+	log.Println("Checking build dependencies...")
+	missing, err := u.debian.CheckBuildDeps(buildDir)
+	if err != nil {
+		return fmt.Errorf("failed to check build dependencies: %w", err)
+	}
+	if missing != "" {
+		log.Println("Build dependencies are not installed on this machine: " + missing)
+		log.Println("Skipping the local build verification; the builder will resolve them in its pbuilder chroot.")
+		log.Println("To verify locally before submitting, install them with:")
+		log.Println("    sudo mk-build-deps -ir debian/control")
+		return nil
+	}
+
+	log.Println("Verifying the package with a local binary build...")
+	if err := u.debian.BuildBinary(buildDir); err != nil {
+		return fmt.Errorf("local build failed, so this package would fail on the builder too; "+
+			"fix the errors above and resubmit (use --skip-local-build to submit anyway): %w", err)
+	}
+	log.Println("Local build succeeded.")
+	return nil
 }

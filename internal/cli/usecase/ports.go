@@ -65,7 +65,8 @@ type DebianPackager interface {
 	ExtractUploaders(controlPath string) (string, error)
 	BuildSource(dir string) error
 	Sign(dir, keyFingerprint string) error
-	GenBuildInfo(dir string) error
+	CheckBuildDeps(dir string) (missing string, err error)
+	BuildBinary(dir string) error
 }
 
 // GPGSigner abstracts GPG operations for the CLI.

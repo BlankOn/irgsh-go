@@ -81,6 +81,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 					Name:  "force-version",
 					Usage: "Force overwrite existing package version in repository",
 				},
+				cli.BoolFlag{
+					Name:  "skip-local-build",
+					Usage: "Do not verify the package with a local binary build before submitting",
+				},
 			},
 			Action: packageSubmitAction(ctx, svc),
 			Subcommands: []cli.Command{
@@ -167,6 +171,7 @@ func packageSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 			IsExperimental: c.Bool("experimental"),
 			IgnoreChecks:   c.Bool("ignore-checks"),
 			ForceVersion:   c.Bool("force-version"),
+			SkipLocalBuild: c.Bool("skip-local-build"),
 		}
 		_, err := svc.SubmitPackage(ctx, params)
 		return err
