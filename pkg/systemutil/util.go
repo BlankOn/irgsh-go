@@ -18,11 +18,66 @@ import (
 // failing command error.
 const cmdOutputExcerptLines = 20
 
+// CommandError describes a command that exited non-zero.
+//
+// Its Error() carries the full context, for the worker's own stderr where
+// there is nothing else to go on. Summary() is the short form for a job log,
+// where the command and its output are already written out just above.
+type CommandError struct {
+	// Desc is the human readable step description passed to CmdExec.
+	Desc string
+	// Cmd is the command as given to CmdExec, before log redirection.
+	Cmd string
+	// Output is the combined output of the command.
+	Output string
+	// Err is the underlying error, typically *exec.ExitError.
+	Err error
+	// InLog reports whether the command and its output were also written to
+	// a job log file.
+	InLog bool
+}
+
+func (e *CommandError) Error() string {
+	return fmt.Sprintf("%s failed (command: %s): %v%s",
+		e.step(), truncate(strings.TrimSpace(e.Cmd), 500), e.Err, outputExcerpt(e.Output))
+}
+
+// Summary is the one line form: which step failed and how it exited.
+func (e *CommandError) Summary() string {
+	return fmt.Sprintf("%s failed: %v", e.step(), e.Err)
+}
+
+func (e *CommandError) Unwrap() error { return e.Err }
+
+func (e *CommandError) step() string {
+	desc := strings.TrimSpace(strings.ReplaceAll(e.Desc, "\n", " "))
+	if desc == "" {
+		desc = "command"
+	}
+	return desc
+}
+
+// FailureSummary renders err for a job log. A command whose output already
+// went to that log is summarised instead of repeated; anything else is
+// reported verbatim.
+func FailureSummary(err error) string {
+	if err == nil {
+		return ""
+	}
+	var cmdErr *CommandError
+	if errors.As(err, &cmdErr) && cmdErr.InLog {
+		return cmdErr.Summary()
+	}
+	return err.Error()
+}
+
 // CmdExec run os command
 func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err error) {
 	if len(cmdStr) == 0 {
 		return "", errors.New("No command string provided.")
 	}
+
+	origCmd := cmdStr
 
 	if len(logPath) > 0 {
 		logDir := filepath.Dir(logPath)
@@ -52,20 +107,23 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err err
 	output, err := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr).CombinedOutput()
 	out = string(output)
 	if err != nil {
-		err = fmt.Errorf("%s: %w%s", cmdFailureContext(cmdDesc, cmdStr), err, outputExcerpt(out))
+		cmdErr := &CommandError{
+			Desc:   cmdDesc,
+			Cmd:    origCmd,
+			Output: out,
+			Err:    err,
+			InLog:  len(logPath) > 0,
+		}
+		// Mark the failure in the job log itself, right after the output that
+		// caused it, so a reader (or a live log stream) sees which step failed
+		// even when the caller goes on to ignore the error.
+		if cmdErr.InLog {
+			_ = WriteLogFile(logPath, "##### FAILED: "+cmdErr.Summary())
+		}
+		err = cmdErr
 	}
 
 	return
-}
-
-// cmdFailureContext describes which step failed, falling back to the command
-// itself when no human readable description was given.
-func cmdFailureContext(cmdDesc string, cmdStr string) string {
-	desc := strings.TrimSpace(strings.ReplaceAll(cmdDesc, "\n", " "))
-	if desc == "" {
-		desc = "command"
-	}
-	return fmt.Sprintf("%s failed (command: %s)", desc, truncate(strings.TrimSpace(cmdStr), 500))
 }
 
 // outputExcerpt returns the last few lines of a command output so the error
@@ -150,6 +208,12 @@ func StreamLogContext(ctx context.Context, path string, sink func(string)) {
 // WriteLog appends a message to both stdout and the log file.
 func WriteLog(logPath string, message string) error {
 	fmt.Println(message)
+	return WriteLogFile(logPath, message)
+}
+
+// WriteLogFile appends a message to the log file only. Use it for messages
+// that a log tailer will echo to stdout anyway.
+func WriteLogFile(logPath string, message string) error {
 	if logPath == "" {
 		return nil
 	}

@@ -151,7 +151,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact from "+artifactURL+": "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact from "+artifactURL+": "+systemutil.FailureSummary(err))
 		systemutil.WriteLog(logPath, describeArtifactDir(artifactDir, taskUUID))
 		uploadLog(logPath, taskUUID)
 		return
@@ -265,7 +265,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -298,7 +298,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject dsc file: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject dsc file: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -317,7 +317,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}

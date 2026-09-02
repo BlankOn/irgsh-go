@@ -220,6 +220,16 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		}
 	}
 
+	// A native source package may not have a Debian revision. Whether
+	// dpkg-source treats that as a warning or an error depends on the dpkg
+	// version and vendor of the machine running it, so a package that builds
+	// here can still be rejected inside the builder's chroot. Catch it now.
+	if !params.IgnoreChecks {
+		if err := checkNativeVersion(packageDir, packageExtendedVersion); err != nil {
+			return domain.SubmitResponse{}, err
+		}
+	}
+
 	// Determine package name with version
 	packageNameVersion := packageName + "-" + packageVersion
 	if packageExtendedVersion != "" {
@@ -264,7 +274,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 	// Verify the package builds before handing it to the build farm.
 	if !params.SkipLocalBuild {
-		if err := u.verifyLocalBuild(workDir); err != nil {
+		if err := u.verifyLocalBuild(tmpDir, workDir); err != nil {
 			return domain.SubmitResponse{}, err
 		}
 	} else {
@@ -462,13 +472,18 @@ func (u *CLIUsecase) PackageLog(ctx context.Context, pipelineID string) (buildLo
 // build is not possible and is skipped — the builder resolves build
 // dependencies inside its pbuilder chroot, so requiring them on every
 // maintainer's machine would defeat the point of the build farm.
-func (u *CLIUsecase) verifyLocalBuild(workDir string) error {
-	buildDir := workDir + ".localbuild"
+func (u *CLIUsecase) verifyLocalBuild(tmpDir, workDir string) error {
+	// dpkg-buildpackage writes its .deb, .buildinfo and .changes files to the
+	// PARENT of the directory it builds in, so the scratch tree has to live
+	// outside the submission directory. Inside it, those files would be swept
+	// into the tarball uploaded to chief.
+	buildRoot := tmpDir + ".localbuild"
+	buildDir := filepath.Join(buildRoot, filepath.Base(workDir))
 	defer func() {
-		_ = u.shell.Run("rm -rf " + sq(buildDir))
+		_ = u.shell.Run("rm -rf " + sq(buildRoot))
 	}()
 
-	if err := u.shell.Run(fmt.Sprintf("rm -rf %s && cp -a %s %s", sq(buildDir), sq(workDir), sq(buildDir))); err != nil {
+	if err := u.shell.Run(fmt.Sprintf("rm -rf %s && mkdir -p %s && cp -a %s %s", sq(buildRoot), sq(buildRoot), sq(workDir), sq(buildDir))); err != nil {
 		return fmt.Errorf("failed to prepare local build directory: %w", err)
 	}
 
@@ -492,4 +507,36 @@ func (u *CLIUsecase) verifyLocalBuild(workDir string) error {
 	}
 	log.Println("Local build succeeded.")
 	return nil
+}
+
+// checkNativeVersion rejects a native source package whose version carries a
+// Debian revision.
+//
+// dpkg-source only warns about this when the vendor allows "fuzzy" native
+// sources (Debian does, from dpkg 1.23); older dpkg in the builder's pbuilder
+// chroot fails the build outright with:
+//
+//	dpkg-source: error: can't build with source format '3.0 (native)':
+//	native package version may not have a revision
+//
+// so the maintainer's machine can accept a package the build farm cannot.
+func checkNativeVersion(packageDir, packageExtendedVersion string) error {
+	if packageExtendedVersion == "" {
+		return nil
+	}
+
+	format, err := os.ReadFile(filepath.Join(packageDir, "debian", "source", "format"))
+	if err != nil {
+		// No debian/source/format means format 1.0, which is only native when
+		// no .orig tarball is present. Leave that case to dpkg-source.
+		return nil
+	}
+	if !strings.Contains(string(format), "native") {
+		return nil
+	}
+
+	return fmt.Errorf("debian/source/format is %q but the version has a Debian revision (-%s); "+
+		"the builder would reject this with \"native package version may not have a revision\". "+
+		"Either drop the revision from debian/changelog or switch to a non-native source format",
+		strings.TrimSpace(string(format)), packageExtendedVersion)
 }

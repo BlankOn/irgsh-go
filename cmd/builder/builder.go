@@ -83,14 +83,14 @@ func Build(payload string) (next string, err error) {
 
 	next, err = BuildPreparation(payload)
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
 
 	next, err = BuildPackage(payload)
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -98,7 +98,7 @@ func Build(payload string) (next string, err error) {
 	next, err = StorePackage(payload)
 
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -251,7 +251,11 @@ func StorePackage(payload string) (next string, err error) {
 	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/build.log"
 
 	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/ && "
-	cmdStr += "tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string)
+	// build.log is excluded because tar's own verbose output is being appended
+	// to it while tar reads it, which makes tar exit non-zero with "file
+	// changed as we read it" and masks the real build result. Chief receives
+	// the log through the separate log-upload endpoint anyway.
+	cmdStr += "tar --exclude=build.log -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string)
 	cmdStr += " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir
 	cmdStr += "/artifacts/" + raw["taskUUID"].(string) + ".tar.gz' "
 	cmdStr += irgshConfig.Chief.Address + "/api/v1/artifact-upload?id="
