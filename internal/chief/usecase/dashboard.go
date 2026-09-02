@@ -17,6 +17,9 @@ import (
 //go:embed templates/dashboard.html
 var dashboardTmplStr string
 
+//go:embed templates/logviewer.html
+var logViewerTmplStr string
+
 // View models for the dashboard template.
 
 type DashboardData struct {
@@ -99,6 +102,13 @@ type DashboardService struct {
 	jobStore      JobStore
 	isoStore      ISOJobStore
 	tmpl          *template.Template
+	logViewerTmpl *template.Template
+}
+
+// LogViewerData is the view model of the streaming log page.
+type LogViewerData struct {
+	TaskUUID string
+	LogType  string
 }
 
 func NewDashboardService(
@@ -113,6 +123,10 @@ func NewDashboardService(
 	if err != nil {
 		return nil, fmt.Errorf("parse dashboard template: %w", err)
 	}
+	logViewerTmpl, err := template.New("logviewer").Parse(logViewerTmplStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse log viewer template: %w", err)
+	}
 	return &DashboardService{
 		version:       version,
 		taskQueue:     taskQueue,
@@ -121,12 +135,18 @@ func NewDashboardService(
 		jobStore:      jobStore,
 		isoStore:      isoStore,
 		tmpl:          tmpl,
+		logViewerTmpl: logViewerTmpl,
 	}, nil
 }
 
 func (d *DashboardService) RenderIndexHTML(w io.Writer) error {
 	data := d.buildDashboardData()
 	return d.tmpl.Execute(w, data)
+}
+
+// RenderLogViewerHTML renders the page that streams one job log.
+func (d *DashboardService) RenderLogViewerHTML(w io.Writer, taskUUID, logType string) error {
+	return d.logViewerTmpl.Execute(w, LogViewerData{TaskUUID: taskUUID, LogType: logType})
 }
 
 func (d *DashboardService) buildDashboardData() DashboardData {

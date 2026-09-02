@@ -89,6 +89,10 @@ func (s *ChiefUsecase) RenderIndexHTML(w io.Writer) error {
 	return s.dashboardSvc.RenderIndexHTML(w)
 }
 
+func (s *ChiefUsecase) RenderLogViewerHTML(w io.Writer, taskUUID, logType string) error {
+	return s.dashboardSvc.RenderLogViewerHTML(w, taskUUID, logType)
+}
+
 func (s *ChiefUsecase) SubmitPackage(submission domain.Submission) (domain.SubmitPayloadResponse, error) {
 	return s.submissionSvc.SubmitPackage(submission)
 }
@@ -124,4 +128,3 @@ func (s *ChiefUsecase) UploadSubmission(tokenData []byte, blob io.Reader) (strin
 func (s *ChiefUsecase) ListMaintainersRaw() (string, error) {
 	return s.maintainerSvc.ListMaintainersRaw()
 }
-

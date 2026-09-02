@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
@@ -26,6 +27,11 @@ var (
 	irgshConfig = config.IrgshConfig{}
 
 	activeTasks atomic.Int32
+
+	// logPublisher mirrors job logs to chief while a job is running. It stays
+	// nil when Redis is unreachable: live streaming is an addition to the log
+	// file, never a reason to fail a build.
+	logPublisher *logstream.Publisher
 )
 
 func main() {
@@ -39,6 +45,12 @@ func main() {
 	err = os.MkdirAll(irgshConfig.Builder.Workdir, 0755)
 	if err != nil {
 		log.Fatalln(err)
+	}
+
+	logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
+	if err != nil {
+		log.Printf("live log streaming disabled: %v\n", err)
+		logPublisher = nil
 	}
 
 	app = cli.NewApp()

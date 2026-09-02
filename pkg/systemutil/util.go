@@ -1,6 +1,7 @@
 package systemutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,10 @@ import (
 	"github.com/hpcloud/tail"
 )
 
+// cmdOutputExcerptLines is how many trailing output lines are attached to a
+// failing command error.
+const cmdOutputExcerptLines = 20
+
 // CmdExec run os command
 func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err error) {
 	if len(cmdStr) == 0 {
@@ -20,16 +25,14 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err err
 	}
 
 	if len(logPath) > 0 {
-
-		logPathArr := strings.Split(logPath, "/")
-		logPathArr = logPathArr[:len(logPathArr)-1]
-		logDir := "/" + strings.Join(logPathArr, "/")
-		os.MkdirAll(logDir, os.ModePerm)
-		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return "", err
+		logDir := filepath.Dir(logPath)
+		if mkErr := os.MkdirAll(logDir, os.ModePerm); mkErr != nil {
+			return "", fmt.Errorf("failed to create log directory %s: %w", logDir, mkErr)
 		}
-		defer f.Close()
+		f, openErr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if openErr != nil {
+			return "", fmt.Errorf("failed to open log file %s: %w", logPath, openErr)
+		}
 		_, _ = f.WriteString("\n")
 		if len(cmdDesc) > 0 {
 			cmdDescSplitted := strings.Split(cmdDesc, "\n")
@@ -39,23 +42,108 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err err
 		}
 		_, _ = f.WriteString("##### RUN " + cmdStr + "\n")
 		f.Close()
-		cmdStr += " 2>&1 | tee -a " + logPath
+		// The command is wrapped in a brace group before being piped: `|`
+		// binds tighter than `&&`, so `a && b | tee log` would only log the
+		// output of `b`, silently dropping every earlier step of the
+		// `&&`-chains the workers are built from.
+		cmdStr = "{ " + cmdStr + "\n} 2>&1 | tee -a " + logPath
 	}
 	// `set -o pipefail` will forces to return the original exit code
-	output, err := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr).Output()
+	output, err := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr).CombinedOutput()
 	out = string(output)
+	if err != nil {
+		err = fmt.Errorf("%s: %w%s", cmdFailureContext(cmdDesc, cmdStr), err, outputExcerpt(out))
+	}
 
 	return
 }
 
+// cmdFailureContext describes which step failed, falling back to the command
+// itself when no human readable description was given.
+func cmdFailureContext(cmdDesc string, cmdStr string) string {
+	desc := strings.TrimSpace(strings.ReplaceAll(cmdDesc, "\n", " "))
+	if desc == "" {
+		desc = "command"
+	}
+	return fmt.Sprintf("%s failed (command: %s)", desc, truncate(strings.TrimSpace(cmdStr), 500))
+}
+
+// outputExcerpt returns the last few lines of a command output so the error
+// itself carries the reason the command failed.
+func outputExcerpt(out string) string {
+	trimmed := strings.TrimRight(out, "\n")
+	if trimmed == "" {
+		return " (no output)"
+	}
+	lines := strings.Split(trimmed, "\n")
+	if len(lines) > cmdOutputExcerptLines {
+		lines = lines[len(lines)-cmdOutputExcerptLines:]
+	}
+	return "\noutput (last " + fmt.Sprint(len(lines)) + " line(s)):\n" + truncate(strings.Join(lines, "\n"), 4000)
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "... (truncated)"
+}
+
+// PrepareLogFile makes sure the directory and the log file itself exist, so a
+// tailer can attach to it and early failures can still be written and uploaded.
+func PrepareLogFile(logPath string) error {
+	if logPath == "" {
+		return nil
+	}
+	logDir := filepath.Dir(logPath)
+	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create log directory %s: %w", logDir, err)
+	}
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create log file %s: %w", logPath, err)
+	}
+	return f.Close()
+}
+
 // StreamLog tailing a file
 func StreamLog(path string) {
+	StreamLogTo(path, nil)
+}
+
+// StreamLogTo tails a file, printing every line to stdout and, when sink is
+// non-nil, handing it the same line. It is used to mirror a job log to chief
+// while the job is still running.
+func StreamLogTo(path string, sink func(string)) {
+	StreamLogContext(context.Background(), path, sink)
+}
+
+// StreamLogContext is StreamLogTo with a lifetime: it stops tailing, and
+// releases the underlying file watcher, once ctx is cancelled.
+func StreamLogContext(ctx context.Context, path string, sink func(string)) {
 	t, err := tail.TailFile(path, tail.Config{Follow: true})
 	if err != nil {
 		log.Printf("error: %v\n", err)
+		return
 	}
-	for line := range t.Lines {
-		fmt.Println(line.Text)
+	defer func() {
+		_ = t.Stop()
+		t.Cleanup()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case line, ok := <-t.Lines:
+			if !ok {
+				return
+			}
+			fmt.Println(line.Text)
+			if sink != nil {
+				sink(line.Text)
+			}
+		}
 	}
 }
 

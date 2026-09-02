@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
+	"github.com/blankon/irgsh-go/internal/cli/usecase"
 )
 
 // mockConfigStore implements usecase.ConfigStore for testing.
@@ -139,13 +140,16 @@ func (m *mockRepoSync) Sync(_, _, _ string) error {
 }
 
 // mockDebianPackager implements usecase.DebianPackager for testing.
+var _ usecase.DebianPackager = (*mockDebianPackager)(nil)
+
 type mockDebianPackager struct {
-	packageName     string
-	version         string
-	extendedVersion string
-	maintainer      string
-	uploaders       string
-	err             error
+	packageName      string
+	missingBuildDeps string
+	version          string
+	extendedVersion  string
+	maintainer       string
+	uploaders        string
+	err              error
 }
 
 func (m *mockDebianPackager) ExtractPackageName(_ string) (string, error) {
@@ -176,7 +180,11 @@ func (m *mockDebianPackager) Sign(_, _ string) error {
 	return m.err
 }
 
-func (m *mockDebianPackager) GenBuildInfo(_ string) error {
+func (m *mockDebianPackager) CheckBuildDeps(_ string) (string, error) {
+	return m.missingBuildDeps, m.err
+}
+
+func (m *mockDebianPackager) BuildBinary(_ string) error {
 	return m.err
 }
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
@@ -65,7 +66,11 @@ func Build(payload string) (next string, err error) {
 	}
 
 	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + taskUUID + "/build.log"
-	go systemutil.StreamLog(logPath)
+	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
+		log.Printf("error: unable to prepare log file %s: %v\n", logPath, prepErr)
+	}
+	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "build", logPath)
+	defer stopLogStream()
 
 	// Ensure notification is always sent on completion
 	defer func() {
