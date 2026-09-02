@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
@@ -52,6 +53,32 @@ func checkResponse(resp *http.Response) error {
 	return httputil.HTTPStatusError{StatusCode: resp.StatusCode, Body: string(body)}
 }
 
+// decodeJSON decodes a chief response, turning a non-JSON body into an error
+// that says what actually came back.
+//
+// Chief serves its dashboard from a catch-all route, so an older server
+// answers an endpoint it does not know with HTML and HTTP 200. Decoding that
+// as JSON otherwise fails with a bare "invalid character '<'".
+func decodeJSON(resp *http.Response, endpoint string, v any) error {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("failed to read the response from %s: %w", endpoint, err)
+	}
+
+	if err := json.Unmarshal(body, v); err != nil {
+		contentType := resp.Header.Get("Content-Type")
+		if strings.Contains(contentType, "html") || bytes.HasPrefix(bytes.TrimSpace(body), []byte("<")) {
+			return fmt.Errorf("chief returned a web page instead of JSON for %s (HTTP %d). "+
+				"This irgsh-chief is most likely older than your irgsh-cli and does not have that endpoint; "+
+				"upgrade irgsh-chief, or check that %s points at the right server",
+				endpoint, resp.StatusCode, resp.Request.URL.Host)
+		}
+		return fmt.Errorf("chief returned an unreadable response for %s (HTTP %d, %s): %w",
+			endpoint, resp.StatusCode, contentType, err)
+	}
+	return nil
+}
+
 func (c *HTTPChiefClient) GetVersion(ctx context.Context) (domain.VersionResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
@@ -75,7 +102,7 @@ func (c *HTTPChiefClient) GetVersion(ctx context.Context) (domain.VersionRespons
 	}
 
 	var v domain.VersionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+	if err := decodeJSON(resp, "/api/v1/version", &v); err != nil {
 		return domain.VersionResponse{}, err
 	}
 	return v, nil
@@ -162,8 +189,8 @@ func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenP
 	}
 
 	var upload domain.UploadResponse
-	if err := json.NewDecoder(resp.Body).Decode(&upload); err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to decode upload response: %w", err)
+	if err := decodeJSON(resp, "/api/v1/submission-upload", &upload); err != nil {
+		return domain.UploadResponse{}, err
 	}
 	return upload, nil
 }
@@ -197,7 +224,7 @@ func (c *HTTPChiefClient) SubmitPackage(ctx context.Context, submission domain.S
 	}
 
 	var sr domain.SubmitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+	if err := decodeJSON(resp, "/api/v1/submit", &sr); err != nil {
 		return domain.SubmitResponse{}, err
 	}
 	return sr, nil
@@ -231,7 +258,7 @@ func (c *HTTPChiefClient) SubmitISO(ctx context.Context, submission domain.ISOSu
 	}
 
 	var sr domain.SubmitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+	if err := decodeJSON(resp, "/api/v1/build-iso", &sr); err != nil {
 		return domain.SubmitResponse{}, err
 	}
 	return sr, nil
@@ -265,7 +292,7 @@ func (c *HTTPChiefClient) SubmitImport(ctx context.Context, submission domain.Im
 	}
 
 	var sr domain.SubmitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+	if err := decodeJSON(resp, "/api/v1/import", &sr); err != nil {
 		return domain.SubmitResponse{}, err
 	}
 	return sr, nil
@@ -293,7 +320,7 @@ func (c *HTTPChiefClient) GetImportStatus(ctx context.Context, pipelineID string
 	}
 
 	var is domain.ImportStatus
-	if err := json.NewDecoder(resp.Body).Decode(&is); err != nil {
+	if err := decodeJSON(resp, "/api/v1/import-status", &is); err != nil {
 		return domain.ImportStatus{}, err
 	}
 	return is, nil
@@ -321,7 +348,7 @@ func (c *HTTPChiefClient) GetPackageStatus(ctx context.Context, pipelineID strin
 	}
 
 	var ps domain.PackageStatus
-	if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
+	if err := decodeJSON(resp, "/api/v1/status", &ps); err != nil {
 		return domain.PackageStatus{}, err
 	}
 	return ps, nil
@@ -349,7 +376,7 @@ func (c *HTTPChiefClient) GetISOStatus(ctx context.Context, pipelineID string) (
 	}
 
 	var is domain.ISOStatus
-	if err := json.NewDecoder(resp.Body).Decode(&is); err != nil {
+	if err := decodeJSON(resp, "/api/v1/iso-status", &is); err != nil {
 		return domain.ISOStatus{}, err
 	}
 	return is, nil
@@ -377,7 +404,7 @@ func (c *HTTPChiefClient) Retry(ctx context.Context, pipelineID string) (domain.
 	}
 
 	var rr domain.RetryResponse
-	if err := json.NewDecoder(resp.Body).Decode(&rr); err != nil {
+	if err := decodeJSON(resp, "/api/v1/retry", &rr); err != nil {
 		return domain.RetryResponse{}, err
 	}
 	return rr, nil
