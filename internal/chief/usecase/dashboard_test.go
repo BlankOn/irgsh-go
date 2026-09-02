@@ -261,10 +261,10 @@ func TestResolveJobStates(t *testing.T) {
 	}
 
 	jobs := []*storage.JobInfo{
-		{TaskUUID: "done-job", State: "DONE"},         // terminal, skip
-		{TaskUUID: "unknown-job", State: "UNKNOWN"},    // UNKNOWN, skip
-		{TaskUUID: "active-job", State: "PENDING"},     // should resolve to DONE
-		{TaskUUID: "stale-job", State: "PENDING"},      // both empty, skip
+		{TaskUUID: "done-job", State: "DONE"},       // terminal, skip
+		{TaskUUID: "unknown-job", State: "UNKNOWN"}, // UNKNOWN, skip
+		{TaskUUID: "active-job", State: "PENDING"},  // should resolve to DONE
+		{TaskUUID: "stale-job", State: "PENDING"},   // both empty, skip
 	}
 
 	ds.resolveJobStates(jobs)
@@ -302,6 +302,26 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	err = ds.RenderIndexHTML(&buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "1.0.0")
+}
+
+func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = ds.RenderLogViewerHTML(&buf, "2026-09-02-143346_abc_base-files", "repo")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "2026-09-02-143346_abc_base-files")
+	// The page must stream from the API and offer the uploaded file as "raw".
+	assert.Contains(t, out, "/api/v1/log-stream?id=")
+	assert.Contains(t, out, "/logs/2026-09-02-143346_abc_base-files.repo.log")
 }
 
 func TestDashboardService_BuildJobViews_NilJobStore(t *testing.T) {

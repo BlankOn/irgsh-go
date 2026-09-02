@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.LogType}} log &mdash; {{.TaskUUID}}</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        header {
+            position: sticky;
+            top: 0;
+            background: #252526;
+            border-bottom: 1px solid #3c3c3c;
+            padding: 10px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+        header .title {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        header .uuid {
+            font-family: monospace;
+            font-size: 0.85em;
+            color: #9cdcfe;
+            word-break: break-all;
+        }
+        header a {
+            color: #9cdcfe;
+            font-size: 0.85em;
+        }
+        .status {
+            font-size: 0.85em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #3c3c3c;
+        }
+        .status.live { background: #0e639c; color: #fff; }
+        .status.ended { background: #37734b; color: #fff; }
+        .status.error { background: #7a2f2f; color: #fff; }
+        label { font-size: 0.85em; }
+        pre {
+            margin: 0;
+            padding: 12px 16px;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 0.85em;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .empty { color: #808080; font-style: italic; }
+    </style>
+</head>
+<body>
+<header>
+    <span class="title">{{.LogType}} log</span>
+    <span class="uuid">{{.TaskUUID}}</span>
+    <span id="status" class="status">connecting&hellip;</span>
+    <label><input type="checkbox" id="follow" checked> Follow</label>
+    <a href="/logs/{{.TaskUUID}}.{{.LogType}}.log" target="_blank">raw</a>
+    <a href="/">dashboard</a>
+</header>
+<pre id="log"><span class="empty">Waiting for output&hellip;</span></pre>
+<script>
+(function () {
+    var logEl = document.getElementById('log');
+    var statusEl = document.getElementById('status');
+    var followEl = document.getElementById('follow');
+    var empty = true;
+
+    function setStatus(text, cls) {
+        statusEl.textContent = text;
+        statusEl.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    function append(text) {
+        if (empty) {
+            logEl.textContent = '';
+            empty = false;
+        }
+        logEl.appendChild(document.createTextNode(text + '\n'));
+        if (followEl.checked) {
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+    }
+
+    var url = '/api/v1/log-stream?id=' + encodeURIComponent({{.TaskUUID}}) +
+              '&type=' + encodeURIComponent({{.LogType}});
+    var source = new EventSource(url);
+
+    source.onopen = function () { setStatus('streaming', 'live'); };
+
+    source.onmessage = function (event) { append(event.data); };
+
+    source.addEventListener('end', function () {
+        source.close();
+        setStatus('ended', 'ended');
+        if (empty) {
+            logEl.innerHTML = '<span class="empty">This job produced no log output.</span>';
+        }
+    });
+
+    source.onerror = function () {
+        // EventSource reconnects on its own; the stream replays from the
+        // backlog, so say so rather than implying the job failed.
+        if (source.readyState === EventSource.CONNECTING) {
+            setStatus('reconnecting…', 'error');
+        } else {
+            setStatus('disconnected', 'error');
+        }
+    };
+})();
+</script>
+</body>
+</html>

@@ -15,6 +15,7 @@ import (
 type ChiefService interface {
 	GetVersion() string
 	RenderIndexHTML(w io.Writer) error
+	RenderLogViewerHTML(w io.Writer, taskUUID, logType string) error
 	GetMaintainers() []domain.Maintainer
 	ListMaintainersRaw() (string, error)
 	SubmitPackage(domain.Submission) (domain.SubmitPayloadResponse, error)

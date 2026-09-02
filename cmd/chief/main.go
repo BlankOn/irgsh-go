@@ -19,6 +19,7 @@ import (
 	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/internal/storage"
 )
@@ -107,6 +108,15 @@ func main() {
 		}
 		chiefService = svc
 
+		// Live log streaming is an addition to the uploaded log files, so a
+		// Redis failure here only disables streaming.
+		if subscriber, subErr := logstream.NewSubscriber(irgshConfig.Redis); subErr != nil {
+			log.Printf("Live log streaming disabled: %v\n", subErr)
+		} else {
+			logSubscriber = subscriber
+			defer subscriber.Close()
+		}
+
 		httpServer := setupRoutes(irgshConfig, artifactHTTPEndpoint)
 
 		if irgshConfig.Monitoring.Enabled && monitoringRegistry != nil {
@@ -138,6 +148,10 @@ func main() {
 
 var chiefService ChiefService
 
+// logSubscriber reads job logs the workers publish while a job runs. It stays
+// nil when Redis is unreachable, in which case only finished logs are served.
+var logSubscriber logStreamSource
+
 func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHTTPEndpoint) *http.Server {
 	mux := http.NewServeMux()
 
@@ -151,6 +165,9 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	mux.HandleFunc("/api/v1/build-iso", BuildISOHandler)
 	mux.HandleFunc("/api/v1/iso-status", ISOStatusHandler)
 	mux.HandleFunc("/api/v1/version", VersionHandler)
+
+	mux.HandleFunc("/api/v1/log-stream", logStreamHandler(cfg.Chief.Workdir+"/logs", logSubscriber))
+	mux.HandleFunc("/logs/stream", logViewerHandler())
 
 	mux.HandleFunc("/maintainers", MaintainersHandler)
 

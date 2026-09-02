@@ -1,6 +1,7 @@
 package systemutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +42,11 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err err
 		}
 		_, _ = f.WriteString("##### RUN " + cmdStr + "\n")
 		f.Close()
-		cmdStr += " 2>&1 | tee -a " + logPath
+		// The command is wrapped in a brace group before being piped: `|`
+		// binds tighter than `&&`, so `a && b | tee log` would only log the
+		// output of `b`, silently dropping every earlier step of the
+		// `&&`-chains the workers are built from.
+		cmdStr = "{ " + cmdStr + "\n} 2>&1 | tee -a " + logPath
 	}
 	// `set -o pipefail` will forces to return the original exit code
 	output, err := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr).CombinedOutput()
@@ -103,12 +108,42 @@ func PrepareLogFile(logPath string) error {
 
 // StreamLog tailing a file
 func StreamLog(path string) {
+	StreamLogTo(path, nil)
+}
+
+// StreamLogTo tails a file, printing every line to stdout and, when sink is
+// non-nil, handing it the same line. It is used to mirror a job log to chief
+// while the job is still running.
+func StreamLogTo(path string, sink func(string)) {
+	StreamLogContext(context.Background(), path, sink)
+}
+
+// StreamLogContext is StreamLogTo with a lifetime: it stops tailing, and
+// releases the underlying file watcher, once ctx is cancelled.
+func StreamLogContext(ctx context.Context, path string, sink func(string)) {
 	t, err := tail.TailFile(path, tail.Config{Follow: true})
 	if err != nil {
 		log.Printf("error: %v\n", err)
+		return
 	}
-	for line := range t.Lines {
-		fmt.Println(line.Text)
+	defer func() {
+		_ = t.Stop()
+		t.Cleanup()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case line, ok := <-t.Lines:
+			if !ok {
+				return
+			}
+			fmt.Println(line.Text)
+			if sink != nil {
+				sink(line.Text)
+			}
+		}
 	}
 }
 

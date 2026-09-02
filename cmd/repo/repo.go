@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 	"github.com/manifoldco/promptui"
@@ -112,14 +113,15 @@ func Repo(payload string) (err error) {
 	logPath := irgshConfig.Repo.Workdir + "/artifacts/"
 	logPath += taskUUID + "/repo.log"
 
-	// Create the log file up front so that StreamLog has something to tail and
+	// Create the log file up front so that the tailer has something to follow and
 	// so early failures still end up in an uploadable log instead of being lost.
 	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
 		fmt.Printf("error: unable to prepare log file %s: %v\n", logPath, prepErr)
 		err = fmt.Errorf("unable to prepare log file %s: %w", logPath, prepErr)
 		return
 	}
-	go systemutil.StreamLog(logPath)
+	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "repo", logPath)
+	defer stopLogStream()
 
 	// Ensure notification is always sent on completion
 	defer func() {
