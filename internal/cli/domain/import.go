@@ -12,6 +12,7 @@ type ImportSubmission struct {
 	IsExperimental  bool     `json:"isExperimental"`
 	ForceVersion    bool     `json:"forceVersion"`
 	Insecure        bool     `json:"insecure"`
+	KeyringPath     string   `json:"keyringPath"`
 }
 
 // ImportStatus is the chief response for an import pipeline.
@@ -32,4 +33,5 @@ type ImportParams struct {
 	IsExperimental  bool
 	ForceVersion    bool
 	Insecure        bool
+	KeyringPath     string
 }

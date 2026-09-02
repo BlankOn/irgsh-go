@@ -172,6 +172,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 					Name:  "force-version",
 					Usage: "Replace the package version if our repository already has it",
 				},
+				cli.StringFlag{
+					Name:  "keyring",
+					Usage: "Absolute path on the repo worker to a keyring verifying the source repository",
+				},
 				cli.BoolFlag{
 					Name:  "insecure",
 					Usage: "Import from a repository whose Release file cannot be verified",
@@ -303,6 +307,7 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 			IsExperimental:  c.Bool("experimental"),
 			ForceVersion:    c.Bool("force-version"),
 			Insecure:        c.Bool("insecure"),
+			KeyringPath:     c.String("keyring"),
 		}
 		_, err := svc.SubmitImport(ctx, params)
 		return err

@@ -426,15 +426,8 @@ func (d *DashboardService) buildISOJobViews() []ISOJobView {
 
 	views := make([]ISOJobView, 0, len(isoJobs))
 	for _, job := range isoJobs {
-		statusClass := ""
-		switch job.State {
-		case "SUCCESS", "DONE":
-			statusClass = "status-online"
-		case "FAILURE", "FAILED":
-			statusClass = "status-offline"
-		case "STARTED", "RECEIVED":
-			statusClass = "status-warning"
-		}
+		job.State = d.resolveTaskState("iso", job.TaskUUID, job.State, d.isoStore.UpdateISOJobState)
+		statusClass := jobStateClass(job.State)
 
 		jakartaTime := job.SubmittedAt.In(jakartaLoc)
 		views = append(views, ISOJobView{
@@ -470,6 +463,7 @@ func (d *DashboardService) buildImportJobViews() []ImportJobView {
 
 	views := make([]ImportJobView, 0, len(importJobs))
 	for _, job := range importJobs {
+		job.State = d.resolveTaskState("import", job.TaskUUID, job.State, d.importStore.UpdateImportJobState)
 		jakartaTime := job.SubmittedAt.In(jakartaLoc)
 		views = append(views, ImportJobView{
 			TimeFormatted:  jakartaTime.Format("2006-01-02 15:04:05 MST"),
@@ -485,6 +479,30 @@ func (d *DashboardService) buildImportJobViews() []ImportJobView {
 		})
 	}
 	return views
+}
+
+// resolveTaskState brings a stored job state up to date from the task queue.
+//
+// The store only ever holds the state the job was recorded with, so without
+// this a single-task job (ISO, import) is displayed as PENDING forever, even
+// after the worker has finished or failed it.
+func (d *DashboardService) resolveTaskState(taskName, taskUUID, stored string, persist func(string, string) error) string {
+	if d.taskQueue == nil || storage.IsTerminalState(stored) || stored == "UNKNOWN" {
+		return stored
+	}
+
+	state := d.taskQueue.GetTaskState(taskName, taskUUID)
+	// Machinery expires task results; keep what we recorded.
+	if state == "" || state == stored {
+		return stored
+	}
+
+	if persist != nil {
+		if err := persist(taskUUID, state); err != nil {
+			log.Printf("Failed to update %s job state: %v\n", taskName, err)
+		}
+	}
+	return state
 }
 
 // jobStateClass maps a job state to the dashboard's status CSS class.

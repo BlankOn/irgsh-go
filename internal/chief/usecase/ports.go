@@ -56,12 +56,14 @@ type JobStore interface {
 type ISOJobStore interface {
 	RecordISOJob(job monitoring.ISOJobInfo) error
 	GetRecentISOJobs(limit int) ([]*monitoring.ISOJobInfo, error)
+	UpdateISOJobState(taskUUID string, state string) error
 }
 
 // ImportJobStore tracks package import job state.
 type ImportJobStore interface {
 	RecordImportJob(job monitoring.ImportJobInfo) error
 	GetRecentImportJobs(limit int) ([]*monitoring.ImportJobInfo, error)
+	UpdateImportJobState(taskUUID string, state string) error
 }
 
 // InstanceRegistry manages worker instance tracking and dashboard summaries.

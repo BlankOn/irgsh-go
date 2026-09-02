@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
+
+// safeKeyringPath matches an absolute path to a keyring file, with no shell
+// metacharacters: the worker interpolates it into a command.
+var safeKeyringPath = regexp.MustCompile(`^[a-zA-Z0-9._/-]+\.(gpg|asc)$`)
 
 // SubmissionService handles package submission, retry, ISO build and package
 // import workflows.
@@ -306,6 +311,13 @@ func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) 
 		if !domain.SafeIDPattern.MatchString(component) {
 			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
 				fmt.Sprintf("invalid component: %q", component))
+		}
+	}
+
+	if submission.KeyringPath != "" {
+		if !filepath.IsAbs(submission.KeyringPath) || !safeKeyringPath.MatchString(submission.KeyringPath) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				"keyringPath must be an absolute path to a .gpg or .asc keyring on the repo worker")
 		}
 	}
 

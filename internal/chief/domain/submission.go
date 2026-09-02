@@ -45,6 +45,9 @@ type ImportSubmission struct {
 	// Insecure imports from a repository whose Release file cannot be
 	// verified against the worker's keyrings.
 	Insecure bool `json:"insecure"`
+	// KeyringPath is an optional keyring on the repo worker to verify the
+	// source repository against.
+	KeyringPath string `json:"keyringPath"`
 }
 
 // ISOSubmission represents an ISO build request.

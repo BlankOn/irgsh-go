@@ -78,6 +78,7 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		IsExperimental:  params.IsExperimental,
 		ForceVersion:    params.ForceVersion,
 		Insecure:        params.Insecure,
+		KeyringPath:     params.KeyringPath,
 	}
 
 	resp, err := u.chief.SubmitImport(ctx, submission)

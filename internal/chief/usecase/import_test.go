@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
 	"github.com/blankon/irgsh-go/internal/monitoring"
@@ -13,9 +14,10 @@ import (
 
 // mockImportJobStore records what the service persists.
 type mockImportJobStore struct {
-	recorded []monitoring.ImportJobInfo
-	recent   []*monitoring.ImportJobInfo
-	err      error
+	recorded      []monitoring.ImportJobInfo
+	recent        []*monitoring.ImportJobInfo
+	updatedStates map[string]string
+	err           error
 }
 
 func (m *mockImportJobStore) RecordImportJob(job monitoring.ImportJobInfo) error {
@@ -25,6 +27,14 @@ func (m *mockImportJobStore) RecordImportJob(job monitoring.ImportJobInfo) error
 
 func (m *mockImportJobStore) GetRecentImportJobs(int) ([]*monitoring.ImportJobInfo, error) {
 	return m.recent, m.err
+}
+
+func (m *mockImportJobStore) UpdateImportJobState(taskUUID, state string) error {
+	if m.updatedStates == nil {
+		m.updatedStates = map[string]string{}
+	}
+	m.updatedStates[taskUUID] = state
+	return nil
 }
 
 func validImportSubmission() domain.ImportSubmission {
@@ -116,4 +126,70 @@ func TestImportPackages_WithoutJobStore(t *testing.T) {
 	resp, err := newTestImportService(&mockTaskQueue{}, nil).ImportPackages(validImportSubmission())
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.PipelineID)
+}
+
+func TestDashboardImportJobState_ResolvedFromTaskQueue(t *testing.T) {
+	now := time.Now()
+	store := &mockImportJobStore{
+		recent: []*monitoring.ImportJobInfo{
+			{TaskUUID: "running", Packages: "firefox", State: "PENDING", SubmittedAt: now},
+			{TaskUUID: "failed", Packages: "grub-pc", State: "PENDING", SubmittedAt: now},
+			{TaskUUID: "finished", Packages: "calamares", State: "SUCCESS", SubmittedAt: now},
+			{TaskUUID: "expired", Packages: "hello", State: "PENDING", SubmittedAt: now},
+		},
+	}
+	tq := &mockTaskQueue{
+		getTaskStateFn: func(taskName, taskUUID string) string {
+			if taskName != "import" {
+				t.Fatalf("expected the import task to be queried, got %q", taskName)
+			}
+			switch taskUUID {
+			case "running":
+				return "STARTED"
+			case "failed":
+				return "FAILURE"
+			case "expired":
+				return "" // machinery has expired the result
+			}
+			return ""
+		},
+	}
+
+	ds := &DashboardService{importStore: store, taskQueue: tq}
+	views := ds.buildImportJobViews()
+	require.Len(t, views, 4)
+
+	// A job the worker has already failed must not stay PENDING on the board.
+	assert.Equal(t, "STARTED", views[0].State)
+	assert.Equal(t, "FAILURE", views[1].State)
+	assert.Equal(t, "status-offline", views[1].StatusClass)
+	// A terminal state is never re-queried, and an expired result is kept.
+	assert.Equal(t, "SUCCESS", views[2].State)
+	assert.Equal(t, "PENDING", views[3].State)
+
+	// The resolved states are written back so they survive result expiry.
+	assert.Equal(t, "STARTED", store.updatedStates["running"])
+	assert.Equal(t, "FAILURE", store.updatedStates["failed"])
+	assert.NotContains(t, store.updatedStates, "finished")
+	assert.NotContains(t, store.updatedStates, "expired")
+}
+
+func TestImportPackages_KeyringPathValidation(t *testing.T) {
+	for _, bad := range []string{
+		"relative/keyring.gpg",
+		"/usr/share/keyrings/archive.txt",
+		"/usr/share/keyrings/$(id).gpg",
+		"/usr/share/keyrings/a;rm -rf /.gpg",
+	} {
+		submission := validImportSubmission()
+		submission.KeyringPath = bad
+		_, err := newTestImportService(&mockTaskQueue{}, nil).ImportPackages(submission)
+		require.Error(t, err, "keyringPath %q must be rejected", bad)
+		assert.Contains(t, err.Error(), "keyringPath")
+	}
+
+	submission := validImportSubmission()
+	submission.KeyringPath = "/usr/share/keyrings/debian-archive-keyring.gpg"
+	_, err := newTestImportService(&mockTaskQueue{}, nil).ImportPackages(submission)
+	require.NoError(t, err)
 }

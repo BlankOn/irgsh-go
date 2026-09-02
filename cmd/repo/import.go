@@ -26,6 +26,9 @@ type importSubmission struct {
 	IsExperimental  bool     `json:"isExperimental"`
 	ForceVersion    bool     `json:"forceVersion"`
 	Insecure        bool     `json:"insecure"`
+	// KeyringPath is an optional keyring on the worker to verify the source
+	// repository against, for a repo whose key is not installed system wide.
+	KeyringPath string `json:"keyringPath"`
 }
 
 func uploadImportLog(logPath string, id string) {
@@ -154,9 +157,9 @@ func (a *aptSandbox) aptOpts() string {
 		"-o Dir::State=" + sq(filepath.Join(a.root, "state")),
 		"-o Dir::State::status=" + sq(filepath.Join(a.root, "state", "status")),
 		"-o Dir::Cache=" + sq(filepath.Join(a.root, "cache")),
-		// Verify against the keyrings the worker already trusts, which is
-		// what makes importing from a Debian mirror work out of the box.
-		"-o Dir::Etc::trustedparts=/etc/apt/trusted.gpg.d",
+		// Verify against the keyrings collected in prepare(), which is what
+		// makes importing from a Debian mirror work out of the box.
+		"-o Dir::Etc::trustedparts=" + sq(a.trustedParts()),
 		"-o APT::Get::List-Cleanup=false",
 		"-o Acquire::Languages=none",
 		// apt drops to the _apt user for downloads, which cannot read the
@@ -175,6 +178,124 @@ func (a *aptSandbox) aptOpts() string {
 	return strings.Join(opts, " ")
 }
 
+// trustedParts is the sandbox directory holding every keyring apt may verify
+// the source repository against.
+func (a *aptSandbox) trustedParts() string {
+	return filepath.Join(a.root, "trusted.gpg.d")
+}
+
+// systemKeyringDirs are the directories searched for installed keyrings.
+//
+// /etc/apt/trusted.gpg.d alone is not enough: on a derivative like BlankOn it
+// holds the distribution's own key, while the Debian archive keys that
+// debian-archive-keyring installs live in /usr/share/keyrings and are what
+// verifying a Debian mirror needs.
+var systemKeyringDirs = []string{"/etc/apt/trusted.gpg.d", "/usr/share/keyrings"}
+
+// collectKeyrings links every keyring found in dirs, plus the optional extra
+// keyring file, into dest and reports how many were linked.
+func collectKeyrings(dirs []string, extra string, dest string) (int, error) {
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return 0, fmt.Errorf("failed to create %s: %w", dest, err)
+	}
+
+	link := func(tag, path string) bool {
+		// apt only reads keyrings ending in .gpg or .asc.
+		if ext := filepath.Ext(path); ext != ".gpg" && ext != ".asc" {
+			return false
+		}
+		// Tag the link with its source directory so two directories holding a
+		// keyring of the same name do not collide.
+		target := filepath.Join(dest, tag+"-"+filepath.Base(path))
+		if _, err := os.Lstat(target); err == nil {
+			return false
+		}
+		return os.Symlink(path, target) == nil
+	}
+
+	var linked int
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			// A missing keyring directory is normal, not an error.
+			continue
+		}
+		tag := strings.NewReplacer("/", "_", ".", "_").Replace(strings.Trim(dir, "/"))
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if link(tag, filepath.Join(dir, entry.Name())) {
+				linked++
+			}
+		}
+	}
+
+	if extra != "" {
+		if _, err := os.Stat(extra); err != nil {
+			return linked, fmt.Errorf("keyring %s is not readable on this worker: %w", extra, err)
+		}
+		if !link("keyring", extra) {
+			return linked, fmt.Errorf("keyring %s could not be used; it must end in .gpg or .asc", extra)
+		}
+		linked++
+	}
+
+	return linked, nil
+}
+
+// signatureHint turns apt's signature failure into something a maintainer can
+// act on, rather than a bare exit status.
+func signatureHint(output string) string {
+	if !strings.Contains(output, "NO_PUBKEY") && !strings.Contains(output, "is not signed") {
+		return ""
+	}
+
+	hint := "##### The source repository could not be verified with the keyrings installed on this worker.\n"
+	if keys := missingKeyIDs(output); len(keys) > 0 {
+		hint += "##### Missing public key(s): " + strings.Join(keys, ", ") + "\n"
+	}
+	hint += "##### Fix it in one of these ways:\n" +
+		"#####   1. Install the source repository's keyring on the repo worker,\n" +
+		"#####      for a Debian mirror: sudo apt-get install debian-archive-keyring\n" +
+		"#####      (already installed? it may be too old for this suite: apt-get upgrade it)\n" +
+		"#####   2. Point at a keyring explicitly: irgsh-cli import --keyring /usr/share/keyrings/debian-archive-keyring.gpg ...\n" +
+		"#####   3. Import without verifying the source at all: irgsh-cli import --insecure ..."
+	return hint
+}
+
+// missingKeyIDs extracts the key IDs apt reported as unavailable.
+func missingKeyIDs(output string) []string {
+	var keys []string
+	seen := map[string]bool{}
+	for _, field := range strings.Fields(output) {
+		if !strings.HasPrefix(field, "NO_PUBKEY") {
+			continue
+		}
+		key := strings.TrimPrefix(field, "NO_PUBKEY")
+		if key == "" {
+			continue
+		}
+		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+
+	// "NO_PUBKEY <id>" is two fields; pick up the ids that follow.
+	fields := strings.Fields(output)
+	for i, field := range fields {
+		if field == "NO_PUBKEY" && i+1 < len(fields) {
+			key := fields[i+1]
+			if !seen[key] {
+				seen[key] = true
+				keys = append(keys, key)
+			}
+		}
+	}
+	return keys
+}
+
 func (a *aptSandbox) prepare(logPath string) error {
 	for _, dir := range []string{
 		filepath.Join(a.root, "state", "lists", "partial"),
@@ -188,6 +309,18 @@ func (a *aptSandbox) prepare(logPath string) error {
 	if err := os.WriteFile(filepath.Join(a.root, "state", "status"), nil, 0644); err != nil {
 		return fmt.Errorf("failed to create the apt status file: %w", err)
 	}
+
+	keyrings, err := collectKeyrings(systemKeyringDirs, a.submission.KeyringPath, a.trustedParts())
+	if err != nil {
+		return err
+	}
+	systemutil.WriteLog(logPath, fmt.Sprintf("##### Verifying against %d keyring(s) installed on this worker", keyrings))
+	if keyrings == 0 && !a.submission.Insecure {
+		return fmt.Errorf("no keyrings are installed on this worker, so %s cannot be verified; "+
+			"install the source repository's keyring, pass --keyring, or import with --insecure",
+			a.submission.SourceURL)
+	}
+
 	trusted := ""
 	if a.submission.Insecure {
 		trusted = "[trusted=yes] "
@@ -200,12 +333,18 @@ func (a *aptSandbox) prepare(logPath string) error {
 	}
 	systemutil.WriteLog(logPath, "##### sources.list\n"+sourcesList)
 
-	_, err := systemutil.CmdExec(
+	out, err := systemutil.CmdExec(
 		fmt.Sprintf("apt-get %s update", a.aptOpts()),
 		"Fetching the package indices of the source repository",
 		logPath,
 	)
-	return err
+	if err != nil {
+		if hint := signatureHint(out); hint != "" {
+			systemutil.WriteLog(logPath, hint)
+		}
+		return err
+	}
+	return nil
 }
 
 // resolveSourcePackages maps each requested binary package to the source

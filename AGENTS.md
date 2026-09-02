@@ -173,6 +173,12 @@ Unlike the packaging flow, reprepro runs without `--nothingiserror`, so a
 version our repository already carries is skipped rather than failing the job.
 Use `--force-version` to replace it.
 
+The source repository is verified against every keyring installed on the repo
+worker, collected from both `/etc/apt/trusted.gpg.d` and `/usr/share/keyrings`
+(a derivative like BlankOn keeps its own key in the former and the Debian
+archive keys in the latter). Use `--keyring <path>` for a repository whose key
+is elsewhere, or `--insecure` to skip verification.
+
 ### Pipeline Flow
 1. CLI validates and submits package (GPG signed)
 2. Chief queues build task to Redis
