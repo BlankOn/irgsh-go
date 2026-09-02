@@ -104,10 +104,12 @@ func Import(payload string) (err error) {
 	}
 	systemutil.WriteLog(logPath, "##### Source packages to import: "+strings.Join(sources, ", "))
 
+	metadata := map[string]sourceMeta{}
 	for _, source := range sources {
 		if err = apt.fetchSource(logPath, source); err != nil {
 			return fail("Failed to fetch source package "+source, err)
 		}
+		metadata[source] = apt.sourceMetadata(logPath, source)
 		binaries, binErr := apt.binariesOf(logPath, source)
 		if binErr != nil {
 			return fail("Failed to list the binaries of "+source, binErr)
@@ -117,7 +119,7 @@ func Import(payload string) (err error) {
 		}
 	}
 
-	if err = injectImportedFiles(logPath, workdir, submission); err != nil {
+	if err = injectImportedFiles(logPath, workdir, submission, metadata); err != nil {
 		return fail("Failed to inject the imported packages", err)
 	}
 
@@ -374,6 +376,51 @@ func (a *aptSandbox) resolveSourcePackages(logPath string, packages []string) ([
 	return sources, nil
 }
 
+// sourceMeta is the section and priority reprepro needs to file a source
+// package, which a .dsc does not have to carry.
+type sourceMeta struct {
+	section  string
+	priority string
+}
+
+// sourceMetadata reads the section and priority of a source package from the
+// repository index.
+//
+// Most .dsc files describe their binaries in Package-List but have no Section
+// or Priority of their own, and reprepro then refuses the package with
+// "No priority for '<source>', skipping." The index always has both.
+func (a *aptSandbox) sourceMetadata(logPath, source string) sourceMeta {
+	read := func(field string) string {
+		out, err := systemutil.CmdExec(
+			fmt.Sprintf("apt-cache %s showsrc %s | grep -m1 '^%s:' | cut -d' ' -f2", a.aptOpts(), sq(source), field),
+			"Reading the "+strings.ToLower(field)+" of "+source,
+			logPath,
+		)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(lastLine(out))
+	}
+
+	return normalizeSourceMeta(read("Section"), read("Priority"))
+}
+
+// normalizeSourceMeta fills in what the index does not give us.
+func normalizeSourceMeta(section, priority string) sourceMeta {
+	section = strings.TrimSpace(section)
+	priority = strings.TrimSpace(priority)
+
+	// Sources indices still carry the legacy "Priority: source", which is not
+	// a package priority reprepro can file the package under.
+	if priority == "" || priority == "source" {
+		priority = "optional"
+	}
+	if section == "" {
+		section = "misc"
+	}
+	return sourceMeta{section: section, priority: priority}
+}
+
 func (a *aptSandbox) fetchSource(logPath, source string) error {
 	_, err := systemutil.CmdExec(
 		fmt.Sprintf("cd %s && apt-get %s source --download-only %s", sq(a.downloads), a.aptOpts(), sq(source)),
@@ -437,7 +484,7 @@ func (a *aptSandbox) fetchBinaries(logPath string, binaries []string) error {
 // reprepro is deliberately run without --nothingiserror: a package version
 // that our repository already carries is reported and skipped, which is a
 // successful no-op for an import rather than a failure.
-func injectImportedFiles(logPath, workdir string, submission importSubmission) error {
+func injectImportedFiles(logPath, workdir string, submission importSubmission, metadata map[string]sourceMeta) error {
 	downloads := filepath.Join(workdir, "files")
 	dist := irgshConfig.Repo.DistCodename + experimentalSuffix(submission.IsExperimental)
 	distDir := filepath.Join(irgshConfig.Repo.Workdir, dist)
@@ -471,9 +518,24 @@ func injectImportedFiles(logPath, workdir string, submission importSubmission) e
 		}
 	}
 
+	if len(dscFiles) > 0 {
+		systemutil.WriteLog(logPath, "##### Note: reprepro cannot check the .dsc signatures of an imported package, "+
+			"because the uploaders' keys are not in the repository keyring. The download itself was already "+
+			"verified against the source repository's signed Release file.")
+	}
+
 	for _, dsc := range dscFiles {
-		cmdStr := fmt.Sprintf("mkdir -p %s && cd %s/ && %s reprepro -v -v -v %s --component %s includedsc %s %s",
-			sq(distDir), sq(distDir), gnupgDir, ignoreDistribution, submission.Component, dist, sq(dsc))
+		meta := metadata[sourceNameOf(dsc)]
+		if meta.section == "" {
+			meta.section = "misc"
+		}
+		if meta.priority == "" {
+			meta.priority = "optional"
+		}
+
+		cmdStr := fmt.Sprintf("mkdir -p %s && cd %s/ && %s reprepro -v -v -v %s --component %s --section %s --priority %s includedsc %s %s",
+			sq(distDir), sq(distDir), gnupgDir, ignoreDistribution, submission.Component,
+			sq(meta.section), sq(meta.priority), dist, sq(dsc))
 		if _, err := systemutil.CmdExec(cmdStr, "Injecting the source package "+filepath.Base(dsc), logPath); err != nil {
 			return err
 		}
@@ -492,11 +554,17 @@ func injectImportedFiles(logPath, workdir string, submission importSubmission) e
 	return err
 }
 
+// sourceNameOf derives the source package name from a .dsc filename, which
+// is always "<source>_<version>.dsc".
+func sourceNameOf(dscPath string) string {
+	return strings.SplitN(filepath.Base(dscPath), "_", 2)[0]
+}
+
 // removeExistingVersions drops the source packages being imported, and their
 // binaries, before injecting the new ones.
 func removeExistingVersions(logPath, dist, distDir, gnupgDir string, dscFiles []string) error {
 	for _, dsc := range dscFiles {
-		source := strings.SplitN(filepath.Base(dsc), "_", 2)[0]
+		source := sourceNameOf(dsc)
 		cmdStr := fmt.Sprintf("mkdir -p %s && cd %s/ && %s reprepro -v -v -v removesrc %s %s",
 			sq(distDir), sq(distDir), gnupgDir, dist, sq(source))
 		if _, err := systemutil.CmdExec(cmdStr,

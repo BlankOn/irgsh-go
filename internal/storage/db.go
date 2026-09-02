@@ -51,10 +51,60 @@ func NewDB(dbPath string) (*DB, error) {
 	return wrappedDB, nil
 }
 
-// initSchema creates the database tables if they don't exist
+// initSchema creates the database tables if they don't exist, then brings
+// existing tables up to date.
 func (db *DB) initSchema() error {
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	return db.applyMigrations()
+}
+
+// applyMigrations adds columns that were introduced after a database was
+// created. CREATE TABLE IF NOT EXISTS leaves an existing table untouched, so
+// a chief that has already run cannot pick up a new column without this.
+func (db *DB) applyMigrations() error {
+	for _, migration := range columnMigrations {
+		exists, err := db.columnExists(migration.table, migration.column)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		stmt := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", migration.table, migration.column, migration.definition)
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to add %s.%s: %w", migration.table, migration.column, err)
+		}
+	}
+	return nil
+}
+
+// columnExists reports whether a table already has a column.
+func (db *DB) columnExists(table, column string) (bool, error) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			ctype      string
+			notNull    int
+			defaultVal sql.NullString
+			pk         int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &defaultVal, &pk); err != nil {
+			return false, fmt.Errorf("failed to inspect %s: %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // Close closes the database connection

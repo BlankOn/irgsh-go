@@ -42,6 +42,7 @@ func validImportSubmission() domain.ImportSubmission {
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
 		PackageNames: []string{"grub-efi-amd64-bin", "calamares"},
+		Maintainer:   "Herpiko Dwi Aguno <herpiko@gmail.com>",
 	}
 }
 
@@ -105,9 +106,11 @@ func TestImportPackages_QueuesTaskAndRecordsJob(t *testing.T) {
 	require.Len(t, store.recorded, 1)
 	recorded := store.recorded[0]
 	assert.Equal(t, queuedUUID, recorded.TaskUUID)
-	assert.Equal(t, "grub-efi-amd64-bin calamares", recorded.Packages)
+	assert.Equal(t, "grub-efi-amd64-bin, calamares", recorded.Packages)
 	assert.Equal(t, "sid", recorded.Dist)
 	assert.Equal(t, "PENDING", recorded.State)
+	assert.Equal(t, "Herpiko Dwi Aguno <herpiko@gmail.com>", recorded.Maintainer,
+		"the dashboard needs to show who triggered the import")
 }
 
 func TestImportPackages_QueueFailureIsReported(t *testing.T) {
@@ -192,4 +195,41 @@ func TestImportPackages_KeyringPathValidation(t *testing.T) {
 	submission.KeyringPath = "/usr/share/keyrings/debian-archive-keyring.gpg"
 	_, err := newTestImportService(&mockTaskQueue{}, nil).ImportPackages(submission)
 	require.NoError(t, err)
+}
+
+func TestFormatPackageList(t *testing.T) {
+	cases := map[string]string{
+		// Rows written before the list was stored comma separated.
+		"grub-efi-amd64-bin grub-pc":  "grub-efi-amd64-bin, grub-pc",
+		"grub-efi-amd64-bin, grub-pc": "grub-efi-amd64-bin, grub-pc",
+		"firefox":                     "firefox",
+		"":                            "",
+	}
+	for input, want := range cases {
+		assert.Equal(t, want, formatPackageList(input), "input %q", input)
+	}
+}
+
+func TestImportJobView_SpinnerAndImporter(t *testing.T) {
+	now := time.Now()
+	store := &mockImportJobStore{
+		recent: []*monitoring.ImportJobInfo{
+			{TaskUUID: "a", Packages: "grub-efi-amd64-bin grub-pc", Maintainer: "Herpiko Dwi Aguno <herpiko@gmail.com>", State: "STARTED", SubmittedAt: now},
+			{TaskUUID: "b", Packages: "firefox", Maintainer: "Herpiko Dwi Aguno <herpiko@gmail.com>", State: "SUCCESS", SubmittedAt: now},
+			{TaskUUID: "c", Packages: "firefox", Maintainer: "Herpiko Dwi Aguno <herpiko@gmail.com>", State: "FAILURE", SubmittedAt: now},
+			{TaskUUID: "d", Packages: "firefox", Maintainer: "Herpiko Dwi Aguno <herpiko@gmail.com>", State: "PENDING", SubmittedAt: now},
+		},
+	}
+	ds := &DashboardService{importStore: store}
+	views := ds.buildImportJobViews()
+	require.Len(t, views, 4)
+
+	// A running job shows the spinner, exactly like a packaging job.
+	assert.True(t, views[0].ShowSpinner, "STARTED must spin")
+	assert.False(t, views[1].ShowSpinner, "SUCCESS must not spin")
+	assert.False(t, views[2].ShowSpinner, "FAILURE must not spin")
+	assert.True(t, views[3].ShowSpinner, "PENDING must spin")
+
+	assert.Equal(t, "grub-efi-amd64-bin, grub-pc", views[0].Packages)
+	assert.Equal(t, "Herpiko Dwi Aguno <herpiko@gmail.com>", views[0].Maintainer)
 }

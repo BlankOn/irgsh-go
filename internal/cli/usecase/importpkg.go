@@ -33,7 +33,8 @@ func SplitPackageNames(value string) []string {
 // SubmitImport asks chief to import already built packages from an external
 // Debian repository into ours.
 func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParams) (domain.SubmitResponse, error) {
-	if _, err := u.config.Load(); err != nil {
+	cfg, err := u.config.Load()
+	if err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
 
@@ -61,10 +62,18 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		sourceComponent = "main"
 	}
 
+	// Record who triggered the import. There is nothing to verify here, but
+	// the dashboard should still show who asked for it.
+	maintainer, err := u.gpg.GetIdentity(cfg.MaintainerSigningKey)
+	if err != nil {
+		return domain.SubmitResponse{}, fmt.Errorf("failed to read the identity of your signing key: %w", err)
+	}
+
 	fmt.Println("Submitting package import job...")
 	fmt.Printf("Source: %s (%s/%s)\n", params.SourceURL, params.Dist, sourceComponent)
 	fmt.Printf("Packages: %s\n", strings.Join(params.PackageNames, ", "))
 	fmt.Printf("Target component: %s\n", component)
+	fmt.Printf("Importer: %s\n", maintainer)
 	if params.Insecure {
 		fmt.Println("Warning: --insecure skips verification of the source repository's signature")
 	}
@@ -79,6 +88,7 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		ForceVersion:    params.ForceVersion,
 		Insecure:        params.Insecure,
 		KeyringPath:     params.KeyringPath,
+		Maintainer:      maintainer,
 	}
 
 	resp, err := u.chief.SubmitImport(ctx, submission)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
@@ -101,9 +102,11 @@ type ImportJobView struct {
 	Dist           string
 	Packages       string
 	Component      string
+	Maintainer     string
 	IsExperimental bool
 	State          string
 	StatusClass    string
+	ShowSpinner    bool
 	TaskUUID       string
 }
 
@@ -470,11 +473,13 @@ func (d *DashboardService) buildImportJobViews() []ImportJobView {
 			TimeRelative:   formatRelativeTime(job.SubmittedAt),
 			SourceURL:      job.SourceURL,
 			Dist:           job.Dist,
-			Packages:       job.Packages,
+			Packages:       formatPackageList(job.Packages),
 			Component:      job.Component,
+			Maintainer:     job.Maintainer,
 			IsExperimental: job.IsExperimental,
 			State:          job.State,
 			StatusClass:    jobStateClass(job.State),
+			ShowSpinner:    isJobRunning(job.State),
 			TaskUUID:       job.TaskUUID,
 		})
 	}
@@ -503,6 +508,25 @@ func (d *DashboardService) resolveTaskState(taskName, taskUUID, stored string, p
 		}
 	}
 	return state
+}
+
+// formatPackageList renders a stored package list as "a, b, c", including
+// rows written before the list was stored comma separated.
+func formatPackageList(packages string) string {
+	names := strings.FieldsFunc(packages, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	})
+	return strings.Join(names, ", ")
+}
+
+// isJobRunning reports whether a single-task job is still in flight, so the
+// dashboard can show the same spinner the packaging jobs use.
+func isJobRunning(state string) bool {
+	switch state {
+	case "SUCCESS", "DONE", "FAILURE", "FAILED", "UNKNOWN", "":
+		return false
+	}
+	return true
 }
 
 // jobStateClass maps a job state to the dashboard's status CSS class.

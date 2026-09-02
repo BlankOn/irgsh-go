@@ -131,3 +131,45 @@ func TestMissingKeyIDs_Deduplicates(t *testing.T) {
 		t.Fatalf("expected [ABC DEF], got %v", keys)
 	}
 }
+
+func TestSourceNameOf(t *testing.T) {
+	cases := map[string]string{
+		"/var/lib/irgsh/repo/imports/job/files/rygel_45.2-1.dsc": "rygel",
+		"grub2_2.12-9+deb13u2.dsc":                               "grub2",
+		"hello_2.10-5.dsc":                                       "hello",
+	}
+	for path, want := range cases {
+		if got := sourceNameOf(path); got != want {
+			t.Fatalf("sourceNameOf(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
+// A .dsc usually has no Section or Priority of its own; without supplying
+// them reprepro refuses the source with "No priority for '<source>'".
+func TestNormalizeSourceMeta(t *testing.T) {
+	cases := []struct {
+		name         string
+		section      string
+		priority     string
+		wantSection  string
+		wantPriority string
+	}{
+		{"as the index reports it", "net", "optional", "net", "optional"},
+		{"legacy source priority", "net", "source", "net", "optional"},
+		{"missing priority", "net", "", "net", "optional"},
+		{"missing section", "", "optional", "misc", "optional"},
+		{"nothing at all", "", "", "misc", "optional"},
+		{"whitespace", "  gnome  ", "  extra  ", "gnome", "extra"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			meta := normalizeSourceMeta(tc.section, tc.priority)
+			if meta.section != tc.wantSection || meta.priority != tc.wantPriority {
+				t.Fatalf("got section=%q priority=%q, want section=%q priority=%q",
+					meta.section, meta.priority, tc.wantSection, tc.wantPriority)
+			}
+		})
+	}
+}

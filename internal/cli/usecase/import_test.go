@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
@@ -28,8 +29,13 @@ func TestSplitPackageNames(t *testing.T) {
 func newImportUsecase(t *testing.T, chief *mockChiefAPI, pipelines *mockPipelineStore) *usecase.CLIUsecase {
 	t.Helper()
 	return usecase.NewCLIUsecase(
-		&mockConfigStore{config: domain.Config{ChiefAddress: "https://irgsh.example.id"}},
-		pipelines, chief, nil, nil, nil, nil, nil, nil, nil, "1.0.0",
+		&mockConfigStore{config: domain.Config{
+			ChiefAddress:         "https://irgsh.example.id",
+			MaintainerSigningKey: "54495BCCA444849BD55A84ED5115CB575CE255A8",
+		}},
+		pipelines, chief, nil, nil, nil,
+		&mockGPGSigner{identity: "Herpiko Dwi Aguno <herpiko@gmail.com>"},
+		nil, nil, nil, "1.0.0",
 	)
 }
 
@@ -76,6 +82,8 @@ func TestSubmitImport_AppliesDefaultsAndSavesPipelineID(t *testing.T) {
 	assert.Equal(t, "main", chief.importSubmitted.Component)
 	assert.Equal(t, "main", chief.importSubmitted.SourceComponent)
 	assert.Equal(t, "sid", chief.importSubmitted.Dist)
+	// The dashboard shows who triggered the import.
+	assert.Equal(t, "Herpiko Dwi Aguno <herpiko@gmail.com>", chief.importSubmitted.Maintainer)
 	// The ID is remembered so `irgsh-cli import status` works with no argument.
 	assert.Equal(t, "2026-09-03-101010_abc_import", pipelines.importID)
 }
@@ -92,4 +100,21 @@ func TestImportStatus_UsesLastPipelineID(t *testing.T) {
 func TestImportStatus_WithoutAnyPipelineID(t *testing.T) {
 	_, err := newImportUsecase(t, &mockChiefAPI{}, &mockPipelineStore{}).ImportStatus(context.Background(), "")
 	assert.ErrorIs(t, err, usecase.ErrPipelineIDMissing)
+}
+
+func TestSubmitImport_SigningKeyIdentityUnavailable(t *testing.T) {
+	usecaseWithBrokenGPG := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{ChiefAddress: "https://irgsh.example.id"}},
+		&mockPipelineStore{}, &mockChiefAPI{}, nil, nil, nil,
+		&mockGPGSigner{err: errors.New("no secret key")},
+		nil, nil, nil, "1.0.0",
+	)
+
+	_, err := usecaseWithBrokenGPG.SubmitImport(context.Background(), domain.ImportParams{
+		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+		Dist:         "sid",
+		PackageNames: []string{"firefox"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "signing key")
 }

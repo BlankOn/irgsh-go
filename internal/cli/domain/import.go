@@ -13,6 +13,7 @@ type ImportSubmission struct {
 	ForceVersion    bool     `json:"forceVersion"`
 	Insecure        bool     `json:"insecure"`
 	KeyringPath     string   `json:"keyringPath"`
+	Maintainer      string   `json:"maintainer"`
 }
 
 // ImportStatus is the chief response for an import pipeline.

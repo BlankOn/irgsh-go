@@ -48,6 +48,9 @@ type ImportSubmission struct {
 	// KeyringPath is an optional keyring on the repo worker to verify the
 	// source repository against.
 	KeyringPath string `json:"keyringPath"`
+	// Maintainer is the identity of whoever triggered the import, taken from
+	// the CLI's configured signing key.
+	Maintainer string `json:"maintainer"`
 }
 
 // ISOSubmission represents an ISO build request.
