@@ -83,14 +83,14 @@ func Build(payload string) (next string, err error) {
 
 	next, err = BuildPreparation(payload)
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
 
 	next, err = BuildPackage(payload)
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -98,7 +98,7 @@ func Build(payload string) (next string, err error) {
 	next, err = StorePackage(payload)
 
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}

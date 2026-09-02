@@ -58,8 +58,8 @@ func BuildISO(payload string) (next string, err error) {
 
 	// Extract job info for notifications
 	jobInfo := notification.JobNotificationInfo{
-		PackageName: "ISO Image",
-		SourceURL:   submission.RepoURL,
+		PackageName:  "ISO Image",
+		SourceURL:    submission.RepoURL,
 		SourceBranch: submission.Branch,
 	}
 
@@ -89,7 +89,7 @@ func BuildISO(payload string) (next string, err error) {
 	// Check if script exists
 	if _, statErr := os.Stat(scriptPath); os.IsNotExist(statErr) {
 		err = fmt.Errorf("iso-build.sh script not found at %s", scriptPath)
-		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+err.Error())
+		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return "", err
 	}
@@ -108,7 +108,7 @@ func BuildISO(payload string) (next string, err error) {
 		logPath,
 	)
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] Build failed: "+err.Error())
+		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] Build failed: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return "", err
 	}
@@ -119,14 +119,14 @@ func BuildISO(payload string) (next string, err error) {
 	isoFiles, globErr := filepath.Glob(isoPattern)
 	if globErr != nil {
 		err = fmt.Errorf("failed to search for ISO files: %v", globErr)
-		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+err.Error())
+		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return "", err
 	}
 
 	if len(isoFiles) == 0 {
 		err = fmt.Errorf("no ISO file found in %s/current/", irgshConfig.ISO.Outputdir)
-		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+err.Error())
+		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return "", err
 	}
