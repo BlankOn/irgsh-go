@@ -55,12 +55,9 @@ echo
 if [ -x "$(command -v irgsh-chief )" ]; then
 	echo "Stopping existing instance(s) ... "
 	systemctl daemon-reload
-	/etc/init.d/irgsh-chief stop || true
-	/etc/init.d/irgsh-builder stop || true
-	/etc/init.d/irgsh-repo stop || true
-	systemctl stop irgsh-chief
-	systemctl stop irgsh-builder
-	systemctl stop irgsh-repo
+	systemctl stop irgsh-chief || true
+	systemctl stop irgsh-builder || true
+	systemctl stop irgsh-repo || true
 	killall irgsh-chief || true
 	killall irgsh-builder || true
 	killall irgsh-repo || true
@@ -94,7 +91,7 @@ echo "Installing files ... "
 cp -v $TEMP_PATH/irgsh-go/usr/bin/* /usr/bin/
 cp -v $TEMP_PATH/irgsh-go/usr/share/irgsh/init.sh /usr/bin/irgsh-init
 cp -vR $TEMP_PATH/irgsh-go/usr/share/irgsh/* /usr/share/irgsh/
-cp -v $TEMP_PATH/irgsh-go/etc/init.d/* /etc/init.d/
+cp -v $TEMP_PATH/irgsh-go/lib/systemd/system/* /lib/systemd/system/
 systemctl daemon-reload
 # Configuration file
 if [ ! -f "/etc/irgsh/config.yaml" ]; then
@@ -149,8 +146,8 @@ fi
 popd >/dev/null
 
 # Enable the services
-/lib/systemd/systemd-sysv-install enable irgsh-chief
-/lib/systemd/systemd-sysv-install enable irgsh-builder
-/lib/systemd/systemd-sysv-install enable irgsh-repo
+systemctl enable irgsh-chief
+systemctl enable irgsh-builder
+systemctl enable irgsh-repo
 
 echo "Happy hacking!"
