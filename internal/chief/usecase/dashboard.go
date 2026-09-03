@@ -49,6 +49,7 @@ type TypeCount struct {
 type WorkerView struct {
 	Type        string
 	BadgeClass  string
+	Dist        string
 	Hostname    string
 	Status      string
 	StatusClass string
@@ -242,6 +243,7 @@ func buildWorkerViews(instances []*monitoring.InstanceInfo) []WorkerView {
 		views = append(views, WorkerView{
 			Type:        string(inst.InstanceType),
 			BadgeClass:  badgeClass,
+			Dist:        inst.Dist,
 			Hostname:    inst.Hostname,
 			Status:      string(inst.Status),
 			StatusClass: statusClass,
