@@ -32,24 +32,6 @@
         .nav a:hover {
             text-decoration: underline;
         }
-        .summary {
-            background: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 4px solid #4CAF50;
-            display: inline-block;
-        }
-        .summary-item {
-            display: inline-block;
-            margin-right: 30px;
-            font-size: 14px;
-            vertical-align: top;
-        }
-        .summary-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
-        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -165,53 +147,8 @@
         <div>irgsh-chief {{.Version}}</div>
     </div>
 
-<div class="section-title">Package Maintainers</div>
-{{- if .Maintainers}}
-    <table>
-        <thead>
-            <tr>
-                <th>GPG Key</th>
-                <th>Name</th>
-                <th>Email</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{- range .Maintainers}}
-            <tr>
-                <td style="font-family: monospace;">{{.KeyID}}</td>
-                <td>{{.Name}}</td>
-                <td>{{.Email}}</td>
-            </tr>
-        {{- end}}
-        </tbody>
-    </table>
-{{- else}}
-    <div class="empty-state">No maintainers found</div>
-{{- end}}
-
 {{- if .HasMonitoring}}
 <div class="section-title">Workers</div>
-    <div class="summary">
-        <div class="summary-item">
-            <div class="summary-number">{{.Summary.Total}}</div>
-            <div>Total Instances</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-number" style="color: #4CAF50;">{{.Summary.Online}}</div>
-            <div>Online</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-number" style="color: #f44336;">{{.Summary.Offline}}</div>
-            <div>Offline</div>
-        </div>
-    {{- range .Summary.ByType}}
-        <div class="summary-item">
-            <div class="summary-number" style="color: #2196F3;">{{.Count}}</div>
-            <div>{{.Name}}</div>
-        </div>
-    {{- end}}
-    </div>
-
     {{- if .Workers}}
     <table>
         <thead>
@@ -380,6 +317,30 @@
         {{- end}}
     </div>
     {{- end}}
+
+<div class="section-title">Package Maintainers</div>
+{{- if .Maintainers}}
+    <table>
+        <thead>
+            <tr>
+                <th>GPG Key</th>
+                <th>Name</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{- range .Maintainers}}
+            <tr>
+                <td style="font-family: monospace;">{{.KeyID}}</td>
+                <td>{{.Name}}</td>
+                <td>{{.Email}}</td>
+            </tr>
+        {{- end}}
+        </tbody>
+    </table>
+{{- else}}
+    <div class="empty-state">No maintainers found</div>
+{{- end}}
 
     <div class="refresh-info">
         Page auto-refreshes every 10 seconds
