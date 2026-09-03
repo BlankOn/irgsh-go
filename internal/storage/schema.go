@@ -4,6 +4,7 @@ const schema = `
 CREATE TABLE IF NOT EXISTS jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_uuid TEXT UNIQUE NOT NULL,
+    dist TEXT NOT NULL DEFAULT '',
     package_name TEXT NOT NULL,
     package_version TEXT NOT NULL,
     maintainer TEXT NOT NULL,
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE TABLE IF NOT EXISTS iso_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_uuid TEXT UNIQUE NOT NULL,
+    dist TEXT NOT NULL DEFAULT '',
     repo_url TEXT NOT NULL,
     branch TEXT NOT NULL,
     submitted_at DATETIME NOT NULL,
@@ -38,6 +40,7 @@ CREATE TABLE IF NOT EXISTS import_jobs (
     task_uuid TEXT UNIQUE NOT NULL,
     source_url TEXT NOT NULL,
     dist TEXT NOT NULL,
+    target_dist TEXT NOT NULL DEFAULT '',
     packages TEXT NOT NULL,
     component TEXT NOT NULL DEFAULT 'main',
     maintainer TEXT NOT NULL DEFAULT '',
@@ -67,4 +70,7 @@ type columnMigration struct {
 // already present.
 var columnMigrations = []columnMigration{
 	{table: "import_jobs", column: "maintainer", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "jobs", column: "dist", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "iso_jobs", column: "dist", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "import_jobs", column: "target_dist", definition: "TEXT NOT NULL DEFAULT ''"},
 }

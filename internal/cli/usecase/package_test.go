@@ -29,6 +29,7 @@ func TestSubmitPackage_VersionMismatch(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, "1.0.0",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:       "verbeek",
 		PackageURL: "https://git.example.com/pkg",
 	})
 	require.Error(t, err)
@@ -43,10 +44,24 @@ func TestSubmitPackage_ChiefConnectError(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, "1.0.0",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:       "verbeek",
 		PackageURL: "https://git.example.com/pkg",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "connect to chief")
+}
+
+func TestSubmitPackage_EmptyDist(t *testing.T) {
+	svc := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
+	)
+	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		IgnoreChecks: true,
+		PackageURL:   "https://git.example.com/pkg",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--dist is required")
 }
 
 func TestSubmitPackage_EmptyPackageURL(t *testing.T) {
@@ -55,6 +70,7 @@ func TestSubmitPackage_EmptyPackageURL(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:         "verbeek",
 		IgnoreChecks: true,
 	})
 	require.Error(t, err)
@@ -67,6 +83,7 @@ func TestSubmitPackage_InvalidPackageURL(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:         "verbeek",
 		IgnoreChecks: true,
 		PackageURL:   "not-a-url",
 	})
@@ -80,6 +97,7 @@ func TestSubmitPackage_InvalidSourceURL(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:         "verbeek",
 		IgnoreChecks: true,
 		PackageURL:   "https://git.example.com/pkg",
 		SourceURL:    "ftp://invalid",
@@ -96,6 +114,7 @@ func TestSubmitPackage_UserCancelled(t *testing.T) {
 		"",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:           "verbeek",
 		IgnoreChecks:   true,
 		PackageURL:     "https://git.example.com/pkg",
 		IsExperimental: false,

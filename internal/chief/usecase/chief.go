@@ -101,14 +101,28 @@ func (s *ChiefUsecase) ImportPackages(submission domain.ImportSubmission) (domai
 	return s.submissionSvc.ImportPackages(submission)
 }
 
-// RepoInfo reports where the repository is published and under which
-// codename, from this chief's configuration.
-func (s *ChiefUsecase) RepoInfo() domain.RepoInfo {
-	return domain.RepoInfo{
-		PublicURL:      s.config.Repo.PublicURL,
-		DistCodename:   s.config.Repo.DistCodename,
-		DistComponents: s.config.Repo.DistComponents,
+// RepoInfo reports where a given distribution's repository is published and
+// under which codename. Chief holds no repo config of its own (it is
+// distribution-agnostic); it answers from the online repo instance that
+// advertised this dist over its heartbeat.
+func (s *ChiefUsecase) RepoInfo(dist string) domain.RepoInfo {
+	if s.monitoringRegistry == nil || dist == "" {
+		return domain.RepoInfo{}
 	}
+	instances, err := s.monitoringRegistry.ListInstances(monitoring.InstanceTypeRepo, monitoring.StatusOnline)
+	if err != nil {
+		return domain.RepoInfo{}
+	}
+	for _, inst := range instances {
+		if inst.Dist == dist {
+			return domain.RepoInfo{
+				PublicURL:      inst.PublicURL,
+				DistCodename:   inst.Dist,
+				DistComponents: inst.DistComponents,
+			}
+		}
+	}
+	return domain.RepoInfo{}
 }
 
 func (s *ChiefUsecase) ImportStatus(UUID string) (string, string, error) {

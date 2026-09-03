@@ -37,7 +37,7 @@ var (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	var err error
-	irgshConfig, err = config.LoadConfig()
+	irgshConfig, err = config.LoadConfig(config.ComponentBuilder)
 	if err != nil {
 		log.Fatalln("couldn't load config : ", err)
 	}
@@ -103,7 +103,7 @@ func main() {
 			&machineryConfig.Config{
 				Broker:        irgshConfig.Redis,
 				ResultBackend: irgshConfig.Redis,
-				DefaultQueue:  "irgsh",
+				DefaultQueue:  config.DistQueue(irgshConfig.Builder.DistCodename),
 			},
 		)
 		if err != nil {
@@ -140,6 +140,7 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeBuilder, irgshConfig.Builder.Workdir,
+		irgshConfig.Builder.DistCodename, monitoring.RepoHeartbeatInfo{},
 		interval, func() int { return int(activeTasks.Load()) },
 	)
 }

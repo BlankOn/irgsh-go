@@ -45,6 +45,11 @@ func Build(payload string) (next string, err error) {
 	taskUUID := raw["taskUUID"].(string)
 	fmt.Println("Processing pipeline :" + taskUUID)
 
+	if dist, ok := raw["dist"].(string); ok && dist != "" && dist != irgshConfig.Builder.DistCodename {
+		return "", fmt.Errorf("build task targeted dist %q but this builder instance serves %q",
+			dist, irgshConfig.Builder.DistCodename)
+	}
+
 	// Extract job info for notifications
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:    raw["packageName"].(string),

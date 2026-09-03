@@ -39,7 +39,7 @@ func main() {
 	app.Version = version
 
 	app.Action = func(c *cli.Context) error {
-		irgshConfig, err := config.LoadConfig()
+		irgshConfig, err := config.LoadConfig(config.ComponentChief)
 		if err != nil {
 			log.Fatalln(err)
 		}

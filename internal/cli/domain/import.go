@@ -4,8 +4,12 @@ package domain
 // built packages from an external Debian repository.
 // The JSON tags must stay in sync with internal/chief/domain/submission.go.
 type ImportSubmission struct {
-	SourceURL       string   `json:"sourceUrl"`
-	Dist            string   `json:"dist"`
+	SourceURL string `json:"sourceUrl"`
+	// Dist is the suite in the source repository, e.g. "sid".
+	Dist string `json:"dist"`
+	// TargetDist is which of our distributions (and therefore which repo
+	// worker's queue) to inject the imported packages into, e.g. "verbeek".
+	TargetDist      string   `json:"targetDist"`
 	SourceComponent string   `json:"sourceComponent"`
 	PackageNames    []string `json:"packageNames"`
 	Component       string   `json:"component"`
@@ -39,6 +43,7 @@ type ImportStatus struct {
 type ImportParams struct {
 	SourceURL       string
 	Dist            string
+	TargetDist      string
 	SourceComponent string
 	PackageNames    []string
 	Component       string

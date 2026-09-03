@@ -63,7 +63,7 @@ func main() {
 		}
 
 		var err error
-		irgshConfig, err = config.LoadConfigFromPath(configPath)
+		irgshConfig, err = config.LoadConfigFromPath(configPath, config.ComponentRepo)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
 		}
@@ -117,7 +117,7 @@ func main() {
 			&machineryConfig.Config{
 				Broker:        irgshConfig.Redis,
 				ResultBackend: irgshConfig.Redis,
-				DefaultQueue:  "irgsh",
+				DefaultQueue:  config.DistQueue(irgshConfig.Repo.DistCodename),
 			},
 		)
 		if err != nil {
@@ -162,6 +162,11 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeRepo, irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		monitoring.RepoHeartbeatInfo{
+			PublicURL:      irgshConfig.Repo.PublicURL,
+			DistComponents: irgshConfig.Repo.DistComponents,
+		},
 		interval, func() int { return int(activeTasks.Load()) },
 	)
 }

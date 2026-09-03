@@ -114,7 +114,7 @@ func (m *mockChiefAPI) GetImportStatus(_ context.Context, _ string) (domain.Impo
 	return m.importStatus, m.importStatusErr
 }
 
-func (m *mockChiefAPI) GetRepoInfo(_ context.Context) (domain.RepoInfo, error) {
+func (m *mockChiefAPI) GetRepoInfo(_ context.Context, _ string) (domain.RepoInfo, error) {
 	return m.repoInfo, m.repoInfoErr
 }
 

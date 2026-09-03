@@ -15,6 +15,8 @@ func StartHeartbeatLoop(
 	ttl time.Duration,
 	instanceType InstanceType,
 	workdir string,
+	dist string,
+	repoInfo RepoHeartbeatInfo,
 	heartbeatInterval time.Duration,
 	activeTasksFn func() int,
 ) {
@@ -36,21 +38,24 @@ func StartHeartbeatLoop(
 	send := func() {
 		metrics := CollectMetrics(workdir)
 		instance := InstanceInfo{
-			InstanceID:    instanceID,
-			InstanceType:  instanceType,
-			Hostname:      GetHostname(),
-			PID:           os.Getpid(),
-			StartTime:     startTime,
-			LastHeartbeat: time.Now(),
-			Status:        StatusOnline,
-			Concurrency:   1,
-			ActiveTasks:   activeTasksFn(),
-			CPUUsage:      metrics.CPUUsage,
-			MemoryUsage:   metrics.MemoryUsage,
-			MemoryTotal:   metrics.MemoryTotal,
-			DiskUsage:     metrics.DiskUsage,
-			DiskTotal:     metrics.DiskTotal,
-			Version:       GetVersion(),
+			InstanceID:     instanceID,
+			InstanceType:   instanceType,
+			Hostname:       GetHostname(),
+			PID:            os.Getpid(),
+			Dist:           dist,
+			PublicURL:      repoInfo.PublicURL,
+			DistComponents: repoInfo.DistComponents,
+			StartTime:      startTime,
+			LastHeartbeat:  time.Now(),
+			Status:         StatusOnline,
+			Concurrency:    1,
+			ActiveTasks:    activeTasksFn(),
+			CPUUsage:       metrics.CPUUsage,
+			MemoryUsage:    metrics.MemoryUsage,
+			MemoryTotal:    metrics.MemoryTotal,
+			DiskUsage:      metrics.DiskUsage,
+			DiskTotal:      metrics.DiskTotal,
+			Version:        GetVersion(),
 		}
 		if err := registry.UpdateInstance(instance); err != nil {
 			log.Printf("Failed to send heartbeat: %v\n", err)

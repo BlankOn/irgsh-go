@@ -85,6 +85,11 @@ func Repo(payload string) (err error) {
 
 	taskUUID := raw["taskUUID"].(string)
 
+	if dist, ok := raw["dist"].(string); ok && dist != "" && dist != irgshConfig.Repo.DistCodename {
+		return fmt.Errorf("repo task targeted dist %q but this repo instance serves %q",
+			dist, irgshConfig.Repo.DistCodename)
+	}
+
 	experimentalSuffix := "-experimental"
 	if !raw["isExperimental"].(bool) {
 		experimentalSuffix = ""

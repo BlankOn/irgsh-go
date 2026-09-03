@@ -16,7 +16,7 @@ import (
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	irgshConfig, _ = config.LoadConfig()
+	irgshConfig, _ = config.LoadConfig(config.ComponentRepo)
 	dir, _ := os.Getwd()
 	irgshConfig.Builder.Workdir = dir + "/../tmp"
 

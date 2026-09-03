@@ -8,29 +8,29 @@ import (
 
 // mockTaskQueue implements TaskQueue for testing.
 type mockTaskQueue struct {
-	sendBuildChainFn func(taskUUID string, payload []byte) error
-	sendImportTaskFn func(taskUUID string, payload []byte) error
-	sendISOTaskFn    func(taskUUID string, payload []byte) error
+	sendBuildChainFn func(taskUUID, dist string, payload []byte) error
+	sendImportTaskFn func(taskUUID, dist string, payload []byte) error
+	sendISOTaskFn    func(taskUUID, dist string, payload []byte) error
 	getTaskStateFn   func(taskName, taskUUID string) string
 }
 
-func (m *mockTaskQueue) SendBuildChain(taskUUID string, payload []byte) error {
+func (m *mockTaskQueue) SendBuildChain(taskUUID, dist string, payload []byte) error {
 	if m.sendBuildChainFn != nil {
-		return m.sendBuildChainFn(taskUUID, payload)
+		return m.sendBuildChainFn(taskUUID, dist, payload)
 	}
 	return nil
 }
 
-func (m *mockTaskQueue) SendISOTask(taskUUID string, payload []byte) error {
+func (m *mockTaskQueue) SendISOTask(taskUUID, dist string, payload []byte) error {
 	if m.sendISOTaskFn != nil {
-		return m.sendISOTaskFn(taskUUID, payload)
+		return m.sendISOTaskFn(taskUUID, dist, payload)
 	}
 	return nil
 }
 
-func (m *mockTaskQueue) SendImportTask(taskUUID string, payload []byte) error {
+func (m *mockTaskQueue) SendImportTask(taskUUID, dist string, payload []byte) error {
 	if m.sendImportTaskFn != nil {
-		return m.sendImportTaskFn(taskUUID, payload)
+		return m.sendImportTaskFn(taskUUID, dist, payload)
 	}
 	return nil
 }

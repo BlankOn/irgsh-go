@@ -8,11 +8,14 @@ import (
 	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
 
-func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error) {
+func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, repoURL, branch string) (domain.SubmitResponse, error) {
 	if _, err := u.config.Load(); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
 
+	if dist == "" {
+		return domain.SubmitResponse{}, errors.New("--dist is required")
+	}
 	if repoURL == "" {
 		return domain.SubmitResponse{}, errors.New("--lb-url is required")
 	}
@@ -21,10 +24,12 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, repoURL, branch string) (dom
 	}
 
 	fmt.Printf("Submitting ISO build job...\n")
+	fmt.Printf("Distribution: %s\n", dist)
 	fmt.Printf("Repository: %s\n", repoURL)
 	fmt.Printf("Branch: %s\n", branch)
 
 	submission := domain.ISOSubmission{
+		Dist:    dist,
 		RepoURL: repoURL,
 		Branch:  branch,
 	}

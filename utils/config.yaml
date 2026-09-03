@@ -1,4 +1,7 @@
 ---
+# Each of chief/builder/repo/iso only requires this redis: block plus its own
+# section below (chief:, builder:, repo:, iso:) to start - the other sections
+# are optional and can be omitted from that component's own config file.
 redis: 'redis://localhost:6379'
 
 monitoring:
@@ -22,6 +25,9 @@ chief:
 
 builder:
   workdir: '/var/lib/irgsh/builder'
+  # The distribution this builder instance builds for. Also its Machinery
+  # queue identity (irgsh-<dist_codename>) - chief routes build tasks there.
+  dist_codename: 'verbeek'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
 
@@ -29,6 +35,8 @@ repo:
   workdir: '/var/lib/irgsh/repo'
   dist_name: 'BlankOn'
   dist_label: 'BlankOn'
+  # Also this repo instance's Machinery queue identity (irgsh-<dist_codename>)
+  # - chief and the matching builder route tasks there.
   dist_codename: 'verbeek'
   dist_components: 'main restricted extras restricted-firmware'
   dist_supported_architectures: 'amd64 source'
@@ -50,3 +58,6 @@ iso:
   workdir: '/var/lib/irgsh/iso'
   outputdir: '/tmp/jahitan'
   public_base_url: 'http://jahitan.blankonlinux.id'
+  # The distribution this ISO builder instance builds for. Also its
+  # Machinery queue identity (irgsh-<dist_codename>).
+  dist_codename: 'verbeek'

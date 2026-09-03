@@ -18,7 +18,7 @@ func TestSubmitISO_Success(t *testing.T) {
 		&mockChiefAPI{isoResp: domain.SubmitResponse{PipelineID: "iso-123"}},
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	resp, err := svc.SubmitISO(context.Background(), "http://repo.git", "main")
+	resp, err := svc.SubmitISO(context.Background(), "verbeek", "http://repo.git", "main")
 	assert.NoError(t, err)
 	assert.Equal(t, "iso-123", resp.PipelineID)
 }
@@ -28,7 +28,7 @@ func TestSubmitISO_ConfigMissing(t *testing.T) {
 		&mockConfigStore{err: errors.New("no config")},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	_, err := svc.SubmitISO(context.Background(), "http://repo.git", "main")
+	_, err := svc.SubmitISO(context.Background(), "verbeek", "http://repo.git", "main")
 	assert.ErrorIs(t, err, usecase.ErrConfigMissing)
 }
 
@@ -37,9 +37,19 @@ func TestSubmitISO_EmptyURL(t *testing.T) {
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	_, err := svc.SubmitISO(context.Background(), "", "main")
+	_, err := svc.SubmitISO(context.Background(), "verbeek", "", "main")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "lb-url")
+}
+
+func TestSubmitISO_EmptyDist(t *testing.T) {
+	svc := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
+	)
+	_, err := svc.SubmitISO(context.Background(), "", "http://repo.git", "main")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--dist")
 }
 
 func TestSubmitISO_EmptyBranch(t *testing.T) {
@@ -47,7 +57,7 @@ func TestSubmitISO_EmptyBranch(t *testing.T) {
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	_, err := svc.SubmitISO(context.Background(), "http://repo.git", "")
+	_, err := svc.SubmitISO(context.Background(), "verbeek", "http://repo.git", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "lb-branch")
 }

@@ -75,7 +75,6 @@ graph LR
     utils --- docker["docker/"]
     utils --- containers["containers/"]
     utils --- quadlets["quadlets/"]
-    utils --- init_dir["init/"]
 ```
 
 | Path | Description |
@@ -128,11 +127,18 @@ make repo-init
 Configuration file: `/etc/irgsh/config.yaml` (or `./utils/config.yaml` for development)
 
 Key sections:
-- `redis`: Connection string for Redis broker
+- `redis`: Connection string for Redis broker (always required)
 - `storage`: SQLite database path for persistent job data
 - `monitoring`: Worker heartbeat and cleanup settings
 - `notification`: Webhook URL for job notifications
 - `chief/builder/repo/iso`: Component-specific settings
+
+**Each binary only requires `redis:` plus its own section.** Config
+validation is scoped per component (`config.LoadConfig(config.ComponentX)`),
+so a config file passed to `irgsh-repo` needs `redis:` + `repo:` only - it
+does not need `chief:`/`builder:` populated, and vice versa. This is what
+lets chief, builder, repo and iso be deployed as independent processes,
+possibly on different machines, without sharing one fully-populated file.
 
 **Special: irgsh-repo requires explicit config path:**
 ```bash
@@ -141,10 +147,23 @@ irgsh-repo -c /path/to/config.yaml
 
 ## Key Patterns
 
+### Multi-Distribution Support
+Chief is distribution-agnostic: it holds no dist config of its own and just
+routes tasks. Builder, repo, and iso each have a fixed distribution identity
+(`dist_codename` in their own config section), and only ever handle tasks for
+that one distribution. `irgsh-cli` picks the target with `--dist verbeek`
+(package/ISO submit) or `--repo-dist verbeek` (import, since `import` already
+uses `--dist` for the *source* suite being imported from).
+
 ### Task Queue (Machinery)
 Jobs are distributed via Redis using the machinery library:
 - Tasks: `build`, `repo`, `import`, `iso`
-- Queue: `irgsh`
+- Queue: `irgsh-<dist_codename>`, one per distribution - a builder/repo/iso
+  instance's queue is derived from its own configured `dist_codename`
+  (`config.DistQueue(dist)`), and chief sets `Signature.RoutingKey` to the
+  submission's target dist when sending each task. Instances for the same
+  dist share one queue, exactly like the single global `irgsh` queue this
+  replaced - each still only registers and handles its own task name(s).
 - Workers register handlers and process jobs asynchronously
 
 ### Monitoring
@@ -162,8 +181,9 @@ When `notification.webhook_url` is configured, POST requests are sent on job com
 ### Import Flow
 `irgsh-cli import` submits a request to import already built packages from an
 external Debian repository. The `import` task is handled by irgsh-repo:
-1. CLI submits `--source`, `--dist` and `--package-name` to chief
-2. Chief queues an `import` task to Redis
+1. CLI submits `--source`, `--dist` (source suite), `--repo-dist` (our
+   distribution to inject into) and `--package-name` to chief
+2. Chief queues an `import` task to the `--repo-dist` distribution's queue
 3. Repo worker builds a throwaway apt root pointing at the source repository,
    resolves each binary package to its source package, then downloads the
    `.dsc` with its tarballs and every binary built from that source
@@ -204,21 +224,24 @@ that nobody can install gets in, so dependencies are checked twice:
 imports anyway.
 
 ### Pipeline Flow
-1. CLI validates and submits package (GPG signed)
-2. Chief queues build task to Redis
+1. CLI validates and submits package (GPG signed) with `--dist <target>`
+2. Chief queues build task to the target dist's queue (`irgsh-<dist>`)
 3. Builder downloads, builds with pbuilder, uploads artifacts
-4. Chief queues repo task
+4. Chief queues repo task on the same dist's queue
 5. Repo downloads artifacts, injects into reprepro repository
 
 ### Wire Format Coupling
 The CLI and chief define parallel `Submission`/`ISOSubmission` structs with matching
 `json:"..."` tags but no shared Go type. The CLI types are strict subsets of the chief
-types (chief adds server-assigned `TaskUUID` and `Timestamp` fields). Response types
+types (chief adds server-assigned `TaskUUID` and `Timestamp` fields). Both carry a
+`dist` field naming the target distribution, used for queue routing. Response types
 (`PackageStatus`, `SubmitResponse`, etc.) are also independently defined in each domain
 package.
 
 Builder and repo receive serialized submissions via the machinery task queue and unmarshal
 into `map[string]interface{}`, accessing fields by string key with no compile-time safety.
+Both also defensively check `raw["dist"]` against their own configured `dist_codename` and
+reject a misrouted task, on top of the queue-name routing.
 
 Changes to the wire format must be coordinated manually across all four components:
 - `internal/cli/domain/submission.go` (CLI sends)
@@ -231,6 +254,10 @@ a map:
 - `internal/cli/domain/import.go` (CLI sends)
 - `internal/chief/domain/submission.go` (`ImportSubmission`, chief receives)
 - `cmd/repo/import.go` (`importSubmission`, repo consumes)
+
+Its `dist` field means the *source* suite being imported from, so it carries
+a separate `targetDist` field (CLI flag `--repo-dist`) naming which of our
+distributions - and therefore which repo instance's queue - to route to.
 
 ## Testing
 
@@ -299,8 +326,9 @@ Key libraries:
 ## Important Notes
 
 1. **DEV mode**: Set `DEV=1` to redirect workdirs from `/var/lib/` to `./tmp/`
-2. **Config validation**: All required fields must be present or startup fails
+2. **Config validation**: Required fields are scoped per component (its own section + `redis:`) - see Configuration above
 3. **GPG keys**: Chief and Repo require GPG keys for signing
 4. **Redis required**: All components depend on Redis being available
-5. **irgsh-repo isolation**: Each instance needs its own config for multi-arch support
-6. **SQLite storage**: Chief uses SQLite at `/var/lib/irgsh/chief/irgsh.db` (or `./tmp/irgsh/chief/irgsh.db` in DEV mode) for persistent job data
+5. **irgsh-repo isolation**: Each instance needs its own config for multi-arch/multi-dist support
+6. **Multi-distribution**: Builder/repo/iso each serve exactly one `dist_codename`; running more than one distribution means running more than one instance of each, each with its own config and queue (`irgsh-<dist_codename>`)
+7. **SQLite storage**: Chief uses SQLite at `/var/lib/irgsh/chief/irgsh.db` (or `./tmp/irgsh/chief/irgsh.db` in DEV mode) for persistent job data

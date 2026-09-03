@@ -41,6 +41,7 @@ func validImportSubmission() domain.ImportSubmission {
 	return domain.ImportSubmission{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
+		TargetDist:   "verbeek",
 		PackageNames: []string{"grub-efi-amd64-bin", "calamares"},
 		Maintainer:   "Herpiko Dwi Aguno <herpiko@gmail.com>",
 	}
@@ -51,14 +52,16 @@ func TestImportPackages_ValidationErrors(t *testing.T) {
 		mutate func(*domain.ImportSubmission)
 		want   string
 	}{
-		"missing source":    {func(s *domain.ImportSubmission) { s.SourceURL = "" }, "sourceUrl is required"},
-		"malformed source":  {func(s *domain.ImportSubmission) { s.SourceURL = "not a url" }, "not a valid URL"},
-		"missing dist":      {func(s *domain.ImportSubmission) { s.Dist = "" }, "dist is required"},
-		"unsafe dist":       {func(s *domain.ImportSubmission) { s.Dist = "sid; rm -rf /" }, "unsupported characters"},
-		"no packages":       {func(s *domain.ImportSubmission) { s.PackageNames = nil }, "packageNames is required"},
-		"unsafe package":    {func(s *domain.ImportSubmission) { s.PackageNames = []string{"grub$(id)"} }, "invalid package name"},
-		"unsafe component":  {func(s *domain.ImportSubmission) { s.Component = "main;evil" }, "invalid component"},
-		"unsafe src compnt": {func(s *domain.ImportSubmission) { s.SourceComponent = "../../etc" }, "invalid component"},
+		"missing source":     {func(s *domain.ImportSubmission) { s.SourceURL = "" }, "sourceUrl is required"},
+		"malformed source":   {func(s *domain.ImportSubmission) { s.SourceURL = "not a url" }, "not a valid URL"},
+		"missing dist":       {func(s *domain.ImportSubmission) { s.Dist = "" }, "dist is required"},
+		"unsafe dist":        {func(s *domain.ImportSubmission) { s.Dist = "sid; rm -rf /" }, "unsupported characters"},
+		"missing targetDist": {func(s *domain.ImportSubmission) { s.TargetDist = "" }, "targetDist is required"},
+		"unsafe targetDist":  {func(s *domain.ImportSubmission) { s.TargetDist = "verbeek; rm -rf /" }, "unsupported characters"},
+		"no packages":        {func(s *domain.ImportSubmission) { s.PackageNames = nil }, "packageNames is required"},
+		"unsafe package":     {func(s *domain.ImportSubmission) { s.PackageNames = []string{"grub$(id)"} }, "invalid package name"},
+		"unsafe component":   {func(s *domain.ImportSubmission) { s.Component = "main;evil" }, "invalid component"},
+		"unsafe src compnt":  {func(s *domain.ImportSubmission) { s.SourceComponent = "../../etc" }, "invalid component"},
 	}
 
 	for name, tc := range cases {
@@ -78,7 +81,7 @@ func TestImportPackages_QueuesTaskAndRecordsJob(t *testing.T) {
 	var queuedUUID string
 	var queuedPayload []byte
 	tq := &mockTaskQueue{
-		sendImportTaskFn: func(taskUUID string, payload []byte) error {
+		sendImportTaskFn: func(taskUUID, dist string, payload []byte) error {
 			queuedUUID = taskUUID
 			queuedPayload = payload
 			return nil
@@ -115,7 +118,7 @@ func TestImportPackages_QueuesTaskAndRecordsJob(t *testing.T) {
 
 func TestImportPackages_QueueFailureIsReported(t *testing.T) {
 	tq := &mockTaskQueue{
-		sendImportTaskFn: func(string, []byte) error { return assert.AnError },
+		sendImportTaskFn: func(string, string, []byte) error { return assert.AnError },
 	}
 	store := &mockImportJobStore{}
 

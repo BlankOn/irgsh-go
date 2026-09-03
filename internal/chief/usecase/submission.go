@@ -54,6 +54,12 @@ func NewSubmissionService(
 }
 
 func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain.SubmitPayloadResponse, error) {
+	if submission.Dist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.Dist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
+	}
 	if !domain.SafeIDPattern.MatchString(submission.MaintainerFingerprint) {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid maintainer fingerprint")
 	}
@@ -102,7 +108,7 @@ func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
@@ -110,6 +116,7 @@ func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain
 	if ss.jobStore != nil {
 		job := monitoring.JobInfo{
 			TaskUUID:       submission.TaskUUID,
+			Dist:           submission.Dist,
 			PackageName:    submission.PackageName,
 			PackageVersion: submission.PackageVersion,
 			Maintainer:     submission.Maintainer,
@@ -191,6 +198,7 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 	submission := domain.Submission{
 		TaskUUID:              newTaskUUID,
 		Timestamp:             newTimestamp,
+		Dist:                  job.Dist,
 		PackageName:           job.PackageName,
 		PackageVersion:        job.PackageVersion,
 		PackageURL:            job.PackageURL,
@@ -209,13 +217,14 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
 	}
 
-	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send retry build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
 	}
 
 	newJob := monitoring.JobInfo{
 		TaskUUID:       newTaskUUID,
+		Dist:           job.Dist,
 		PackageName:    job.PackageName,
 		PackageVersion: job.PackageVersion,
 		Maintainer:     job.Maintainer,
@@ -238,6 +247,12 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 }
 
 func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.SubmitPayloadResponse, error) {
+	if submission.Dist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.Dist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
+	}
 	if submission.RepoURL == "" {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "repoUrl is required")
 	}
@@ -254,7 +269,7 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	if err := ss.taskQueue.SendISOTask(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendISOTask(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send ISO task: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
@@ -262,6 +277,7 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 	if ss.isoStore != nil {
 		isoJob := monitoring.ISOJobInfo{
 			TaskUUID:    submission.TaskUUID,
+			Dist:        submission.Dist,
 			RepoURL:     submission.RepoURL,
 			Branch:      submission.Branch,
 			SubmittedAt: submission.Timestamp,
@@ -289,6 +305,12 @@ func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) 
 	}
 	if !domain.SafeIDPattern.MatchString(submission.Dist) {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
+	}
+	if submission.TargetDist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "targetDist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.TargetDist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "targetDist contains unsupported characters")
 	}
 	if len(submission.PackageNames) == 0 {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "packageNames is required")
@@ -330,7 +352,7 @@ func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) 
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	if err := ss.taskQueue.SendImportTask(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendImportTask(submission.TaskUUID, submission.TargetDist, jsonStr); err != nil {
 		log.Printf("Could not send import task: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
@@ -340,6 +362,7 @@ func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) 
 			TaskUUID:       submission.TaskUUID,
 			SourceURL:      submission.SourceURL,
 			Dist:           submission.Dist,
+			TargetDist:     submission.TargetDist,
 			Packages:       strings.Join(submission.PackageNames, ", "),
 			Component:      submission.Component,
 			Maintainer:     submission.Maintainer,

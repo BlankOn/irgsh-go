@@ -298,13 +298,14 @@ func (c *HTTPChiefClient) SubmitImport(ctx context.Context, submission domain.Im
 	return sr, nil
 }
 
-func (c *HTTPChiefClient) GetRepoInfo(ctx context.Context) (domain.RepoInfo, error) {
+func (c *HTTPChiefClient) GetRepoInfo(ctx context.Context, dist string) (domain.RepoInfo, error) {
 	base, err := c.baseURL()
 	if err != nil {
 		return domain.RepoInfo{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/repo-info", nil)
+	reqURL := base + "/api/v1/repo-info?dist=" + url.QueryEscape(dist)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return domain.RepoInfo{}, err
 	}

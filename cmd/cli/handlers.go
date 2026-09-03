@@ -15,7 +15,7 @@ type CLIService interface {
 	SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error)
 	PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error)
-	SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error)
+	SubmitISO(ctx context.Context, dist, repoURL, branch string) (domain.SubmitResponse, error)
 	ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	ISOLog(ctx context.Context, pipelineID string) (string, error)
 	SubmitImport(ctx context.Context, params domain.ImportParams) (domain.SubmitResponse, error)
@@ -53,6 +53,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			Name:  "package",
 			Usage: "Submit a package build job, or use subcommands (status, log)",
 			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "dist",
+					Usage: "Target distribution to build for and publish into, e.g. verbeek (required)",
+				},
 				cli.StringFlag{
 					Name:  "source",
 					Usage: "Source URL",
@@ -118,6 +122,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 					Usage: "Submit an ISO build job",
 					Flags: []cli.Flag{
 						cli.StringFlag{
+							Name:  "dist",
+							Usage: "Target distribution to build the ISO for, e.g. verbeek (required)",
+						},
+						cli.StringFlag{
 							Name:  "lb-url",
 							Usage: "Live build git repository URL (required)",
 						},
@@ -151,6 +159,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				cli.StringFlag{
 					Name:  "dist",
 					Usage: "Suite to import from in the source repository, e.g. sid",
+				},
+				cli.StringFlag{
+					Name:  "repo-dist",
+					Usage: "Our distribution to import the packages into, e.g. verbeek (required)",
 				},
 				cli.StringFlag{
 					Name:  "source-component",
@@ -234,6 +246,7 @@ func configAction(svc CLIService) cli.ActionFunc {
 func packageSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		params := domain.SubmitParams{
+			Dist:           c.String("dist"),
 			PackageURL:     c.String("package"),
 			SourceURL:      c.String("source"),
 			Component:      c.String("component"),
@@ -278,7 +291,7 @@ func packageLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 
 func livebuildSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		_, err := svc.SubmitISO(ctx, c.String("lb-url"), c.String("lb-branch"))
+		_, err := svc.SubmitISO(ctx, c.String("dist"), c.String("lb-url"), c.String("lb-branch"))
 		return err
 	}
 }
@@ -313,6 +326,7 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 		params := domain.ImportParams{
 			SourceURL:       c.String("source"),
 			Dist:            c.String("dist"),
+			TargetDist:      c.String("repo-dist"),
 			SourceComponent: c.String("source-component"),
 			PackageNames:    usecase.SplitPackageNames(c.String("package-name")),
 			Component:       c.String("component"),
