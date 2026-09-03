@@ -263,53 +263,65 @@ type shellResult struct {
 type scriptedShell struct {
 	outputs   map[string]shellResult
 	simulated bool
-	// checkRoot is the sandbox directory the check built, captured so the
-	// test can read the files apt was pointed at.
-	checkRoot string
+	// sourcesListContent and preferencesContent snapshot the sandbox files
+	// while the check still has them on disk: checkImportLocally removes its
+	// directory (defer os.RemoveAll) before returning, so a test cannot read
+	// them back afterward.
+	sourcesListContent string
+	preferencesContent string
 }
 
 // sourcesList returns the sources.list the check wrote.
 func (s *scriptedShell) sourcesList(t *testing.T) string {
 	t.Helper()
-	return s.readSandboxFile(t, "sources.list")
+	if s.sourcesListContent == "" {
+		t.Fatal("the check never built a sandbox")
+	}
+	return s.sourcesListContent
 }
 
 // preferences returns the apt pinning the check wrote.
 func (s *scriptedShell) preferences(t *testing.T) string {
 	t.Helper()
-	return s.readSandboxFile(t, "preferences")
-}
-
-func (s *scriptedShell) readSandboxFile(t *testing.T, name string) string {
-	t.Helper()
-	if s.checkRoot == "" {
+	if s.preferencesContent == "" {
 		t.Fatal("the check never built a sandbox")
 	}
-	content, err := os.ReadFile(filepath.Join(s.checkRoot, name))
-	if err != nil {
-		t.Fatalf("failed to read %s: %v", name, err)
-	}
-	return string(content)
+	return s.preferencesContent
 }
 
-// captureRoot remembers the sandbox path from an apt command line, before the
-// check removes the directory.
-func (s *scriptedShell) captureRoot(cmd string) {
+// snapshotSandbox reads the sandbox files an apt command line points at,
+// while the check still has them on disk (the check removes its directory
+// before checkImportLocally returns).
+func (s *scriptedShell) snapshotSandbox(cmd string) {
+	root := sandboxRoot(cmd)
+	if root == "" {
+		return
+	}
+	if content, err := os.ReadFile(filepath.Join(root, "sources.list")); err == nil {
+		s.sourcesListContent = string(content)
+	}
+	if content, err := os.ReadFile(filepath.Join(root, "preferences")); err == nil {
+		s.preferencesContent = string(content)
+	}
+}
+
+// sandboxRoot extracts the sandbox directory from an apt command line.
+func sandboxRoot(cmd string) string {
 	const marker = "-o Dir::State='"
 	i := strings.Index(cmd, marker)
 	if i < 0 {
-		return
+		return ""
 	}
 	rest := cmd[i+len(marker):]
 	end := strings.Index(rest, "'")
 	if end < 0 {
-		return
+		return ""
 	}
-	s.checkRoot = filepath.Dir(rest[:end])
+	return filepath.Dir(rest[:end])
 }
 
 func (s *scriptedShell) result(cmd string) shellResult {
-	s.captureRoot(cmd)
+	s.snapshotSandbox(cmd)
 	if strings.Contains(cmd, "--simulate") {
 		s.simulated = true
 	}
