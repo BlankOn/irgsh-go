@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
@@ -30,6 +31,7 @@ type DashboardData struct {
 	Workers       []WorkerView
 	Jobs          []JobView
 	ISOJobs       []ISOJobView
+	ImportJobs    []ImportJobView
 }
 
 type SummaryView struct {
@@ -64,23 +66,23 @@ type RepoLink struct {
 }
 
 type JobView struct {
-	FilterStatus   string
-	TimeFormatted  string
-	TimeRelative   string
-	PackageName    string
-	PackageVersion string
-	Maintainer     string
-	Component      string
-	IsExperimental bool
-	RepoLinks      []RepoLink
+	FilterStatus    string
+	TimeFormatted   string
+	TimeRelative    string
+	PackageName     string
+	PackageVersion  string
+	Maintainer      string
+	Component       string
+	IsExperimental  bool
+	RepoLinks       []RepoLink
 	BuildStageClass string
 	BuildStateText  string
 	RepoStageClass  string
 	RepoStateText   string
-	StatusClass    string
-	StatusText     string
-	ShowSpinner    bool
-	TaskUUID       string
+	StatusClass     string
+	StatusText      string
+	ShowSpinner     bool
+	TaskUUID        string
 }
 
 type ISOJobView struct {
@@ -93,6 +95,21 @@ type ISOJobView struct {
 	TaskUUID      string
 }
 
+type ImportJobView struct {
+	TimeFormatted  string
+	TimeRelative   string
+	SourceURL      string
+	Dist           string
+	Packages       string
+	Component      string
+	Maintainer     string
+	IsExperimental bool
+	State          string
+	StatusClass    string
+	ShowSpinner    bool
+	TaskUUID       string
+}
+
 // DashboardService renders the chief dashboard HTML.
 type DashboardService struct {
 	version       string
@@ -101,6 +118,7 @@ type DashboardService struct {
 	registry      InstanceRegistry
 	jobStore      JobStore
 	isoStore      ISOJobStore
+	importStore   ImportJobStore
 	tmpl          *template.Template
 	logViewerTmpl *template.Template
 }
@@ -118,6 +136,7 @@ func NewDashboardService(
 	registry InstanceRegistry,
 	jobStore JobStore,
 	isoStore ISOJobStore,
+	importStore ImportJobStore,
 ) (*DashboardService, error) {
 	tmpl, err := template.New("dashboard").Parse(dashboardTmplStr)
 	if err != nil {
@@ -134,6 +153,7 @@ func NewDashboardService(
 		registry:      registry,
 		jobStore:      jobStore,
 		isoStore:      isoStore,
+		importStore:   importStore,
 		tmpl:          tmpl,
 		logViewerTmpl: logViewerTmpl,
 	}, nil
@@ -173,6 +193,7 @@ func (d *DashboardService) buildDashboardData() DashboardData {
 	}
 	data.Jobs = d.buildJobViews()
 	data.ISOJobs = d.buildISOJobViews()
+	data.ImportJobs = d.buildImportJobViews()
 
 	return data
 }
@@ -408,15 +429,8 @@ func (d *DashboardService) buildISOJobViews() []ISOJobView {
 
 	views := make([]ISOJobView, 0, len(isoJobs))
 	for _, job := range isoJobs {
-		statusClass := ""
-		switch job.State {
-		case "SUCCESS", "DONE":
-			statusClass = "status-online"
-		case "FAILURE", "FAILED":
-			statusClass = "status-offline"
-		case "STARTED", "RECEIVED":
-			statusClass = "status-warning"
-		}
+		job.State = d.resolveTaskState("iso", job.TaskUUID, job.State, d.isoStore.UpdateISOJobState)
+		statusClass := jobStateClass(job.State)
 
 		jakartaTime := job.SubmittedAt.In(jakartaLoc)
 		views = append(views, ISOJobView{
@@ -430,6 +444,102 @@ func (d *DashboardService) buildISOJobViews() []ISOJobView {
 		})
 	}
 	return views
+}
+
+func (d *DashboardService) buildImportJobViews() []ImportJobView {
+	if d.importStore == nil {
+		return nil
+	}
+	importJobs, err := d.importStore.GetRecentImportJobs(50)
+	if err != nil {
+		log.Printf("Failed to list import jobs: %v\n", err)
+		return nil
+	}
+	if len(importJobs) == 0 {
+		return nil
+	}
+
+	jakartaLoc, locErr := time.LoadLocation("Asia/Jakarta")
+	if locErr != nil {
+		jakartaLoc = time.UTC
+	}
+
+	views := make([]ImportJobView, 0, len(importJobs))
+	for _, job := range importJobs {
+		job.State = d.resolveTaskState("import", job.TaskUUID, job.State, d.importStore.UpdateImportJobState)
+		jakartaTime := job.SubmittedAt.In(jakartaLoc)
+		views = append(views, ImportJobView{
+			TimeFormatted:  jakartaTime.Format("2006-01-02 15:04:05 MST"),
+			TimeRelative:   formatRelativeTime(job.SubmittedAt),
+			SourceURL:      job.SourceURL,
+			Dist:           job.Dist,
+			Packages:       formatPackageList(job.Packages),
+			Component:      job.Component,
+			Maintainer:     job.Maintainer,
+			IsExperimental: job.IsExperimental,
+			State:          job.State,
+			StatusClass:    jobStateClass(job.State),
+			ShowSpinner:    isJobRunning(job.State),
+			TaskUUID:       job.TaskUUID,
+		})
+	}
+	return views
+}
+
+// resolveTaskState brings a stored job state up to date from the task queue.
+//
+// The store only ever holds the state the job was recorded with, so without
+// this a single-task job (ISO, import) is displayed as PENDING forever, even
+// after the worker has finished or failed it.
+func (d *DashboardService) resolveTaskState(taskName, taskUUID, stored string, persist func(string, string) error) string {
+	if d.taskQueue == nil || storage.IsTerminalState(stored) || stored == "UNKNOWN" {
+		return stored
+	}
+
+	state := d.taskQueue.GetTaskState(taskName, taskUUID)
+	// Machinery expires task results; keep what we recorded.
+	if state == "" || state == stored {
+		return stored
+	}
+
+	if persist != nil {
+		if err := persist(taskUUID, state); err != nil {
+			log.Printf("Failed to update %s job state: %v\n", taskName, err)
+		}
+	}
+	return state
+}
+
+// formatPackageList renders a stored package list as "a, b, c", including
+// rows written before the list was stored comma separated.
+func formatPackageList(packages string) string {
+	names := strings.FieldsFunc(packages, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	})
+	return strings.Join(names, ", ")
+}
+
+// isJobRunning reports whether a single-task job is still in flight, so the
+// dashboard can show the same spinner the packaging jobs use.
+func isJobRunning(state string) bool {
+	switch state {
+	case "SUCCESS", "DONE", "FAILURE", "FAILED", "UNKNOWN", "":
+		return false
+	}
+	return true
+}
+
+// jobStateClass maps a job state to the dashboard's status CSS class.
+func jobStateClass(state string) string {
+	switch state {
+	case "SUCCESS", "DONE":
+		return "status-online"
+	case "FAILURE", "FAILED":
+		return "status-offline"
+	case "STARTED", "RECEIVED":
+		return "status-warning"
+	}
+	return ""
 }
 
 func stageClass(state string) string {

@@ -170,3 +170,36 @@ func TestLogStreamRouteBeatsStaticLogFileServer(t *testing.T) {
 		t.Fatalf("expected the static log file, got %q", got)
 	}
 }
+
+// The dashboard is registered as a catch-all, so an unknown path must not be
+// answered with HTML: a client decoding JSON would report a parse error
+// instead of a missing endpoint.
+func TestIndexHandler_UnknownPaths(t *testing.T) {
+	cases := []struct {
+		path       string
+		wantStatus int
+		wantJSON   bool
+	}{
+		{"/api/v1/import", http.StatusNotFound, true},
+		{"/api/v1/nope", http.StatusNotFound, true},
+		{"/whatever", http.StatusNotFound, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			indexHandler(rec, httptest.NewRequest(http.MethodPost, tc.path, nil))
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d", tc.wantStatus, rec.Code)
+			}
+			if strings.Contains(rec.Body.String(), "<!DOCTYPE") || strings.Contains(rec.Body.String(), "<html") {
+				t.Fatalf("an unknown path must not return the dashboard:\n%s", rec.Body.String())
+			}
+			isJSON := strings.Contains(rec.Header().Get("Content-Type"), "json")
+			if isJSON != tc.wantJSON {
+				t.Fatalf("expected JSON=%v for %s, got %q", tc.wantJSON, tc.path, rec.Header().Get("Content-Type"))
+			}
+		})
+	}
+}

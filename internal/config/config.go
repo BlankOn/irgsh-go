@@ -54,7 +54,11 @@ type RepoConfig struct {
 	UpstreamDistCodename       string `json:"upstream_dist_codename"`       // sid
 	UpstreamDistUrl            string `json:"upstream_dist_url"`            // http://kartolo.sby.datautama.net.id/debian
 	UpstreamDistComponents     string `json:"upstream_dist_components"`     // main non-free>restricted contrib>extras
-	GnupgDir                   string `json:"gnupg_dir"`                    // GNUPG dir path
+	// PublicURL is where this repository is published for users to install
+	// from, e.g. http://arsip-dev.blankonlinux.id/dev. Clients need it to
+	// check a package against the repository it is actually going into.
+	PublicURL string `json:"public_url"`
+	GnupgDir  string `json:"gnupg_dir"` // GNUPG dir path
 }
 
 type MonitoringConfig struct {
@@ -72,6 +76,9 @@ type StorageConfig struct {
 	DatabasePath string `json:"database_path"` // Path to SQLite database file (default: /var/lib/irgsh/chief/irgsh.db)
 	MaxJobs      int    `json:"max_jobs"`      // Maximum number of jobs to retain (default: 1000)
 	MaxISOJobs   int    `json:"max_iso_jobs"`  // Maximum number of ISO jobs to retain (default: 200)
+	// MaxImportJobs is the maximum number of package import jobs to retain
+	// (default: 200)
+	MaxImportJobs int `json:"max_import_jobs"`
 }
 
 // LoadConfigFromPath loads irgsh config from a specific file path
@@ -142,6 +149,9 @@ func applyDefaults(cfg *IrgshConfig) error {
 	}
 	if cfg.Storage.MaxISOJobs == 0 {
 		cfg.Storage.MaxISOJobs = 200
+	}
+	if cfg.Storage.MaxImportJobs == 0 {
+		cfg.Storage.MaxImportJobs = 200
 	}
 
 	isDev := os.Getenv("DEV") == "1"

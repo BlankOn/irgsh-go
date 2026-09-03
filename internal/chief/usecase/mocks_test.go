@@ -9,6 +9,7 @@ import (
 // mockTaskQueue implements TaskQueue for testing.
 type mockTaskQueue struct {
 	sendBuildChainFn func(taskUUID string, payload []byte) error
+	sendImportTaskFn func(taskUUID string, payload []byte) error
 	sendISOTaskFn    func(taskUUID string, payload []byte) error
 	getTaskStateFn   func(taskName, taskUUID string) string
 }
@@ -27,6 +28,13 @@ func (m *mockTaskQueue) SendISOTask(taskUUID string, payload []byte) error {
 	return nil
 }
 
+func (m *mockTaskQueue) SendImportTask(taskUUID string, payload []byte) error {
+	if m.sendImportTaskFn != nil {
+		return m.sendImportTaskFn(taskUUID, payload)
+	}
+	return nil
+}
+
 func (m *mockTaskQueue) GetTaskState(taskName, taskUUID string) string {
 	if m.getTaskStateFn != nil {
 		return m.getTaskStateFn(taskName, taskUUID)
@@ -36,10 +44,10 @@ func (m *mockTaskQueue) GetTaskState(taskName, taskUUID string) string {
 
 // mockGPGVerifier implements GPGVerifier for testing.
 type mockGPGVerifier struct {
-	listKeysWithColonsFn      func() (string, error)
-	listKeysFn                func() (string, error)
-	verifySignedSubmissionFn  func(submissionPath string) error
-	verifyFileFn              func(filePath string) error
+	listKeysWithColonsFn     func() (string, error)
+	listKeysFn               func() (string, error)
+	verifySignedSubmissionFn func(submissionPath string) error
+	verifyFileFn             func(filePath string) error
 }
 
 func (m *mockGPGVerifier) ListKeysWithColons() (string, error) {
@@ -76,20 +84,20 @@ type mockFileStorage struct {
 	logsDir        string
 	submissionsDir string
 
-	ensureDirFn              func(path string) error
-	submissionTarballPathFn  func(taskUUID string) string
-	submissionDirPathFn      func(taskUUID string) string
+	ensureDirFn               func(path string) error
+	submissionTarballPathFn   func(taskUUID string) string
+	submissionDirPathFn       func(taskUUID string) string
 	submissionSignaturePathFn func(taskUUID string) string
-	extractSubmissionFn      func(taskUUID string) error
-	copyFileWithSudoFn       func(src, dst string) error
-	copyDirWithSudoFn        func(src, dst string) error
-	chownWithSudoFn          func(path string) error
-	chownRecursiveWithSudoFn func(path string) error
+	extractSubmissionFn       func(taskUUID string) error
+	copyFileWithSudoFn        func(src, dst string) error
+	copyDirWithSudoFn         func(src, dst string) error
+	chownWithSudoFn           func(path string) error
+	chownRecursiveWithSudoFn  func(path string) error
 }
 
 func (m *mockFileStorage) ArtifactsDir() string   { return m.artifactsDir }
-func (m *mockFileStorage) LogsDir() string         { return m.logsDir }
-func (m *mockFileStorage) SubmissionsDir() string  { return m.submissionsDir }
+func (m *mockFileStorage) LogsDir() string        { return m.logsDir }
+func (m *mockFileStorage) SubmissionsDir() string { return m.submissionsDir }
 
 func (m *mockFileStorage) EnsureDir(path string) error {
 	if m.ensureDirFn != nil {
@@ -202,12 +210,21 @@ func (m *mockJobStore) UpdateJobStages(taskUUID, buildState, repoState, currentS
 type mockISOJobStore struct {
 	recordISOJobFn     func(job monitoring.ISOJobInfo) error
 	getRecentISOJobsFn func(limit int) ([]*monitoring.ISOJobInfo, error)
+	updatedStates      map[string]string
 }
 
 func (m *mockISOJobStore) RecordISOJob(job monitoring.ISOJobInfo) error {
 	if m.recordISOJobFn != nil {
 		return m.recordISOJobFn(job)
 	}
+	return nil
+}
+
+func (m *mockISOJobStore) UpdateISOJobState(taskUUID, state string) error {
+	if m.updatedStates == nil {
+		m.updatedStates = map[string]string{}
+	}
+	m.updatedStates[taskUUID] = state
 	return nil
 }
 

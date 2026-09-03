@@ -16,7 +16,7 @@ import (
 )
 
 // logTypes are the job logs that can be streamed.
-var logTypes = map[string]bool{"build": true, "repo": true, "iso": true}
+var logTypes = map[string]bool{"build": true, "repo": true, "iso": true, "import": true}
 
 // logStreamSource reads job logs published by the workers. It is satisfied by
 // *logstream.Subscriber, and stubbed in tests.

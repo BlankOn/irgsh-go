@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
 	"github.com/blankon/irgsh-go/pkg/httputil"
@@ -23,6 +24,9 @@ type ChiefService interface {
 	BuildStatus(string) (domain.BuildStatusResponse, error)
 	ISOStatus(string) (string, string, error)
 	BuildISO(domain.ISOSubmission) (domain.SubmitPayloadResponse, error)
+	RepoInfo() domain.RepoInfo
+	ImportStatus(string) (string, string, error)
+	ImportPackages(domain.ImportSubmission) (domain.SubmitPayloadResponse, error)
 	UploadArtifact(string, io.Reader) error
 	UploadLog(string, string, io.Reader) error
 	UploadSubmission([]byte, io.Reader) (string, error)
@@ -71,6 +75,19 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
+	// "/" is registered as a catch-all, so anything that matched no other
+	// route lands here. Rendering the dashboard for those made an unknown API
+	// path answer HTTP 200 with HTML, which a client decoding JSON reports as
+	// a parse error instead of "no such endpoint".
+	if r.URL.Path != "/" {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			writeJSONError(w, http.StatusNotFound, "unknown endpoint: "+r.URL.Path)
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := chiefService.RenderIndexHTML(w); err != nil {
 		log.Printf("dashboard render error: %v", err)
@@ -139,6 +156,56 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 		State:      jobStatus,
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// RepoInfoHandler reports the repository imports are published to, so a
+// client can check a package against the repository it is going into.
+func RepoInfoHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, chiefService.RepoInfo())
+}
+
+func ImportStatusHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["uuid"]
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "uuid parameter is required")
+		return
+	}
+	UUID := keys[0]
+
+	jobStatus, importStatus, err := chiefService.ImportStatus(UUID)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	res := struct {
+		PipelineID   string `json:"pipelineId"`
+		JobStatus    string `json:"jobStatus"`
+		ImportStatus string `json:"importStatus"`
+		State        string `json:"state"`
+	}{
+		PipelineID:   UUID,
+		JobStatus:    jobStatus,
+		ImportStatus: importStatus,
+		State:        jobStatus,
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func ImportPackagesHandler(w http.ResponseWriter, r *http.Request) {
+	var submission domain.ImportSubmission
+	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	payload, err := chiefService.ImportPackages(submission)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func RetryHandler(w http.ResponseWriter, r *http.Request) {

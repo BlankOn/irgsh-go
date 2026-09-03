@@ -57,23 +57,27 @@ func NewChiefUsecase(
 func newSubmissionSvc(tq TaskQueue, st FileStorage, gpg GPGVerifier, reg *monitoring.Registry) *SubmissionService {
 	var js JobStore
 	var is ISOJobStore
+	var imp ImportJobStore
 	if reg != nil {
 		js = reg
 		is = reg
+		imp = reg
 	}
-	return NewSubmissionService(tq, st, gpg, js, is)
+	return NewSubmissionService(tq, st, gpg, js, is, imp)
 }
 
 func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
 	var ir InstanceRegistry
 	var js JobStore
 	var is ISOJobStore
+	var imp ImportJobStore
 	if reg != nil {
 		ir = reg
 		js = reg
 		is = reg
+		imp = reg
 	}
-	return NewDashboardService(version, tq, ms, ir, js, is)
+	return NewDashboardService(version, tq, ms, ir, js, is, imp)
 }
 
 // GetVersion returns the version string for use by handlers.
@@ -91,6 +95,24 @@ func (s *ChiefUsecase) RenderIndexHTML(w io.Writer) error {
 
 func (s *ChiefUsecase) RenderLogViewerHTML(w io.Writer, taskUUID, logType string) error {
 	return s.dashboardSvc.RenderLogViewerHTML(w, taskUUID, logType)
+}
+
+func (s *ChiefUsecase) ImportPackages(submission domain.ImportSubmission) (domain.SubmitPayloadResponse, error) {
+	return s.submissionSvc.ImportPackages(submission)
+}
+
+// RepoInfo reports where the repository is published and under which
+// codename, from this chief's configuration.
+func (s *ChiefUsecase) RepoInfo() domain.RepoInfo {
+	return domain.RepoInfo{
+		PublicURL:      s.config.Repo.PublicURL,
+		DistCodename:   s.config.Repo.DistCodename,
+		DistComponents: s.config.Repo.DistComponents,
+	}
+}
+
+func (s *ChiefUsecase) ImportStatus(UUID string) (string, string, error) {
+	return s.statusSvc.ImportStatus(UUID)
 }
 
 func (s *ChiefUsecase) SubmitPackage(submission domain.Submission) (domain.SubmitPayloadResponse, error) {

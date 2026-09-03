@@ -2,10 +2,13 @@ package usecase
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,13 +20,19 @@ import (
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
-// SubmissionService handles package submission, retry, and ISO build workflows.
+// safeKeyringPath matches an absolute path to a keyring file, with no shell
+// metacharacters: the worker interpolates it into a command.
+var safeKeyringPath = regexp.MustCompile(`^[a-zA-Z0-9._/-]+\.(gpg|asc)$`)
+
+// SubmissionService handles package submission, retry, ISO build and package
+// import workflows.
 type SubmissionService struct {
-	taskQueue TaskQueue
-	storage   FileStorage
-	gpg       GPGVerifier
-	jobStore  JobStore
-	isoStore  ISOJobStore
+	taskQueue   TaskQueue
+	storage     FileStorage
+	gpg         GPGVerifier
+	jobStore    JobStore
+	isoStore    ISOJobStore
+	importStore ImportJobStore
 }
 
 func NewSubmissionService(
@@ -32,13 +41,15 @@ func NewSubmissionService(
 	gpg GPGVerifier,
 	jobStore JobStore,
 	isoStore ISOJobStore,
+	importStore ImportJobStore,
 ) *SubmissionService {
 	return &SubmissionService{
-		taskQueue: taskQueue,
-		storage:   storage,
-		gpg:       gpg,
-		jobStore:  jobStore,
-		isoStore:  isoStore,
+		taskQueue:   taskQueue,
+		storage:     storage,
+		gpg:         gpg,
+		jobStore:    jobStore,
+		isoStore:    isoStore,
+		importStore: importStore,
 	}
 }
 
@@ -258,6 +269,86 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 		}
 		if err := ss.isoStore.RecordISOJob(isoJob); err != nil {
 			log.Printf("Failed to record ISO job: %v\n", err)
+		}
+	}
+
+	return domain.SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
+}
+
+// ImportPackages queues a job that pulls already built packages out of an
+// external Debian repository and injects them into ours.
+func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) (domain.SubmitPayloadResponse, error) {
+	if submission.SourceURL == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceUrl is required")
+	}
+	if _, err := url.ParseRequestURI(submission.SourceURL); err != nil {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceUrl is not a valid URL")
+	}
+	if submission.Dist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.Dist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
+	}
+	if len(submission.PackageNames) == 0 {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "packageNames is required")
+	}
+
+	// Everything below is interpolated into shell commands on the worker.
+	for _, name := range submission.PackageNames {
+		if !domain.SafeDebianNamePattern.MatchString(name) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("invalid package name: %q", name))
+		}
+	}
+	if submission.SourceComponent == "" {
+		submission.SourceComponent = "main"
+	}
+	if submission.Component == "" {
+		submission.Component = "main"
+	}
+	for _, component := range []string{submission.SourceComponent, submission.Component} {
+		if !domain.SafeIDPattern.MatchString(component) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("invalid component: %q", component))
+		}
+	}
+
+	if submission.KeyringPath != "" {
+		if !filepath.IsAbs(submission.KeyringPath) || !safeKeyringPath.MatchString(submission.KeyringPath) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				"keyringPath must be an absolute path to a .gpg or .asc keyring on the repo worker")
+		}
+	}
+
+	submission.Timestamp = time.Now()
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_import"
+
+	jsonStr, err := json.Marshal(submission)
+	if err != nil {
+		log.Println(err.Error())
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
+	}
+
+	if err := ss.taskQueue.SendImportTask(submission.TaskUUID, jsonStr); err != nil {
+		log.Printf("Could not send import task: %v\n", err)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+	}
+
+	if ss.importStore != nil {
+		importJob := monitoring.ImportJobInfo{
+			TaskUUID:       submission.TaskUUID,
+			SourceURL:      submission.SourceURL,
+			Dist:           submission.Dist,
+			Packages:       strings.Join(submission.PackageNames, ", "),
+			Component:      submission.Component,
+			Maintainer:     submission.Maintainer,
+			IsExperimental: submission.IsExperimental,
+			SubmittedAt:    submission.Timestamp,
+			State:          "PENDING",
+		}
+		if err := ss.importStore.RecordImportJob(importJob); err != nil {
+			log.Printf("Failed to record import job: %v\n", err)
 		}
 	}
 

@@ -18,7 +18,7 @@ func StartHeartbeatLoop(
 	heartbeatInterval time.Duration,
 	activeTasksFn func() int,
 ) {
-	registry, err := NewRegistry(redisAddr, ttl, nil, 0, 0)
+	registry, err := NewRegistry(redisAddr, ttl, nil, 0, 0, 0)
 	if err != nil {
 		log.Printf("Failed to create monitoring registry: %v\n", err)
 		return

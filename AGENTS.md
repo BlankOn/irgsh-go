@@ -95,7 +95,8 @@ graph LR
 | `internal/monitoring/` | Worker health tracking, heartbeats, job history, instance registry |
 | `internal/notification/` | Webhook POST notifications on job completion |
 | `internal/artifact/` | Artifact storage using repo/service/endpoint pattern |
-| `internal/storage/` | SQLite database for persistent job and ISO job data |
+| `internal/storage/` | SQLite database for persistent job, ISO job and import job data |
+| `internal/logstream/` | Live job log streaming from workers to chief over Redis |
 | `pkg/httputil/` | JSON response helpers, `HTTPError`, `HTTPStatusError`, retry utilities |
 | `pkg/systemutil/` | Shell command execution and log streaming |
 | `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile, Containerfiles (`containers/`), Podman Quadlet units (`quadlets/`) |
@@ -142,7 +143,7 @@ irgsh-repo -c /path/to/config.yaml
 
 ### Task Queue (Machinery)
 Jobs are distributed via Redis using the machinery library:
-- Tasks: `build`, `repo`
+- Tasks: `build`, `repo`, `import`, `iso`
 - Queue: `irgsh`
 - Workers register handlers and process jobs asynchronously
 
@@ -157,6 +158,50 @@ When `notification.webhook_url` is configured, POST requests are sent on job com
 ```json
 {"title": "IRGSH Build Job SUCCESS", "message": "Job ID: xxx\nStatus: SUCCESS\n..."}
 ```
+
+### Import Flow
+`irgsh-cli import` submits a request to import already built packages from an
+external Debian repository. The `import` task is handled by irgsh-repo:
+1. CLI submits `--source`, `--dist` and `--package-name` to chief
+2. Chief queues an `import` task to Redis
+3. Repo worker builds a throwaway apt root pointing at the source repository,
+   resolves each binary package to its source package, then downloads the
+   `.dsc` with its tarballs and every binary built from that source
+4. Repo worker simulates installing the downloaded packages against our
+   repository plus its configured upstream distribution (`apt-get --simulate`),
+   and fails the job if they are not installable
+5. Repo worker injects them with `reprepro includedsc` / `includedeb`,
+   supplying `--section`/`--priority` from the source index because a `.dsc`
+   usually carries neither
+
+Unlike the packaging flow, reprepro runs without `--nothingiserror`, so a
+version our repository already carries is skipped rather than failing the job.
+Use `--force-version` to replace it.
+
+The source repository is verified against every keyring installed on the repo
+worker, collected from both `/etc/apt/trusted.gpg.d` and `/usr/share/keyrings`
+(a derivative like BlankOn keeps its own key in the former and the Debian
+archive keys in the latter). Use `--keyring <path>` for a repository whose key
+is elsewhere, or `--insecure` to skip verification.
+
+Importing from a newer suite than the repository is based on is how a package
+that nobody can install gets in, so dependencies are checked twice:
+
+- **In the CLI, before submitting.** The maintainer's machine already runs the
+  distribution, so its own apt sources are the target. The source repository is
+  added as an extra source, pinned (`Pin: release n=<dist>`, priority -1) so
+  only the named packages may come from it and their dependencies must be
+  satisfied by the distribution. `--skip-check` bypasses it; a machine without
+  apt skips it with a note.
+- **In the repo worker, before injecting.** The downloaded `.deb` files are
+  resolved against the exported distribution in
+  `<repo workdir>/<codename>/www`. The configured upstream is deliberately not
+  added: the repository merges upstream into itself, so what users can install
+  is what we have published, and adding the live upstream would satisfy
+  dependencies from the very suite the packages come from.
+
+`--dry-run` fetches and checks without injecting; `--ignore-dependencies`
+imports anyway.
 
 ### Pipeline Flow
 1. CLI validates and submits package (GPG signed)
@@ -180,6 +225,12 @@ Changes to the wire format must be coordinated manually across all four componen
 - `internal/chief/domain/submission.go` (chief receives)
 - `cmd/builder/builder.go` (builder consumes via map)
 - `cmd/repo/repo.go` (repo consumes via map)
+
+The import job has its own wire format, unmarshalled into a struct rather than
+a map:
+- `internal/cli/domain/import.go` (CLI sends)
+- `internal/chief/domain/submission.go` (`ImportSubmission`, chief receives)
+- `cmd/repo/import.go` (`importSubmission`, repo consumes)
 
 ## Testing
 

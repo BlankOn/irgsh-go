@@ -15,7 +15,11 @@ import (
 )
 
 func newTestSubmissionService(tq TaskQueue, fs FileStorage, gpg GPGVerifier, js JobStore, iso ISOJobStore) *SubmissionService {
-	return NewSubmissionService(tq, fs, gpg, js, iso)
+	return NewSubmissionService(tq, fs, gpg, js, iso, nil)
+}
+
+func newTestImportService(tq TaskQueue, store ImportJobStore) *SubmissionService {
+	return NewSubmissionService(tq, &mockFileStorage{}, &mockGPGVerifier{}, nil, nil, store)
 }
 
 func TestSubmitPackage_ValidationErrors(t *testing.T) {

@@ -28,15 +28,16 @@ const (
 
 // Registry manages worker instances in Redis and job data in SQLite
 type Registry struct {
-	client      *redis.Client
-	instanceTTL time.Duration // Timeout to mark as offline
-	ctx         context.Context
-	jobStore    *storage.JobStore    // SQLite job store
-	isoJobStore *storage.ISOJobStore // SQLite ISO job store
+	client         *redis.Client
+	instanceTTL    time.Duration // Timeout to mark as offline
+	ctx            context.Context
+	jobStore       *storage.JobStore       // SQLite job store
+	isoJobStore    *storage.ISOJobStore    // SQLite ISO job store
+	importJobStore *storage.ImportJobStore // SQLite package import job store
 }
 
 // NewRegistry creates a new instance registry with Redis for instances and SQLite for jobs
-func NewRegistry(redisURL string, ttl time.Duration, db *storage.DB, maxJobs, maxISOJobs int) (*Registry, error) {
+func NewRegistry(redisURL string, ttl time.Duration, db *storage.DB, maxJobs, maxISOJobs, maxImportJobs int) (*Registry, error) {
 	// Parse Redis URL
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -58,17 +59,20 @@ func NewRegistry(redisURL string, ttl time.Duration, db *storage.DB, maxJobs, ma
 	// Initialize job stores if database is provided
 	var jobStore *storage.JobStore
 	var isoJobStore *storage.ISOJobStore
+	var importJobStore *storage.ImportJobStore
 	if db != nil {
 		jobStore = storage.NewJobStore(db, maxJobs)
 		isoJobStore = storage.NewISOJobStore(db, maxISOJobs)
+		importJobStore = storage.NewImportJobStore(db, maxImportJobs)
 	}
 
 	return &Registry{
-		client:      client,
-		instanceTTL: ttl,
-		ctx:         ctx,
-		jobStore:    jobStore,
-		isoJobStore: isoJobStore,
+		client:         client,
+		instanceTTL:    ttl,
+		ctx:            ctx,
+		jobStore:       jobStore,
+		isoJobStore:    isoJobStore,
+		importJobStore: importJobStore,
 	}, nil
 }
 
@@ -80,6 +84,11 @@ func (r *Registry) GetJobStore() *storage.JobStore {
 // GetISOJobStore returns the ISO job store for direct access if needed
 func (r *Registry) GetISOJobStore() *storage.ISOJobStore {
 	return r.isoJobStore
+}
+
+// GetImportJobStore returns the import job store for direct access if needed
+func (r *Registry) GetImportJobStore() *storage.ImportJobStore {
+	return r.importJobStore
 }
 
 // UpdateInstance updates or creates an instance record
