@@ -252,8 +252,8 @@
 <div class="section-title">Recent Jobs</div>
     <div class="tabs">
         <button type="button" class="tab-button" data-tab="packaging">Packaging ({{len .Jobs}})</button>
+        <button type="button" class="tab-button" data-tab="imports">Package Imports ({{len .ImportJobs}})</button>
         <button type="button" class="tab-button" data-tab="iso">ISO Builds ({{len .ISOJobs}})</button>
-        <button type="button" class="tab-button" data-tab="imports">Imports ({{len .ImportJobs}})</button>
     </div>
 
     <div class="tab-pane" id="tab-packaging">
@@ -309,35 +309,6 @@
         {{- end}}
     </div>
 
-    <div class="tab-pane" id="tab-iso">
-        {{- if .ISOJobs}}
-        <table>
-            <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>Repository</th>
-                    <th>Branch</th>
-                    <th>Status</th>
-                    <th>UUID</th>
-                </tr>
-            </thead>
-            <tbody>
-            {{- range .ISOJobs}}
-                <tr>
-                    <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
-                    <td>{{.RepoURL}}</td>
-                    <td>{{.Branch}}</td>
-                    <td><span class="{{.StatusClass}}">{{.State}}</span></td>
-                    <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
-                </tr>
-            {{- end}}
-            </tbody>
-        </table>
-        {{- else}}
-        <div class="empty-state">No ISO build jobs found</div>
-        {{- end}}
-    </div>
-
     <div class="tab-pane" id="tab-imports">
         {{- if .ImportJobs}}
         <table>
@@ -379,6 +350,35 @@
         <div class="empty-state">No import jobs found</div>
         {{- end}}
     </div>
+
+    <div class="tab-pane" id="tab-iso">
+        {{- if .ISOJobs}}
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Repository</th>
+                    <th>Branch</th>
+                    <th>Status</th>
+                    <th>UUID</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{- range .ISOJobs}}
+                <tr>
+                    <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                    <td>{{.RepoURL}}</td>
+                    <td>{{.Branch}}</td>
+                    <td><span class="{{.StatusClass}}">{{.State}}</span></td>
+                    <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
+                </tr>
+            {{- end}}
+            </tbody>
+        </table>
+        {{- else}}
+        <div class="empty-state">No ISO build jobs found</div>
+        {{- end}}
+    </div>
     {{- end}}
 
     <div class="refresh-info">
@@ -401,7 +401,7 @@
 
     // Job tabs. The selected tab is kept in the URL fragment (not just JS
     // state) so it survives this page's 10-second meta-refresh reload.
-    var jobTabs = ['packaging', 'iso', 'imports'];
+    var jobTabs = ['packaging', 'imports', 'iso'];
     function showJobTab(name) {
         if (jobTabs.indexOf(name) === -1) name = 'packaging';
         jobTabs.forEach(function(t) {
