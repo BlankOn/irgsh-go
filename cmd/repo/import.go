@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -636,6 +637,10 @@ func sq(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
+// errRepoNotExported reports that the distribution has never been published,
+// so there is nothing to resolve the imported packages against.
+var errRepoNotExported = errors.New("the distribution has not been exported yet")
+
 // targetSandbox models the machine a user installs on: our own repository
 // plus the upstream distribution it sits on top of.
 //
@@ -673,42 +678,37 @@ func upstreamComponents(configured string) string {
 	return strings.Join(components, " ")
 }
 
+// exportedRepoDir is where reprepro publishes a distribution, and so what a
+// user's machine actually installs from.
+func exportedRepoDir(dist string) string {
+	return filepath.Join(irgshConfig.Repo.Workdir, dist, "www")
+}
+
 func (t *targetSandbox) prepare(logPath string) error {
 	if _, err := prepareAptRoot(t.root, t.submission.KeyringPath); err != nil {
 		return err
 	}
 
 	dist := irgshConfig.Repo.DistCodename + experimentalSuffix(t.submission.IsExperimental)
-	ourRepo := filepath.Join(irgshConfig.Repo.Workdir, "www")
+	ourRepo := exportedRepoDir(dist)
 
-	var sources []string
-	// Our own repository, if it has been exported at least once.
-	if _, err := os.Stat(filepath.Join(ourRepo, "dists", dist, "Release")); err == nil {
-		components := irgshConfig.Repo.DistComponents
-		if components == "" {
-			components = t.submission.Component
-		}
-		sources = append(sources, fmt.Sprintf("deb [trusted=yes] file://%s %s %s", ourRepo, dist, components))
-	} else {
-		systemutil.WriteLog(logPath, "##### Note: "+dist+" has not been exported yet, "+
-			"so the dependency check only considers the upstream distribution")
+	// The check resolves against our own distribution and nothing else.
+	//
+	// It is tempting to add the configured upstream as a second source, but
+	// the repository merges upstream into itself (reprepro Update), so what
+	// users can install is whatever we have published. Adding the live
+	// upstream would satisfy dependencies from the very suite the packages
+	// are being imported from, which is precisely the mistake this check
+	// exists to catch.
+	if _, err := os.Stat(filepath.Join(ourRepo, "dists", dist, "Release")); err != nil {
+		return errRepoNotExported
 	}
 
-	// The distribution our repository is an overlay on, which is where a user
-	// gets everything we do not carry ourselves.
-	if irgshConfig.Repo.UpstreamDistUrl != "" && irgshConfig.Repo.UpstreamDistCodename != "" {
-		sources = append(sources, fmt.Sprintf("deb %s %s %s",
-			irgshConfig.Repo.UpstreamDistUrl,
-			irgshConfig.Repo.UpstreamDistCodename,
-			upstreamComponents(irgshConfig.Repo.UpstreamDistComponents)))
+	components := irgshConfig.Repo.DistComponents
+	if components == "" {
+		components = t.submission.Component
 	}
-
-	if len(sources) == 0 {
-		return fmt.Errorf("neither an exported repository nor an upstream distribution is configured, " +
-			"so the imported packages cannot be checked")
-	}
-
-	sourcesList := strings.Join(sources, "\n") + "\n"
+	sourcesList := fmt.Sprintf("deb [trusted=yes] file://%s %s %s\n", ourRepo, dist, components)
 	if err := os.WriteFile(filepath.Join(t.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
 		return fmt.Errorf("failed to write the target sources list: %w", err)
 	}
@@ -744,6 +744,14 @@ func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
 func checkDependencies(logPath, workdir string, submission importSubmission, debFiles []string) error {
 	target := newTargetSandbox(workdir, submission)
 	if err := target.prepare(logPath); err != nil {
+		if errors.Is(err, errRepoNotExported) {
+			// Nothing has been published yet, so there is nothing to resolve
+			// against. Say so rather than reporting a pass.
+			systemutil.WriteLog(logPath, "##### Skipping the dependency check: "+
+				irgshConfig.Repo.DistCodename+experimentalSuffix(submission.IsExperimental)+
+				" has not been exported yet, so there is nothing to check the packages against")
+			return nil
+		}
 		return fmt.Errorf("could not prepare the dependency check: %w", err)
 	}
 	return target.simulate(logPath, debFiles)

@@ -40,6 +40,7 @@ type ChiefAPI interface {
 	SubmitISO(ctx context.Context, submission domain.ISOSubmission) (domain.SubmitResponse, error)
 	SubmitImport(ctx context.Context, submission domain.ImportSubmission) (domain.SubmitResponse, error)
 	GetImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error)
+	GetRepoInfo(ctx context.Context) (domain.RepoInfo, error)
 	GetPackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	GetISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	Retry(ctx context.Context, pipelineID string) (domain.RetryResponse, error)

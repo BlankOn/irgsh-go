@@ -39,6 +39,11 @@ repo:
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
   upstream_dist_components: 'main non-free>restricted contrib>extras non-free-firmware>restricted-firmware'
+  # Where this repository is published for users. irgsh-cli checks an import
+  # against it, so that it validates against the repository the packages are
+  # really going into rather than whatever the maintainer's machine happens
+  # to have configured.
+  public_url: 'http://arsip-dev.blankonlinux.id/dev'
   gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:

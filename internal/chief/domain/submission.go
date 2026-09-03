@@ -58,6 +58,14 @@ type ImportSubmission struct {
 	IgnoreDependencies bool `json:"ignoreDependencies"`
 }
 
+// RepoInfo describes the repository packages are published to, so that a
+// client can check an import against the real target.
+type RepoInfo struct {
+	PublicURL      string `json:"publicUrl"`
+	DistCodename   string `json:"distCodename"`
+	DistComponents string `json:"distComponents"`
+}
+
 // ISOSubmission represents an ISO build request.
 // The JSON tags must stay in sync with internal/cli/domain/iso.go.
 type ISOSubmission struct {

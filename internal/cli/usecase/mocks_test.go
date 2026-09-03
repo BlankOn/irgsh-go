@@ -88,6 +88,8 @@ type mockChiefAPI struct {
 	importErr       error
 	importStatus    domain.ImportStatus
 	importStatusErr error
+	repoInfo        domain.RepoInfo
+	repoInfoErr     error
 	importSubmitted domain.ImportSubmission
 	retryResp       domain.RetryResponse
 	retryErr        error
@@ -110,6 +112,10 @@ func (m *mockChiefAPI) SubmitImport(_ context.Context, submission domain.ImportS
 
 func (m *mockChiefAPI) GetImportStatus(_ context.Context, _ string) (domain.ImportStatus, error) {
 	return m.importStatus, m.importStatusErr
+}
+
+func (m *mockChiefAPI) GetRepoInfo(_ context.Context) (domain.RepoInfo, error) {
+	return m.repoInfo, m.repoInfoErr
 }
 
 func (m *mockChiefAPI) SubmitPackage(_ context.Context, _ domain.Submission) (domain.SubmitResponse, error) {

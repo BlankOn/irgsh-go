@@ -100,6 +100,53 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		IgnoreDependencies: params.IgnoreDependencies,
 	}
 
+	// Check here first: the maintainer's machine runs the distribution these
+	// packages are going into, so it can answer before anything is queued.
+	if !params.SkipCheck {
+		// Ask chief where these packages are going, rather than assuming this
+		// machine is configured with the same repository.
+		var targets []string
+		var targetDesc string
+		info, infoErr := u.chief.GetRepoInfo(ctx)
+		if infoErr != nil {
+			fmt.Printf("Could not ask chief which repository this targets (%v), falling back to this machine's sources\n", infoErr)
+		}
+		targets, targetDesc, infoErr = targetSources(info)
+		if infoErr != nil {
+			fmt.Printf("Skipping the local dependency check: %v\n", infoErr)
+			targets = nil
+		}
+
+		if len(targets) > 0 {
+			fmt.Println("Checking the packages against " + targetDesc + " ...")
+		}
+		switch checkErr := u.checkImportLocally(ImportCheckParams{
+			SourceURL:       params.SourceURL,
+			Dist:            params.Dist,
+			SourceComponent: sourceComponent,
+			PackageNames:    params.PackageNames,
+			TargetSources:   targets,
+		}); {
+		case checkErr == nil:
+			fmt.Println("Dependency check passed.")
+		case errors.Is(checkErr, errCheckUnavailable), errors.Is(checkErr, errNoSystemSources), errors.Is(checkErr, errNoTarget):
+			fmt.Printf("Skipping the local dependency check: %v\n", checkErr)
+			fmt.Println("The repo worker will still check before injecting.")
+		default:
+			var depErr *ImportDependencyError
+			if errors.As(checkErr, &depErr) && !params.IgnoreDependencies {
+				return domain.SubmitResponse{}, fmt.Errorf("%s: %w\n\n"+
+					"Import it anyway with --ignore-dependencies, or check without submitting with --dry-run",
+					targetDesc, depErr)
+			}
+			if errors.As(checkErr, &depErr) {
+				fmt.Println("Warning: the packages are not installable here, importing anyway (--ignore-dependencies)")
+			} else {
+				fmt.Printf("Skipping the local dependency check: %v\n", checkErr)
+			}
+		}
+	}
+
 	resp, err := u.chief.SubmitImport(ctx, submission)
 	if err != nil {
 		return domain.SubmitResponse{}, err

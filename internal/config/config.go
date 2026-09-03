@@ -54,7 +54,11 @@ type RepoConfig struct {
 	UpstreamDistCodename       string `json:"upstream_dist_codename"`       // sid
 	UpstreamDistUrl            string `json:"upstream_dist_url"`            // http://kartolo.sby.datautama.net.id/debian
 	UpstreamDistComponents     string `json:"upstream_dist_components"`     // main non-free>restricted contrib>extras
-	GnupgDir                   string `json:"gnupg_dir"`                    // GNUPG dir path
+	// PublicURL is where this repository is published for users to install
+	// from, e.g. http://arsip-dev.blankonlinux.id/dev. Clients need it to
+	// check a package against the repository it is actually going into.
+	PublicURL string `json:"public_url"`
+	GnupgDir  string `json:"gnupg_dir"` // GNUPG dir path
 }
 
 type MonitoringConfig struct {

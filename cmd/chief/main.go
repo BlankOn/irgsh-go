@@ -167,6 +167,7 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	mux.HandleFunc("/api/v1/iso-status", ISOStatusHandler)
 	mux.HandleFunc("/api/v1/import", ImportPackagesHandler)
 	mux.HandleFunc("/api/v1/import-status", ImportStatusHandler)
+	mux.HandleFunc("/api/v1/repo-info", RepoInfoHandler)
 	mux.HandleFunc("/api/v1/version", VersionHandler)
 
 	mux.HandleFunc("/api/v1/log-stream", logStreamHandler(cfg.Chief.Workdir+"/logs", logSubscriber))

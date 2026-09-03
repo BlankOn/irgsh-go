@@ -24,6 +24,7 @@ type ChiefService interface {
 	BuildStatus(string) (domain.BuildStatusResponse, error)
 	ISOStatus(string) (string, string, error)
 	BuildISO(domain.ISOSubmission) (domain.SubmitPayloadResponse, error)
+	RepoInfo() domain.RepoInfo
 	ImportStatus(string) (string, string, error)
 	ImportPackages(domain.ImportSubmission) (domain.SubmitPayloadResponse, error)
 	UploadArtifact(string, io.Reader) error
@@ -155,6 +156,12 @@ func ISOStatusHandler(w http.ResponseWriter, r *http.Request) {
 		State:      jobStatus,
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// RepoInfoHandler reports the repository imports are published to, so a
+// client can check a package against the repository it is going into.
+func RepoInfoHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, chiefService.RepoInfo())
 }
 
 func ImportStatusHandler(w http.ResponseWriter, r *http.Request) {

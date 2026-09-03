@@ -298,6 +298,35 @@ func (c *HTTPChiefClient) SubmitImport(ctx context.Context, submission domain.Im
 	return sr, nil
 }
 
+func (c *HTTPChiefClient) GetRepoInfo(ctx context.Context) (domain.RepoInfo, error) {
+	base, err := c.baseURL()
+	if err != nil {
+		return domain.RepoInfo{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/repo-info", nil)
+	if err != nil {
+		return domain.RepoInfo{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return domain.RepoInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return domain.RepoInfo{}, err
+	}
+
+	var info domain.RepoInfo
+	if err := decodeJSON(resp, "/api/v1/repo-info", &info); err != nil {
+		return domain.RepoInfo{}, err
+	}
+	return info, nil
+}
+
 func (c *HTTPChiefClient) GetImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error) {
 	base, err := c.baseURL()
 	if err != nil {

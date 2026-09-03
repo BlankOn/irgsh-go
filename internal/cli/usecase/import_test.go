@@ -3,6 +3,9 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
@@ -28,12 +31,19 @@ func TestSplitPackageNames(t *testing.T) {
 
 func newImportUsecase(t *testing.T, chief *mockChiefAPI, pipelines *mockPipelineStore) *usecase.CLIUsecase {
 	t.Helper()
+	// A shell that reports apt as unavailable, so the local dependency check
+	// is skipped: the tests here are about submission, not about apt.
+	return newImportUsecaseWithShell(t, chief, pipelines, &mockShellRunner{err: errors.New("not found")})
+}
+
+func newImportUsecaseWithShell(t *testing.T, chief *mockChiefAPI, pipelines *mockPipelineStore, shell usecase.ShellRunner) *usecase.CLIUsecase {
+	t.Helper()
 	return usecase.NewCLIUsecase(
 		&mockConfigStore{config: domain.Config{
 			ChiefAddress:         "https://irgsh.example.id",
 			MaintainerSigningKey: "54495BCCA444849BD55A84ED5115CB575CE255A8",
 		}},
-		pipelines, chief, nil, nil, nil,
+		pipelines, chief, shell, nil, nil,
 		&mockGPGSigner{identity: "Herpiko Dwi Aguno <herpiko@gmail.com>"},
 		nil, nil, nil, "1.0.0",
 	)
@@ -153,4 +163,226 @@ func TestSubmitImport_DefaultsAreConservative(t *testing.T) {
 	assert.False(t, chief.importSubmitted.DryRun)
 	assert.False(t, chief.importSubmitted.IgnoreDependencies)
 	assert.False(t, chief.importSubmitted.Insecure)
+}
+
+// A machine without apt cannot check, and that must not block a submission.
+func TestSubmitImport_LocalCheckUnavailable(t *testing.T) {
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+
+	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{},
+		&mockShellRunner{err: errors.New("command not found")},
+	).SubmitImport(context.Background(), domain.ImportParams{
+		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+		Dist:         "sid",
+		PackageNames: []string{"firefox"},
+	})
+
+	require.NoError(t, err, "an unavailable check must not block the import")
+	assert.Equal(t, "firefox", chief.importSubmitted.PackageNames[0])
+}
+
+// When the check runs and the packages are not installable, the submission is
+// refused with apt's own report.
+func TestSubmitImport_LocalCheckFails(t *testing.T) {
+	unmet := `The following packages have unmet dependencies:
+ firefox : Depends: libc6 (>= 2.43) but 2.41-12+deb13u3 is to be installed
+           Depends: libvpx12 (>= 1.16.0) but it is not installable`
+
+	// Every command succeeds except the simulation, which reports the unmet
+	// dependencies and exits non-zero.
+	shell := &scriptedShell{
+		outputs: map[string]shellResult{
+			"--simulate": {out: unmet, err: errors.New("exit status 100")},
+		},
+	}
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+
+	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
+		SubmitImport(context.Background(), domain.ImportParams{
+			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+			Dist:         "sid",
+			PackageNames: []string{"firefox"},
+		})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "libc6 (>= 2.43)")
+	assert.Contains(t, err.Error(), "--ignore-dependencies")
+	assert.Empty(t, chief.importSubmitted.PackageNames, "a failing check must not submit anything")
+}
+
+// --ignore-dependencies submits anyway.
+func TestSubmitImport_LocalCheckOverridden(t *testing.T) {
+	shell := &scriptedShell{
+		outputs: map[string]shellResult{
+			"--simulate": {out: "unmet dependencies", err: errors.New("exit status 100")},
+		},
+	}
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+
+	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
+		SubmitImport(context.Background(), domain.ImportParams{
+			SourceURL:          "https://kartolo.sby.datautama.net.id/debian/",
+			Dist:               "sid",
+			PackageNames:       []string{"firefox"},
+			IgnoreDependencies: true,
+		})
+
+	require.NoError(t, err)
+	assert.Equal(t, "firefox", chief.importSubmitted.PackageNames[0])
+}
+
+// --skip-check does not run the check at all.
+func TestSubmitImport_SkipCheck(t *testing.T) {
+	shell := &scriptedShell{
+		outputs: map[string]shellResult{
+			"--simulate": {out: "unmet dependencies", err: errors.New("exit status 100")},
+		},
+	}
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+
+	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
+		SubmitImport(context.Background(), domain.ImportParams{
+			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+			Dist:         "sid",
+			PackageNames: []string{"firefox"},
+			SkipCheck:    true,
+		})
+
+	require.NoError(t, err)
+	assert.False(t, shell.simulated, "--skip-check must not run the simulation")
+}
+
+// shellResult is one canned command result.
+type shellResult struct {
+	out string
+	err error
+}
+
+// scriptedShell answers by substring: any command containing a key returns
+// that result, everything else succeeds.
+type scriptedShell struct {
+	outputs   map[string]shellResult
+	simulated bool
+	// checkRoot is the sandbox directory the check built, captured so the
+	// test can read the files apt was pointed at.
+	checkRoot string
+}
+
+// sourcesList returns the sources.list the check wrote.
+func (s *scriptedShell) sourcesList(t *testing.T) string {
+	t.Helper()
+	return s.readSandboxFile(t, "sources.list")
+}
+
+// preferences returns the apt pinning the check wrote.
+func (s *scriptedShell) preferences(t *testing.T) string {
+	t.Helper()
+	return s.readSandboxFile(t, "preferences")
+}
+
+func (s *scriptedShell) readSandboxFile(t *testing.T, name string) string {
+	t.Helper()
+	if s.checkRoot == "" {
+		t.Fatal("the check never built a sandbox")
+	}
+	content, err := os.ReadFile(filepath.Join(s.checkRoot, name))
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", name, err)
+	}
+	return string(content)
+}
+
+// captureRoot remembers the sandbox path from an apt command line, before the
+// check removes the directory.
+func (s *scriptedShell) captureRoot(cmd string) {
+	const marker = "-o Dir::State='"
+	i := strings.Index(cmd, marker)
+	if i < 0 {
+		return
+	}
+	rest := cmd[i+len(marker):]
+	end := strings.Index(rest, "'")
+	if end < 0 {
+		return
+	}
+	s.checkRoot = filepath.Dir(rest[:end])
+}
+
+func (s *scriptedShell) result(cmd string) shellResult {
+	s.captureRoot(cmd)
+	if strings.Contains(cmd, "--simulate") {
+		s.simulated = true
+	}
+	for key, result := range s.outputs {
+		if strings.Contains(cmd, key) {
+			return result
+		}
+	}
+	return shellResult{}
+}
+
+func (s *scriptedShell) Output(cmd string) (string, error) {
+	r := s.result(cmd)
+	return r.out, r.err
+}
+
+func (s *scriptedShell) Run(cmd string) error            { return s.result(cmd).err }
+func (s *scriptedShell) RunInteractive(cmd string) error { return s.result(cmd).err }
+
+// The target is whatever chief publishes to, not whatever this machine
+// happens to have in its sources.list.
+func TestSubmitImport_ChecksAgainstTheRepositoryChiefPublishesTo(t *testing.T) {
+	shell := &scriptedShell{}
+	chief := &mockChiefAPI{
+		importResp: domain.SubmitResponse{PipelineID: "id"},
+		repoInfo: domain.RepoInfo{
+			PublicURL:      "http://arsip-dev.blankonlinux.id/dev",
+			DistCodename:   "verbeek",
+			DistComponents: "main restricted extras",
+		},
+	}
+
+	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
+		SubmitImport(context.Background(), domain.ImportParams{
+			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+			Dist:         "sid",
+			PackageNames: []string{"firefox"},
+		})
+	require.NoError(t, err)
+
+	if !shell.simulated {
+		t.Fatal("the check must have run")
+	}
+	sources := shell.sourcesList(t)
+	assert.Contains(t, sources, "http://arsip-dev.blankonlinux.id/dev verbeek main restricted extras",
+		"the target must be the repository chief publishes to")
+	assert.Contains(t, sources, "https://kartolo.sby.datautama.net.id/debian/ sid main",
+		"the source repository must be added so the candidate can be found")
+
+	// The source suite is pinned out of dependency resolution, otherwise it
+	// would satisfy the dependencies it is supposed to be checked against.
+	preferences := shell.preferences(t)
+	assert.Contains(t, preferences, "Pin: release n=sid")
+	assert.Contains(t, preferences, "Pin-Priority: -1")
+	assert.Contains(t, preferences, "Package: firefox")
+}
+
+// An older chief has no repo-info endpoint; the check falls back rather than
+// blocking the import.
+func TestSubmitImport_RepoInfoUnavailable(t *testing.T) {
+	shell := &scriptedShell{}
+	chief := &mockChiefAPI{
+		importResp:  domain.SubmitResponse{PipelineID: "id"},
+		repoInfoErr: errors.New("HTTP 404"),
+	}
+
+	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
+		SubmitImport(context.Background(), domain.ImportParams{
+			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
+			Dist:         "sid",
+			PackageNames: []string{"firefox"},
+		})
+
+	require.NoError(t, err, "an unreachable repo-info must not block the import")
+	assert.Equal(t, "firefox", chief.importSubmitted.PackageNames[0])
 }

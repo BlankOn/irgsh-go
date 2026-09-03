@@ -185,9 +185,23 @@ archive keys in the latter). Use `--keyring <path>` for a repository whose key
 is elsewhere, or `--insecure` to skip verification.
 
 Importing from a newer suite than the repository is based on is how a package
-that nobody can install gets in, so step 4 is on by default: `--dry-run`
-fetches and checks without injecting, and `--ignore-dependencies` injects
-anyway.
+that nobody can install gets in, so dependencies are checked twice:
+
+- **In the CLI, before submitting.** The maintainer's machine already runs the
+  distribution, so its own apt sources are the target. The source repository is
+  added as an extra source, pinned (`Pin: release n=<dist>`, priority -1) so
+  only the named packages may come from it and their dependencies must be
+  satisfied by the distribution. `--skip-check` bypasses it; a machine without
+  apt skips it with a note.
+- **In the repo worker, before injecting.** The downloaded `.deb` files are
+  resolved against the exported distribution in
+  `<repo workdir>/<codename>/www`. The configured upstream is deliberately not
+  added: the repository merges upstream into itself, so what users can install
+  is what we have published, and adding the live upstream would satisfy
+  dependencies from the very suite the packages come from.
+
+`--dry-run` fetches and checks without injecting; `--ignore-dependencies`
+imports anyway.
 
 ### Pipeline Flow
 1. CLI validates and submits package (GPG signed)

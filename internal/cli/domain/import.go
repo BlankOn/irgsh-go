@@ -19,6 +19,14 @@ type ImportSubmission struct {
 	IgnoreDependencies bool `json:"ignoreDependencies"`
 }
 
+// RepoInfo describes the repository an import is published to.
+// The JSON tags must stay in sync with internal/chief/domain/submission.go.
+type RepoInfo struct {
+	PublicURL      string `json:"publicUrl"`
+	DistCodename   string `json:"distCodename"`
+	DistComponents string `json:"distComponents"`
+}
+
 // ImportStatus is the chief response for an import pipeline.
 type ImportStatus struct {
 	PipelineID   string `json:"pipelineId"`
@@ -41,4 +49,5 @@ type ImportParams struct {
 	DryRun          bool
 
 	IgnoreDependencies bool
+	SkipCheck          bool
 }

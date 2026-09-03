@@ -101,6 +101,16 @@ func (s *ChiefUsecase) ImportPackages(submission domain.ImportSubmission) (domai
 	return s.submissionSvc.ImportPackages(submission)
 }
 
+// RepoInfo reports where the repository is published and under which
+// codename, from this chief's configuration.
+func (s *ChiefUsecase) RepoInfo() domain.RepoInfo {
+	return domain.RepoInfo{
+		PublicURL:      s.config.Repo.PublicURL,
+		DistCodename:   s.config.Repo.DistCodename,
+		DistComponents: s.config.Repo.DistComponents,
+	}
+}
+
 func (s *ChiefUsecase) ImportStatus(UUID string) (string, string, error) {
 	return s.statusSvc.ImportStatus(UUID)
 }
