@@ -1,3 +1,25 @@
+irgsh (2.0.0-1) unstable; urgency=medium
+
+  * Add multi-distribution support: chief is now distribution-agnostic and
+    routes tasks by dist to per-distribution Machinery queues
+    (irgsh-<dist_codename>), replacing the single shared "irgsh" queue
+  * BREAKING: builder and iso now require a dist_codename in their config;
+    irgsh-cli requires --dist on `package submit` and `livebuild submit`,
+    and --repo-dist on `import` (existing --dist there still means the
+    source suite)
+  * BREAKING: wire format for Submission/ISOSubmission gains a required
+    dist field; ImportSubmission gains targetDist
+  * Config validation is now scoped per component (its own section plus
+    redis: only), so e.g. irgsh-repo no longer requires chief:/builder:
+    to be populated in its config file
+  * Convert the default install flow (make build-install/install.sh) from
+    sysv init scripts to native systemd units, matching how the Debian
+    package has always installed them
+  * Add dist/target_dist columns to the jobs, iso_jobs and import_jobs
+    SQLite tables (migrated automatically on existing databases)
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 04 Sep 2026 00:00:00 +0700
+
 irgsh (1.3.14-2) unstable; urgency=medium
 
   * Split irgsh-cli into a standalone binary package (Closes: #189)
