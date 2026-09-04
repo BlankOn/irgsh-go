@@ -49,6 +49,7 @@ type TypeCount struct {
 type WorkerView struct {
 	Type        string
 	BadgeClass  string
+	Dist        string
 	Hostname    string
 	Status      string
 	StatusClass string
@@ -88,7 +89,7 @@ type JobView struct {
 type ISOJobView struct {
 	TimeFormatted string
 	TimeRelative  string
-	RepoURL       string
+	Dist          string
 	Branch        string
 	State         string
 	StatusClass   string
@@ -242,6 +243,7 @@ func buildWorkerViews(instances []*monitoring.InstanceInfo) []WorkerView {
 		views = append(views, WorkerView{
 			Type:        string(inst.InstanceType),
 			BadgeClass:  badgeClass,
+			Dist:        inst.Dist,
 			Hostname:    inst.Hostname,
 			Status:      string(inst.Status),
 			StatusClass: statusClass,
@@ -436,7 +438,7 @@ func (d *DashboardService) buildISOJobViews() []ISOJobView {
 		views = append(views, ISOJobView{
 			TimeFormatted: jakartaTime.Format("2006-01-02 15:04:05 MST"),
 			TimeRelative:  formatRelativeTime(job.SubmittedAt),
-			RepoURL:       job.RepoURL,
+			Dist:          job.Dist,
 			Branch:        job.Branch,
 			State:         job.State,
 			StatusClass:   statusClass,

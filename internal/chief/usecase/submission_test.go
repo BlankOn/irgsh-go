@@ -31,18 +31,28 @@ func TestSubmitPackage_ValidationErrors(t *testing.T) {
 		wantMsg    string
 	}{
 		{
+			"missing dist",
+			domain.Submission{MaintainerFingerprint: "ABC123", PackageName: "pkg", Tarball: "tarball"},
+			"dist is required",
+		},
+		{
+			"unsafe dist",
+			domain.Submission{Dist: "verbeek; rm -rf /", MaintainerFingerprint: "ABC123", PackageName: "pkg", Tarball: "tarball"},
+			"unsupported characters",
+		},
+		{
 			"invalid fingerprint",
-			domain.Submission{MaintainerFingerprint: "../bad", PackageName: "pkg", Tarball: "tarball"},
+			domain.Submission{Dist: "verbeek", MaintainerFingerprint: "../bad", PackageName: "pkg", Tarball: "tarball"},
 			"invalid maintainer fingerprint",
 		},
 		{
 			"invalid package name",
-			domain.Submission{MaintainerFingerprint: "ABC123", PackageName: "bad/name", Tarball: "tarball"},
+			domain.Submission{Dist: "verbeek", MaintainerFingerprint: "ABC123", PackageName: "bad/name", Tarball: "tarball"},
 			"invalid package name",
 		},
 		{
 			"invalid tarball",
-			domain.Submission{MaintainerFingerprint: "ABC123", PackageName: "pkg", Tarball: "bad/tarball"},
+			domain.Submission{Dist: "verbeek", MaintainerFingerprint: "ABC123", PackageName: "pkg", Tarball: "bad/tarball"},
 			"invalid tarball identifier",
 		},
 	}
@@ -88,6 +98,7 @@ func TestSubmitPackage_GPGFailure(t *testing.T) {
 	svc := newTestSubmissionService(&mockTaskQueue{}, storage, gpg, nil, nil)
 
 	sub := domain.Submission{
+		Dist:                  "verbeek",
 		MaintainerFingerprint: "ABCDEF1234567890",
 		PackageName:           "testpkg",
 		Tarball:               tarballName,
@@ -106,7 +117,7 @@ func TestSubmitPackage_QueueFailure(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, tarballName+".token"), []byte("sig"), 0644))
 
 	tq := &mockTaskQueue{
-		sendBuildChainFn: func(taskUUID string, payload []byte) error {
+		sendBuildChainFn: func(taskUUID, dist string, payload []byte) error {
 			return errors.New("queue down")
 		},
 	}
@@ -126,6 +137,7 @@ func TestSubmitPackage_QueueFailure(t *testing.T) {
 	svc := newTestSubmissionService(tq, storage, &mockGPGVerifier{}, nil, nil)
 
 	sub := domain.Submission{
+		Dist:                  "verbeek",
 		MaintainerFingerprint: "ABCDEF1234567890",
 		PackageName:           "testpkg",
 		Tarball:               tarballName,
@@ -153,7 +165,7 @@ func TestSubmitPackage_Success(t *testing.T) {
 
 	var queuedUUID string
 	tq := &mockTaskQueue{
-		sendBuildChainFn: func(taskUUID string, payload []byte) error {
+		sendBuildChainFn: func(taskUUID, dist string, payload []byte) error {
 			queuedUUID = taskUUID
 			return nil
 		},
@@ -175,6 +187,7 @@ func TestSubmitPackage_Success(t *testing.T) {
 	svc := newTestSubmissionService(tq, storage, &mockGPGVerifier{}, jobStore, nil)
 
 	sub := domain.Submission{
+		Dist:                  "verbeek",
 		MaintainerFingerprint: "ABCDEF1234567890",
 		PackageName:           "testpkg",
 		PackageVersion:        "1.0",
@@ -186,6 +199,7 @@ func TestSubmitPackage_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.PipelineID)
 	assert.Equal(t, resp.PipelineID, queuedUUID)
 	assert.Equal(t, "testpkg", recordedJob.PackageName)
+	assert.Equal(t, "verbeek", recordedJob.Dist)
 	assert.Equal(t, "PENDING", recordedJob.State)
 }
 
@@ -248,17 +262,26 @@ func TestRetryPipeline_MissingTarball(t *testing.T) {
 func TestBuildISO_ValidationErrors(t *testing.T) {
 	svc := newTestSubmissionService(&mockTaskQueue{}, &mockFileStorage{}, &mockGPGVerifier{}, nil, nil)
 
-	t.Run("missing repoUrl", func(t *testing.T) {
+	t.Run("missing dist", func(t *testing.T) {
 		_, err := svc.BuildISO(domain.ISOSubmission{Branch: "main"})
 		require.Error(t, err)
 		var httpErr httputil.HTTPError
 		require.True(t, errors.As(err, &httpErr))
 		assert.Equal(t, http.StatusBadRequest, httpErr.Code)
-		assert.Contains(t, httpErr.Message, "repoUrl")
+		assert.Contains(t, httpErr.Message, "dist")
+	})
+
+	t.Run("unsafe dist", func(t *testing.T) {
+		_, err := svc.BuildISO(domain.ISOSubmission{Dist: "verbeek; rm -rf /", Branch: "main"})
+		require.Error(t, err)
+		var httpErr httputil.HTTPError
+		require.True(t, errors.As(err, &httpErr))
+		assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		assert.Contains(t, httpErr.Message, "unsupported characters")
 	})
 
 	t.Run("missing branch", func(t *testing.T) {
-		_, err := svc.BuildISO(domain.ISOSubmission{RepoURL: "https://repo.example.com"})
+		_, err := svc.BuildISO(domain.ISOSubmission{Dist: "verbeek"})
 		require.Error(t, err)
 		var httpErr httputil.HTTPError
 		require.True(t, errors.As(err, &httpErr))
@@ -269,15 +292,15 @@ func TestBuildISO_ValidationErrors(t *testing.T) {
 
 func TestBuildISO_QueueFailure(t *testing.T) {
 	tq := &mockTaskQueue{
-		sendISOTaskFn: func(taskUUID string, payload []byte) error {
+		sendISOTaskFn: func(taskUUID, dist string, payload []byte) error {
 			return errors.New("queue down")
 		},
 	}
 	svc := newTestSubmissionService(tq, &mockFileStorage{}, &mockGPGVerifier{}, nil, nil)
 
 	_, err := svc.BuildISO(domain.ISOSubmission{
-		RepoURL: "https://repo.example.com",
-		Branch:  "main",
+		Dist:   "verbeek",
+		Branch: "main",
 	})
 	require.Error(t, err)
 	var httpErr httputil.HTTPError
@@ -294,10 +317,13 @@ func TestBuildISO_Success(t *testing.T) {
 		},
 	}
 
-	var queuedUUID string
+	var queuedUUID, queuedDist string
+	var queuedPayload []byte
 	tq := &mockTaskQueue{
-		sendISOTaskFn: func(taskUUID string, payload []byte) error {
+		sendISOTaskFn: func(taskUUID, dist string, payload []byte) error {
 			queuedUUID = taskUUID
+			queuedDist = dist
+			queuedPayload = payload
 			return nil
 		},
 	}
@@ -305,13 +331,25 @@ func TestBuildISO_Success(t *testing.T) {
 	svc := newTestSubmissionService(tq, &mockFileStorage{}, &mockGPGVerifier{}, nil, isoStore)
 
 	resp, err := svc.BuildISO(domain.ISOSubmission{
-		RepoURL: "https://repo.example.com",
+		Dist:    "verbeek",
 		Branch:  "main",
+		NoCache: true,
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.PipelineID)
 	assert.Contains(t, resp.PipelineID, "_iso")
 	assert.Equal(t, resp.PipelineID, queuedUUID)
 	assert.Equal(t, "PENDING", recordedISO.State)
-	assert.Equal(t, "https://repo.example.com", recordedISO.RepoURL)
+	assert.Equal(t, "verbeek", recordedISO.Dist)
+	assert.Equal(t, "main", recordedISO.Branch)
+	// The live-build repository belongs to the worker's config now, so chief
+	// records nothing for it.
+	assert.Empty(t, recordedISO.RepoURL)
+
+	// The job must be routed to the target dist's queue, and the worker needs
+	// the branch and the cacheless flag off the wire.
+	assert.Equal(t, "verbeek", queuedDist)
+	assert.Contains(t, string(queuedPayload), `"branch":"main"`)
+	assert.Contains(t, string(queuedPayload), `"noCache":true`)
+	assert.NotContains(t, string(queuedPayload), "repoUrl")
 }

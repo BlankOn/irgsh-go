@@ -22,13 +22,11 @@ release:
 	# Bundling
 	mkdir -p irgsh-go/usr/bin
 	mkdir -p irgsh-go/etc/irgsh
-	mkdir -p irgsh-go/etc/init.d
 	mkdir -p irgsh-go/lib/systemd/system
 	mkdir -p irgsh-go/usr/share/irgsh
 	cp -rf bin/* irgsh-go/usr/bin/
 	cp -rf utils/config.yaml irgsh-go/etc/irgsh/
 	cp -rf utils/config.yaml irgsh-go/usr/share/irgsh/config.yaml
-	cp -rf utils/init/* irgsh-go/etc/init.d/
 	cp -rf utils/systemctl/* irgsh-go/lib/systemd/system
 	cp -rf utils/scripts/init.sh irgsh-go/usr/share/irgsh/init.sh
 	cp -rf utils/scripts/iso-build.sh irgsh-go/usr/share/irgsh/iso-build.sh
@@ -44,10 +42,10 @@ release-in-docker: release
 	chown -vR :users target
 
 preinstall:
-	sudo /etc/init.d/irgsh-chief stop || true
-	sudo /etc/init.d/irgsh-builder stop || true
-	sudo /etc/init.d/irgsh-iso stop || true
-	sudo /etc/init.d/irgsh-repo stop || true
+	sudo systemctl stop irgsh-chief || true
+	sudo systemctl stop irgsh-builder || true
+	sudo systemctl stop irgsh-iso || true
+	sudo systemctl stop irgsh-repo || true
 	sudo killall irgsh-chief || true
 	sudo killall irgsh-builder || true
 	sudo killall irgsh-iso || true
@@ -69,9 +67,9 @@ build:
 build-install: release
 	./install.sh
 	sudo systemctl daemon-reload
-	sudo /lib/systemd/systemd-sysv-install enable irgsh-chief
-	sudo /lib/systemd/systemd-sysv-install enable irgsh-builder
-	sudo /lib/systemd/systemd-sysv-install enable irgsh-repo
+	sudo systemctl enable irgsh-chief
+	sudo systemctl enable irgsh-builder
+	sudo systemctl enable irgsh-repo
 	sudo systemctl start irgsh-chief
 	sudo systemctl start irgsh-builder
 	sudo systemctl start irgsh-repo

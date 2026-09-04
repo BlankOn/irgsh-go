@@ -9,6 +9,7 @@ import (
 // ISOJobInfo contains metadata about an ISO build job
 type ISOJobInfo struct {
 	TaskUUID    string    `json:"task_uuid"`
+	Dist        string    `json:"dist"` // Target distribution this ISO builds for
 	RepoURL     string    `json:"repo_url"`
 	Branch      string    `json:"branch"`
 	SubmittedAt time.Time `json:"submitted_at"`
@@ -35,16 +36,17 @@ func NewISOJobStore(db *DB, maxISOJobs int) *ISOJobStore {
 // RecordISOJob stores ISO job metadata in SQLite
 func (s *ISOJobStore) RecordISOJob(job ISOJobInfo) error {
 	query := `
-		INSERT INTO iso_jobs (task_uuid, repo_url, branch, submitted_at, state)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO iso_jobs (task_uuid, dist, repo_url, branch, submitted_at, state)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(task_uuid) DO UPDATE SET
+			dist = excluded.dist,
 			repo_url = excluded.repo_url,
 			branch = excluded.branch,
 			state = excluded.state,
 			updated_at = CURRENT_TIMESTAMP
 	`
 
-	_, err := s.db.Exec(query, job.TaskUUID, job.RepoURL, job.Branch, job.SubmittedAt, job.State)
+	_, err := s.db.Exec(query, job.TaskUUID, job.Dist, job.RepoURL, job.Branch, job.SubmittedAt, job.State)
 	if err != nil {
 		return fmt.Errorf("failed to record ISO job: %w", err)
 	}
@@ -61,14 +63,14 @@ func (s *ISOJobStore) RecordISOJob(job ISOJobInfo) error {
 // GetISOJob retrieves an ISO job by UUID
 func (s *ISOJobStore) GetISOJob(taskUUID string) (*ISOJobInfo, error) {
 	query := `
-		SELECT task_uuid, repo_url, branch, submitted_at, state
+		SELECT task_uuid, dist, repo_url, branch, submitted_at, state
 		FROM iso_jobs
 		WHERE task_uuid = ?
 	`
 
 	var job ISOJobInfo
 	err := s.db.QueryRow(query, taskUUID).Scan(
-		&job.TaskUUID, &job.RepoURL, &job.Branch, &job.SubmittedAt, &job.State,
+		&job.TaskUUID, &job.Dist, &job.RepoURL, &job.Branch, &job.SubmittedAt, &job.State,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("ISO job not found: %s", taskUUID)
@@ -87,7 +89,7 @@ func (s *ISOJobStore) GetRecentISOJobs(limit int) ([]*ISOJobInfo, error) {
 	}
 
 	query := `
-		SELECT task_uuid, repo_url, branch, submitted_at, state
+		SELECT task_uuid, dist, repo_url, branch, submitted_at, state
 		FROM iso_jobs
 		ORDER BY submitted_at DESC
 		LIMIT ?
@@ -102,7 +104,7 @@ func (s *ISOJobStore) GetRecentISOJobs(limit int) ([]*ISOJobInfo, error) {
 	var jobs []*ISOJobInfo
 	for rows.Next() {
 		var job ISOJobInfo
-		err := rows.Scan(&job.TaskUUID, &job.RepoURL, &job.Branch, &job.SubmittedAt, &job.State)
+		err := rows.Scan(&job.TaskUUID, &job.Dist, &job.RepoURL, &job.Branch, &job.SubmittedAt, &job.State)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan ISO job: %w", err)
 		}

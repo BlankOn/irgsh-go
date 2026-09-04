@@ -61,6 +61,10 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		sourceBranch = "master"
 	}
 
+	if params.Dist == "" {
+		return domain.SubmitResponse{}, errors.New("--dist is required")
+	}
+
 	// Validate URLs
 	if params.SourceURL != "" {
 		srcURL, err := url.Parse(params.SourceURL)
@@ -336,6 +340,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 	// Build submission
 	submission := domain.Submission{
+		Dist:                   params.Dist,
 		PackageName:            packageName,
 		PackageVersion:         packageVersion,
 		PackageExtendedVersion: packageExtendedVersion,

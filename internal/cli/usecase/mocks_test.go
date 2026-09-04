@@ -80,6 +80,7 @@ type mockChiefAPI struct {
 	submitErr       error
 	isoResp         domain.SubmitResponse
 	isoErr          error
+	isoSubmitted    domain.ISOSubmission
 	pkgStatus       domain.PackageStatus
 	pkgStatusErr    error
 	isoStatus       domain.ISOStatus
@@ -114,7 +115,7 @@ func (m *mockChiefAPI) GetImportStatus(_ context.Context, _ string) (domain.Impo
 	return m.importStatus, m.importStatusErr
 }
 
-func (m *mockChiefAPI) GetRepoInfo(_ context.Context) (domain.RepoInfo, error) {
+func (m *mockChiefAPI) GetRepoInfo(_ context.Context, _ string) (domain.RepoInfo, error) {
 	return m.repoInfo, m.repoInfoErr
 }
 
@@ -122,7 +123,8 @@ func (m *mockChiefAPI) SubmitPackage(_ context.Context, _ domain.Submission) (do
 	return m.submitResp, m.submitErr
 }
 
-func (m *mockChiefAPI) SubmitISO(_ context.Context, _ domain.ISOSubmission) (domain.SubmitResponse, error) {
+func (m *mockChiefAPI) SubmitISO(_ context.Context, submission domain.ISOSubmission) (domain.SubmitResponse, error) {
+	m.isoSubmitted = submission
 	return m.isoResp, m.isoErr
 }
 

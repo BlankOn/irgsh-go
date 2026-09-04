@@ -9,6 +9,7 @@ import (
 // JobInfo contains metadata about a build job
 type JobInfo struct {
 	TaskUUID       string    `json:"task_uuid"`
+	Dist           string    `json:"dist"` // Target distribution this job builds for
 	PackageName    string    `json:"package_name"`
 	PackageVersion string    `json:"package_version"`
 	Maintainer     string    `json:"maintainer"`
@@ -46,11 +47,12 @@ func NewJobStore(db *DB, maxJobs int) *JobStore {
 func (s *JobStore) RecordJob(job JobInfo) error {
 	query := `
 		INSERT INTO jobs (
-			task_uuid, package_name, package_version, maintainer, component,
+			task_uuid, dist, package_name, package_version, maintainer, component,
 			is_experimental, submitted_at, state, current_stage, build_state,
 			repo_state, package_url, source_url, package_branch, source_branch
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(task_uuid) DO UPDATE SET
+			dist = excluded.dist,
 			package_name = excluded.package_name,
 			package_version = excluded.package_version,
 			maintainer = excluded.maintainer,
@@ -68,7 +70,7 @@ func (s *JobStore) RecordJob(job JobInfo) error {
 	`
 
 	_, err := s.db.Exec(query,
-		job.TaskUUID, job.PackageName, job.PackageVersion, job.Maintainer, job.Component,
+		job.TaskUUID, job.Dist, job.PackageName, job.PackageVersion, job.Maintainer, job.Component,
 		job.IsExperimental, job.SubmittedAt, job.State, job.CurrentStage, job.BuildState,
 		job.RepoState, job.PackageURL, job.SourceURL, job.PackageBranch, job.SourceBranch,
 	)
@@ -88,7 +90,7 @@ func (s *JobStore) RecordJob(job JobInfo) error {
 // GetJob retrieves a job by UUID
 func (s *JobStore) GetJob(taskUUID string) (*JobInfo, error) {
 	query := `
-		SELECT task_uuid, package_name, package_version, maintainer, component,
+		SELECT task_uuid, dist, package_name, package_version, maintainer, component,
 			   is_experimental, submitted_at, state, current_stage, build_state,
 			   repo_state, package_url, source_url, package_branch, source_branch
 		FROM jobs
@@ -97,7 +99,7 @@ func (s *JobStore) GetJob(taskUUID string) (*JobInfo, error) {
 
 	var job JobInfo
 	err := s.db.QueryRow(query, taskUUID).Scan(
-		&job.TaskUUID, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
+		&job.TaskUUID, &job.Dist, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
 		&job.IsExperimental, &job.SubmittedAt, &job.State, &job.CurrentStage, &job.BuildState,
 		&job.RepoState, &job.PackageURL, &job.SourceURL, &job.PackageBranch, &job.SourceBranch,
 	)
@@ -118,7 +120,7 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 	}
 
 	query := `
-		SELECT task_uuid, package_name, package_version, maintainer, component,
+		SELECT task_uuid, dist, package_name, package_version, maintainer, component,
 			   is_experimental, submitted_at, state, current_stage, build_state,
 			   repo_state, package_url, source_url, package_branch, source_branch
 		FROM jobs
@@ -136,7 +138,7 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 	for rows.Next() {
 		var job JobInfo
 		err := rows.Scan(
-			&job.TaskUUID, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
+			&job.TaskUUID, &job.Dist, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
 			&job.IsExperimental, &job.SubmittedAt, &job.State, &job.CurrentStage, &job.BuildState,
 			&job.RepoState, &job.PackageURL, &job.SourceURL, &job.PackageBranch, &job.SourceBranch,
 		)

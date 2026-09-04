@@ -3,6 +3,9 @@ package domain
 // Submission is the wire format sent to the chief API.
 // The JSON tags must stay in sync with internal/chief/domain/submission.go.
 type Submission struct {
+	// Dist is the target distribution to build for and publish into, e.g.
+	// "verbeek". It selects which builder/repo instances handle this job.
+	Dist                   string `json:"dist"`
 	PackageName            string `json:"packageName"`
 	PackageVersion         string `json:"packageVersion"`
 	PackageExtendedVersion string `json:"packageExtendedVersion"`
@@ -20,6 +23,7 @@ type Submission struct {
 
 // SubmitParams holds the CLI input parameters for a package submission.
 type SubmitParams struct {
+	Dist           string
 	PackageURL     string
 	SourceURL      string
 	Component      string

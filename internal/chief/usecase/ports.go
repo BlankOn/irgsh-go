@@ -8,12 +8,15 @@ import (
 
 // TaskQueue abstracts the distributed task queue (machinery).
 type TaskQueue interface {
-	// SendBuildChain queues a build -> repo task chain.
-	SendBuildChain(taskUUID string, payload []byte) error
-	// SendISOTask queues a single ISO build task.
-	SendISOTask(taskUUID string, payload []byte) error
-	// SendImportTask queues a single package import task.
-	SendImportTask(taskUUID string, payload []byte) error
+	// SendBuildChain queues a build -> repo task chain on the given
+	// distribution's queue.
+	SendBuildChain(taskUUID, dist string, payload []byte) error
+	// SendISOTask queues a single ISO build task on the given distribution's
+	// queue.
+	SendISOTask(taskUUID, dist string, payload []byte) error
+	// SendImportTask queues a single package import task on the given
+	// (target) distribution's queue.
+	SendImportTask(taskUUID, dist string, payload []byte) error
 	// GetTaskState returns the current state string for a task.
 	// taskName is "build", "repo", or "iso".
 	GetTaskState(taskName, taskUUID string) string

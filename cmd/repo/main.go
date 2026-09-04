@@ -63,9 +63,16 @@ func main() {
 		}
 
 		var err error
-		irgshConfig, err = config.LoadConfigFromPath(configPath)
+		irgshConfig, err = config.LoadConfigFromPath(configPath, config.ComponentRepo)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
+		}
+
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs are uploaded there and
+		// artifacts are fetched from it.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can reach chief for artifacts and logs", 1)
 		}
 
 		// Prepare workdir
@@ -117,7 +124,7 @@ func main() {
 			&machineryConfig.Config{
 				Broker:        irgshConfig.Redis,
 				ResultBackend: irgshConfig.Redis,
-				DefaultQueue:  "irgsh",
+				DefaultQueue:  config.DistQueue(irgshConfig.Repo.DistCodename),
 			},
 		)
 		if err != nil {
@@ -162,6 +169,11 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeRepo, irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		monitoring.RepoHeartbeatInfo{
+			PublicURL:      irgshConfig.Repo.PublicURL,
+			DistComponents: irgshConfig.Repo.DistComponents,
+		},
 		interval, func() int { return int(activeTasks.Load()) },
 	)
 }

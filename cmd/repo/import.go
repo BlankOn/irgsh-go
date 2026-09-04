@@ -18,9 +18,13 @@ import (
 // build and repo tasks, which read their payload out of a map, an import job
 // has enough structure to be worth unmarshalling properly.
 type importSubmission struct {
-	TaskUUID        string   `json:"taskUUID"`
-	SourceURL       string   `json:"sourceUrl"`
-	Dist            string   `json:"dist"`
+	TaskUUID  string `json:"taskUUID"`
+	SourceURL string `json:"sourceUrl"`
+	Dist      string `json:"dist"`
+	// TargetDist is which of our distributions this import is destined for.
+	// It's what routed this task to this repo instance's queue in the first
+	// place; kept here only to detect a misrouted task defensively.
+	TargetDist      string   `json:"targetDist"`
 	SourceComponent string   `json:"sourceComponent"`
 	PackageNames    []string `json:"packageNames"`
 	Component       string   `json:"component"`
@@ -63,6 +67,11 @@ func Import(payload string) (err error) {
 		return fmt.Errorf("invalid import payload: %w", err)
 	}
 	taskUUID := submission.TaskUUID
+
+	if submission.TargetDist != "" && submission.TargetDist != irgshConfig.Repo.DistCodename {
+		return fmt.Errorf("import task targeted dist %q but this repo instance serves %q",
+			submission.TargetDist, irgshConfig.Repo.DistCodename)
+	}
 
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:    strings.Join(submission.PackageNames, " "),

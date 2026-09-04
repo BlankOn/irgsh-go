@@ -8,6 +8,7 @@ Type=simple
 User=irgsh
 Group=irgsh
 WorkingDirectory=/var/lib/irgsh
+Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
 ExecStart=/usr/bin/irgsh-iso
 Restart=on-failure
 RestartSec=10s

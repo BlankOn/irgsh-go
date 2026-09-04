@@ -10,11 +10,12 @@ import (
 // already built package out of an external Debian repository and injecting it
 // into ours.
 type ImportJobInfo struct {
-	TaskUUID  string `json:"task_uuid"`
-	SourceURL string `json:"source_url"`
-	Dist      string `json:"dist"`
-	Packages  string `json:"packages"` // comma separated package names
-	Component string `json:"component"`
+	TaskUUID   string `json:"task_uuid"`
+	SourceURL  string `json:"source_url"`
+	Dist       string `json:"dist"`        // source suite, e.g. "sid"
+	TargetDist string `json:"target_dist"` // our distribution the packages are injected into, e.g. "verbeek"
+	Packages   string `json:"packages"`    // comma separated package names
+	Component  string `json:"component"`
 	// Maintainer is the identity of whoever triggered the import.
 	Maintainer     string    `json:"maintainer"`
 	IsExperimental bool      `json:"is_experimental"`
@@ -42,11 +43,12 @@ func NewImportJobStore(db *DB, maxImportJobs int) *ImportJobStore {
 // RecordImportJob stores import job metadata in SQLite
 func (s *ImportJobStore) RecordImportJob(job ImportJobInfo) error {
 	query := `
-		INSERT INTO import_jobs (task_uuid, source_url, dist, packages, component, maintainer, is_experimental, submitted_at, state)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO import_jobs (task_uuid, source_url, dist, target_dist, packages, component, maintainer, is_experimental, submitted_at, state)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(task_uuid) DO UPDATE SET
 			source_url = excluded.source_url,
 			dist = excluded.dist,
+			target_dist = excluded.target_dist,
 			packages = excluded.packages,
 			component = excluded.component,
 			maintainer = excluded.maintainer,
@@ -55,7 +57,7 @@ func (s *ImportJobStore) RecordImportJob(job ImportJobInfo) error {
 			updated_at = CURRENT_TIMESTAMP
 	`
 
-	_, err := s.db.Exec(query, job.TaskUUID, job.SourceURL, job.Dist, job.Packages,
+	_, err := s.db.Exec(query, job.TaskUUID, job.SourceURL, job.Dist, job.TargetDist, job.Packages,
 		job.Component, job.Maintainer, job.IsExperimental, job.SubmittedAt, job.State)
 	if err != nil {
 		return fmt.Errorf("failed to record import job: %w", err)
@@ -73,14 +75,14 @@ func (s *ImportJobStore) RecordImportJob(job ImportJobInfo) error {
 // GetImportJob retrieves an import job by UUID
 func (s *ImportJobStore) GetImportJob(taskUUID string) (*ImportJobInfo, error) {
 	query := `
-		SELECT task_uuid, source_url, dist, packages, component, maintainer, is_experimental, submitted_at, state
+		SELECT task_uuid, source_url, dist, target_dist, packages, component, maintainer, is_experimental, submitted_at, state
 		FROM import_jobs
 		WHERE task_uuid = ?
 	`
 
 	var job ImportJobInfo
 	err := s.db.QueryRow(query, taskUUID).Scan(
-		&job.TaskUUID, &job.SourceURL, &job.Dist, &job.Packages,
+		&job.TaskUUID, &job.SourceURL, &job.Dist, &job.TargetDist, &job.Packages,
 		&job.Component, &job.Maintainer, &job.IsExperimental, &job.SubmittedAt, &job.State,
 	)
 	if err == sql.ErrNoRows {
@@ -100,7 +102,7 @@ func (s *ImportJobStore) GetRecentImportJobs(limit int) ([]*ImportJobInfo, error
 	}
 
 	query := `
-		SELECT task_uuid, source_url, dist, packages, component, maintainer, is_experimental, submitted_at, state
+		SELECT task_uuid, source_url, dist, target_dist, packages, component, maintainer, is_experimental, submitted_at, state
 		FROM import_jobs
 		ORDER BY submitted_at DESC
 		LIMIT ?
@@ -115,7 +117,7 @@ func (s *ImportJobStore) GetRecentImportJobs(limit int) ([]*ImportJobInfo, error
 	var jobs []*ImportJobInfo
 	for rows.Next() {
 		var job ImportJobInfo
-		err := rows.Scan(&job.TaskUUID, &job.SourceURL, &job.Dist, &job.Packages,
+		err := rows.Scan(&job.TaskUUID, &job.SourceURL, &job.Dist, &job.TargetDist, &job.Packages,
 			&job.Component, &job.Maintainer, &job.IsExperimental, &job.SubmittedAt, &job.State)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan import job: %w", err)

@@ -4,6 +4,8 @@ import (
 	"github.com/RichardKnop/machinery/v1"
 	"github.com/RichardKnop/machinery/v1/backends/result"
 	"github.com/RichardKnop/machinery/v1/tasks"
+
+	"github.com/blankon/irgsh-go/internal/config"
 )
 
 // MachineryTaskQueue adapts *machinery.Server to the usecase.TaskQueue interface.
@@ -15,15 +17,18 @@ func NewMachineryTaskQueue(server *machinery.Server) *MachineryTaskQueue {
 	return &MachineryTaskQueue{server: server}
 }
 
-func (m *MachineryTaskQueue) SendBuildChain(taskUUID string, payload []byte) error {
+func (m *MachineryTaskQueue) SendBuildChain(taskUUID, dist string, payload []byte) error {
+	queue := config.DistQueue(dist)
 	buildSig := tasks.Signature{
-		Name: "build",
-		UUID: taskUUID,
-		Args: []tasks.Arg{{Type: "string", Value: string(payload)}},
+		Name:       "build",
+		UUID:       taskUUID,
+		RoutingKey: queue,
+		Args:       []tasks.Arg{{Type: "string", Value: string(payload)}},
 	}
 	repoSig := tasks.Signature{
-		Name: "repo",
-		UUID: taskUUID,
+		Name:       "repo",
+		UUID:       taskUUID,
+		RoutingKey: queue,
 	}
 	chain, err := tasks.NewChain(&buildSig, &repoSig)
 	if err != nil {
@@ -33,21 +38,23 @@ func (m *MachineryTaskQueue) SendBuildChain(taskUUID string, payload []byte) err
 	return err
 }
 
-func (m *MachineryTaskQueue) SendISOTask(taskUUID string, payload []byte) error {
+func (m *MachineryTaskQueue) SendISOTask(taskUUID, dist string, payload []byte) error {
 	sig := tasks.Signature{
-		Name: "iso",
-		UUID: taskUUID,
-		Args: []tasks.Arg{{Type: "string", Value: string(payload)}},
+		Name:       "iso",
+		UUID:       taskUUID,
+		RoutingKey: config.DistQueue(dist),
+		Args:       []tasks.Arg{{Type: "string", Value: string(payload)}},
 	}
 	_, err := m.server.SendTask(&sig)
 	return err
 }
 
-func (m *MachineryTaskQueue) SendImportTask(taskUUID string, payload []byte) error {
+func (m *MachineryTaskQueue) SendImportTask(taskUUID, dist string, payload []byte) error {
 	sig := tasks.Signature{
-		Name: "import",
-		UUID: taskUUID,
-		Args: []tasks.Arg{{Type: "string", Value: string(payload)}},
+		Name:       "import",
+		UUID:       taskUUID,
+		RoutingKey: config.DistQueue(dist),
+		Args:       []tasks.Arg{{Type: "string", Value: string(payload)}},
 	}
 	_, err := m.server.SendTask(&sig)
 	return err

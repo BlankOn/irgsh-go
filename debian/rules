@@ -58,6 +58,8 @@ override_dh_auto_install:
 	install -D -m 0644 utils/config.yaml $(CURDIR)/debian/irgsh/usr/share/irgsh/config.yaml
 	# Install init script
 	install -D -m 0755 utils/scripts/init.sh $(CURDIR)/debian/irgsh/usr/share/irgsh/init.sh
+	# Install the ISO build script irgsh-iso executes
+	install -D -m 0755 utils/scripts/iso-build.sh $(CURDIR)/debian/irgsh/usr/share/irgsh/iso-build.sh
 	# Install reprepro template
 	mkdir -p $(CURDIR)/debian/irgsh/usr/share/irgsh/reprepro-template
 	cp -r utils/reprepro-template/* $(CURDIR)/debian/irgsh/usr/share/irgsh/reprepro-template/

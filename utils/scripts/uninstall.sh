@@ -3,10 +3,13 @@ rm -f irgsh-go/
 rm -f irgsh-go/etc/
 rm -f irgsh-go/etc/irgsh/
 rm -f irgsh-go/etc/irgsh/config.yaml
-rm -f irgsh-go/etc/init.d/
-rm -f irgsh-go/etc/init.d/irgsh-builder
-rm -f irgsh-go/etc/init.d/irgsh-chief
-rm -f irgsh-go/etc/init.d/irgsh-repo
+rm -f irgsh-go/lib/
+rm -f irgsh-go/lib/systemd/
+rm -f irgsh-go/lib/systemd/system/
+rm -f irgsh-go/lib/systemd/system/irgsh-builder.service
+rm -f irgsh-go/lib/systemd/system/irgsh-chief.service
+rm -f irgsh-go/lib/systemd/system/irgsh-repo.service
+rm -f irgsh-go/lib/systemd/system/irgsh-iso.service
 rm -f irgsh-go/usr/
 rm -f irgsh-go/usr/share/
 rm -f irgsh-go/usr/share/irgsh/

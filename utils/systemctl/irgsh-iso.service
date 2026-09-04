@@ -1,13 +1,19 @@
 [Unit]
-Description=irgsh-iso
+Description=irgsh-iso - IRGSH ISO Builder
+After=network.target redis-server.service irgsh-chief.service
+Wants=redis-server.service
 
 [Service]
+Type=simple
 User=irgsh
+Group=irgsh
 WorkingDirectory=/var/lib/irgsh
+Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
 ExecStart=/usr/bin/irgsh-iso
-ExecStop=/bin/kill -9 $MAINPID
-StandardOutput=file:/var/log/irgsh/iso.log
-StandardError=file:/var/log/irgsh/iso.log
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:/var/log/irgsh/iso.log
+StandardError=append:/var/log/irgsh/iso.log
 
 [Install]
 WantedBy=multi-user.target

@@ -53,6 +53,7 @@ func TestSubmitImport_ValidationErrors(t *testing.T) {
 	base := domain.ImportParams{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
+		TargetDist:   "verbeek",
 		PackageNames: []string{"grub-pc"},
 	}
 
@@ -60,10 +61,11 @@ func TestSubmitImport_ValidationErrors(t *testing.T) {
 		mutate func(*domain.ImportParams)
 		want   string
 	}{
-		"missing source":  {func(p *domain.ImportParams) { p.SourceURL = "" }, "--source is required"},
-		"missing dist":    {func(p *domain.ImportParams) { p.Dist = "" }, "--dist is required"},
-		"missing package": {func(p *domain.ImportParams) { p.PackageNames = nil }, "--package-name is required"},
-		"unsafe package":  {func(p *domain.ImportParams) { p.PackageNames = []string{"grub;reboot"} }, "invalid package name"},
+		"missing source":    {func(p *domain.ImportParams) { p.SourceURL = "" }, "--source is required"},
+		"missing dist":      {func(p *domain.ImportParams) { p.Dist = "" }, "--dist is required"},
+		"missing repo-dist": {func(p *domain.ImportParams) { p.TargetDist = "" }, "--repo-dist is required"},
+		"missing package":   {func(p *domain.ImportParams) { p.PackageNames = nil }, "--package-name is required"},
+		"unsafe package":    {func(p *domain.ImportParams) { p.PackageNames = []string{"grub;reboot"} }, "invalid package name"},
 	}
 
 	for name, tc := range cases {
@@ -84,6 +86,7 @@ func TestSubmitImport_AppliesDefaultsAndSavesPipelineID(t *testing.T) {
 	resp, err := newImportUsecase(t, chief, pipelines).SubmitImport(context.Background(), domain.ImportParams{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
+		TargetDist:   "verbeek",
 		PackageNames: []string{"grub-efi-amd64-bin"},
 	})
 	require.NoError(t, err)
@@ -123,6 +126,7 @@ func TestSubmitImport_SigningKeyIdentityUnavailable(t *testing.T) {
 	_, err := usecaseWithBrokenGPG.SubmitImport(context.Background(), domain.ImportParams{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
+		TargetDist:   "verbeek",
 		PackageNames: []string{"firefox"},
 	})
 	require.Error(t, err)
@@ -135,6 +139,7 @@ func TestSubmitImport_PassesCheckFlagsThrough(t *testing.T) {
 	_, err := newImportUsecase(t, chief, &mockPipelineStore{}).SubmitImport(context.Background(), domain.ImportParams{
 		SourceURL:          "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:               "sid",
+		TargetDist:         "verbeek",
 		PackageNames:       []string{"firefox"},
 		DryRun:             true,
 		IgnoreDependencies: true,
@@ -155,6 +160,7 @@ func TestSubmitImport_DefaultsAreConservative(t *testing.T) {
 	_, err := newImportUsecase(t, chief, &mockPipelineStore{}).SubmitImport(context.Background(), domain.ImportParams{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
+		TargetDist:   "verbeek",
 		PackageNames: []string{"firefox"},
 	})
 	require.NoError(t, err)
@@ -174,6 +180,7 @@ func TestSubmitImport_LocalCheckUnavailable(t *testing.T) {
 	).SubmitImport(context.Background(), domain.ImportParams{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 		Dist:         "sid",
+		TargetDist:   "verbeek",
 		PackageNames: []string{"firefox"},
 	})
 
@@ -201,6 +208,7 @@ func TestSubmitImport_LocalCheckFails(t *testing.T) {
 		SubmitImport(context.Background(), domain.ImportParams{
 			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 			Dist:         "sid",
+			TargetDist:   "verbeek",
 			PackageNames: []string{"firefox"},
 		})
 
@@ -223,6 +231,7 @@ func TestSubmitImport_LocalCheckOverridden(t *testing.T) {
 		SubmitImport(context.Background(), domain.ImportParams{
 			SourceURL:          "https://kartolo.sby.datautama.net.id/debian/",
 			Dist:               "sid",
+			TargetDist:         "verbeek",
 			PackageNames:       []string{"firefox"},
 			IgnoreDependencies: true,
 		})
@@ -244,6 +253,7 @@ func TestSubmitImport_SkipCheck(t *testing.T) {
 		SubmitImport(context.Background(), domain.ImportParams{
 			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 			Dist:         "sid",
+			TargetDist:   "verbeek",
 			PackageNames: []string{"firefox"},
 			SkipCheck:    true,
 		})
@@ -358,6 +368,7 @@ func TestSubmitImport_ChecksAgainstTheRepositoryChiefPublishesTo(t *testing.T) {
 		SubmitImport(context.Background(), domain.ImportParams{
 			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 			Dist:         "sid",
+			TargetDist:   "verbeek",
 			PackageNames: []string{"firefox"},
 		})
 	require.NoError(t, err)
@@ -392,6 +403,7 @@ func TestSubmitImport_RepoInfoUnavailable(t *testing.T) {
 		SubmitImport(context.Background(), domain.ImportParams{
 			SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
 			Dist:         "sid",
+			TargetDist:   "verbeek",
 			PackageNames: []string{"firefox"},
 		})
 

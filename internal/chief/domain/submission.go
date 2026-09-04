@@ -5,21 +5,24 @@ import "time"
 // Submission represents a package build submission from a maintainer.
 // The JSON tags must stay in sync with internal/cli/domain/submission.go.
 type Submission struct {
-	TaskUUID               string    `json:"taskUUID"`
-	Timestamp              time.Time `json:"timestamp"`
-	PackageName            string    `json:"packageName"`
-	PackageVersion         string    `json:"packageVersion"`
-	PackageExtendedVersion string    `json:"packageExtendedVersion"`
-	PackageURL             string    `json:"packageUrl"`
-	SourceURL              string    `json:"sourceUrl"`
-	Maintainer             string    `json:"maintainer"`
-	MaintainerFingerprint  string    `json:"maintainerFingerprint"`
-	Component              string    `json:"component"`
-	IsExperimental         bool      `json:"isExperimental"`
-	ForceVersion           bool      `json:"forceVersion"`
-	Tarball                string    `json:"tarball"`
-	PackageBranch          string    `json:"packageBranch"`
-	SourceBranch           string    `json:"sourceBranch"`
+	TaskUUID  string    `json:"taskUUID"`
+	Timestamp time.Time `json:"timestamp"`
+	// Dist is the target distribution to build for and publish into, e.g.
+	// "verbeek". It selects which builder/repo instances handle this job.
+	Dist                   string `json:"dist"`
+	PackageName            string `json:"packageName"`
+	PackageVersion         string `json:"packageVersion"`
+	PackageExtendedVersion string `json:"packageExtendedVersion"`
+	PackageURL             string `json:"packageUrl"`
+	SourceURL              string `json:"sourceUrl"`
+	Maintainer             string `json:"maintainer"`
+	MaintainerFingerprint  string `json:"maintainerFingerprint"`
+	Component              string `json:"component"`
+	IsExperimental         bool   `json:"isExperimental"`
+	ForceVersion           bool   `json:"forceVersion"`
+	Tarball                string `json:"tarball"`
+	PackageBranch          string `json:"packageBranch"`
+	SourceBranch           string `json:"sourceBranch"`
 }
 
 // ImportSubmission represents a request to import already built packages from
@@ -32,6 +35,10 @@ type ImportSubmission struct {
 	SourceURL string `json:"sourceUrl"`
 	// Dist is the suite in the source repository, e.g. "sid".
 	Dist string `json:"dist"`
+	// TargetDist is which of our distributions (and therefore which repo
+	// worker's queue) to inject the imported packages into, e.g. "verbeek".
+	// Distinct from Dist, which names the source suite.
+	TargetDist string `json:"targetDist"`
 	// SourceComponent is the component to look in on the source side,
 	// defaulting to "main".
 	SourceComponent string `json:"sourceComponent"`
@@ -71,6 +78,13 @@ type RepoInfo struct {
 type ISOSubmission struct {
 	TaskUUID  string    `json:"taskUUID"`
 	Timestamp time.Time `json:"timestamp"`
-	RepoURL   string    `json:"repoUrl"`
-	Branch    string    `json:"branch"`
+	// Dist is the target distribution this ISO is built for, e.g. "verbeek".
+	// It selects which ISO builder instance handles this job; that instance
+	// supplies the live-build repository URL from its own config, so chief
+	// never sees it.
+	Dist   string `json:"dist"`
+	Branch string `json:"branch"`
+	// NoCache asks the worker to clear the reusable live-build directories
+	// (cache, chroot, auto, local) before building.
+	NoCache bool `json:"noCache"`
 }
