@@ -12,15 +12,31 @@ import (
 )
 
 func TestSubmitISO_Success(t *testing.T) {
+	chief := &mockChiefAPI{isoResp: domain.SubmitResponse{PipelineID: "iso-123"}}
 	svc := usecase.NewCLIUsecase(
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		&mockPipelineStore{},
-		&mockChiefAPI{isoResp: domain.SubmitResponse{PipelineID: "iso-123"}},
+		chief,
 		nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	resp, err := svc.SubmitISO(context.Background(), "verbeek", "http://repo.git", "main")
+	resp, err := svc.SubmitISO(context.Background(), "verbeek", "without-praya", false)
 	assert.NoError(t, err)
 	assert.Equal(t, "iso-123", resp.PipelineID)
+	// The live-build repository is the worker's config, not the client's to send.
+	assert.Equal(t, domain.ISOSubmission{Dist: "verbeek", Branch: "without-praya"}, chief.isoSubmitted)
+}
+
+func TestSubmitISO_NoCacheIsForwarded(t *testing.T) {
+	chief := &mockChiefAPI{isoResp: domain.SubmitResponse{PipelineID: "iso-123"}}
+	svc := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		&mockPipelineStore{},
+		chief,
+		nil, nil, nil, nil, nil, nil, nil, "",
+	)
+	_, err := svc.SubmitISO(context.Background(), "verbeek", "without-praya", true)
+	assert.NoError(t, err)
+	assert.True(t, chief.isoSubmitted.NoCache)
 }
 
 func TestSubmitISO_ConfigMissing(t *testing.T) {
@@ -28,18 +44,8 @@ func TestSubmitISO_ConfigMissing(t *testing.T) {
 		&mockConfigStore{err: errors.New("no config")},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	_, err := svc.SubmitISO(context.Background(), "verbeek", "http://repo.git", "main")
+	_, err := svc.SubmitISO(context.Background(), "verbeek", "main", false)
 	assert.ErrorIs(t, err, usecase.ErrConfigMissing)
-}
-
-func TestSubmitISO_EmptyURL(t *testing.T) {
-	svc := usecase.NewCLIUsecase(
-		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
-	)
-	_, err := svc.SubmitISO(context.Background(), "verbeek", "", "main")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "lb-url")
 }
 
 func TestSubmitISO_EmptyDist(t *testing.T) {
@@ -47,7 +53,7 @@ func TestSubmitISO_EmptyDist(t *testing.T) {
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	_, err := svc.SubmitISO(context.Background(), "", "http://repo.git", "main")
+	_, err := svc.SubmitISO(context.Background(), "", "main", false)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "--dist")
 }
@@ -57,9 +63,9 @@ func TestSubmitISO_EmptyBranch(t *testing.T) {
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, "",
 	)
-	_, err := svc.SubmitISO(context.Background(), "verbeek", "http://repo.git", "")
+	_, err := svc.SubmitISO(context.Background(), "verbeek", "", false)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "lb-branch")
+	assert.Contains(t, err.Error(), "--branch")
 }
 
 func TestISOStatus_Success(t *testing.T) {

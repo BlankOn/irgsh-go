@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
@@ -26,6 +27,11 @@ var (
 	irgshConfig = config.IrgshConfig{}
 
 	activeTasks atomic.Int32
+
+	// logPublisher mirrors job logs to chief while a job is running. It stays
+	// nil when Redis is unreachable: live streaming is an addition to the log
+	// file, never a reason to fail a build.
+	logPublisher *logstream.Publisher
 )
 
 func main() {
@@ -57,10 +63,29 @@ func main() {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
 		}
 
-		// Prepare workdir
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs are uploaded there.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can upload logs to chief", 1)
+		}
+
+		// Prepare workdir. This is the persistent live-build tree the build
+		// script runs in, not a per-job directory.
 		err = os.MkdirAll(irgshConfig.ISO.Workdir, 0755)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
+		}
+		// Nothing else creates the output directory, and the build script
+		// needs it to exist to count today's builds.
+		err = os.MkdirAll(irgshConfig.ISO.Outputdir, 0755)
+		if err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't create outputdir: %v", err), 1)
+		}
+
+		logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("live log streaming disabled: %v\n", err)
+			logPublisher = nil
 		}
 
 		return nil

@@ -41,6 +41,11 @@ func main() {
 	if err != nil {
 		log.Fatalln("couldn't load config : ", err)
 	}
+	// Config validation is scoped to this component's own section, so the
+	// chief address is not covered by it - but logs and artifacts go there.
+	if irgshConfig.Chief.Address == "" {
+		log.Fatalln("chief.address is required so the worker can upload logs and artifacts to chief")
+	}
 	// Prepare workdir
 	err = os.MkdirAll(irgshConfig.Builder.Workdir, 0755)
 	if err != nil {

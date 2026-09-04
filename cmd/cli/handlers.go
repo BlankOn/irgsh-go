@@ -15,7 +15,7 @@ type CLIService interface {
 	SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error)
 	PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error)
-	SubmitISO(ctx context.Context, dist, repoURL, branch string) (domain.SubmitResponse, error)
+	SubmitISO(ctx context.Context, dist, branch string, noCache bool) (domain.SubmitResponse, error)
 	ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	ISOLog(ctx context.Context, pipelineID string) (string, error)
 	SubmitImport(ctx context.Context, params domain.ImportParams) (domain.SubmitResponse, error)
@@ -114,37 +114,33 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			Action: retryAction(ctx, svc),
 		},
 		{
-			Name:  "livebuild",
-			Usage: "ISO build commands (submit, status, log)",
-			Subcommands: []cli.Command{
-				{
-					Name:  "submit",
-					Usage: "Submit an ISO build job",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "dist",
-							Usage: "Target distribution to build the ISO for, e.g. verbeek (required)",
-						},
-						cli.StringFlag{
-							Name:  "lb-url",
-							Usage: "Live build git repository URL (required)",
-						},
-						cli.StringFlag{
-							Name:  "lb-branch",
-							Usage: "Live build git branch name (required)",
-						},
-					},
-					Action: livebuildSubmitAction(ctx, svc),
+			Name:  "build-iso",
+			Usage: "Submit an ISO build job, or use subcommands (status, log)",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "dist",
+					Usage: "Target distribution to build the ISO for, e.g. verbeek (required)",
 				},
+				cli.StringFlag{
+					Name:  "branch",
+					Usage: "Live build git branch name, e.g. without-praya (required)",
+				},
+				cli.BoolFlag{
+					Name:  "no-cache",
+					Usage: "Clear the reusable live-build directories (cache, chroot, auto, local) before building",
+				},
+			},
+			Action: isoSubmitAction(ctx, svc),
+			Subcommands: []cli.Command{
 				{
 					Name:   "status",
 					Usage:  "Check status of an ISO build pipeline",
-					Action: livebuildStatusAction(ctx, svc),
+					Action: isoStatusAction(ctx, svc),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of an ISO build pipeline",
-					Action: livebuildLogAction(ctx, svc),
+					Action: isoLogAction(ctx, svc),
 				},
 			},
 		},
@@ -289,14 +285,14 @@ func packageLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	}
 }
 
-func livebuildSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func isoSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		_, err := svc.SubmitISO(ctx, c.String("dist"), c.String("lb-url"), c.String("lb-branch"))
+		_, err := svc.SubmitISO(ctx, c.String("dist"), c.String("branch"), c.Bool("no-cache"))
 		return err
 	}
 }
 
-func livebuildStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func isoStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		status, err := svc.ISOStatus(ctx, pipelineID)
@@ -309,7 +305,7 @@ func livebuildStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	}
 }
 
-func livebuildLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func isoLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		logResult, err := svc.ISOLog(ctx, pipelineID)

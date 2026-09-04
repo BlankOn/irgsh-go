@@ -37,9 +37,23 @@ type BuilderConfig struct {
 }
 
 type ISOConfig struct {
+	// Workdir is the persistent live-build tree the build script runs in.
+	// chroot/, cache/, auto/ and local/ are reused between builds unless the
+	// submission asks for a cacheless build.
 	Workdir      string `json:"workdir" validate:"required"`
 	Outputdir    string `json:"outputdir" validate:"required"`
 	DistCodename string `json:"dist_codename" validate:"required"` // verbeek - the distribution this ISO builder builds for, also its queue identity
+	// RepoURL is the live-build git repository this worker builds from, e.g.
+	// https://github.com/BlankOn/blankon-live-build.git. It belongs to the
+	// worker rather than the submission: a client only names the branch.
+	RepoURL string `json:"repo_url" validate:"required"`
+	// PublicBaseURL is where the built images are published for users, e.g.
+	// http://arsip-dev.blankonlinux.id/iso. The build script needs it for the
+	// zsync control file and its announcements.
+	PublicBaseURL string `json:"public_base_url"`
+	// TelegramBotKey is optional. When empty the build script skips its
+	// Telegram announcement.
+	TelegramBotKey string `json:"telegram_bot_key"`
 }
 
 type RepoConfig struct {

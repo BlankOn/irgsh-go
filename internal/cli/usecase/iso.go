@@ -8,7 +8,7 @@ import (
 	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
 
-func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, repoURL, branch string) (domain.SubmitResponse, error) {
+func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, branch string, noCache bool) (domain.SubmitResponse, error) {
 	if _, err := u.config.Load(); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
@@ -16,22 +16,21 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, repoURL, branch string
 	if dist == "" {
 		return domain.SubmitResponse{}, errors.New("--dist is required")
 	}
-	if repoURL == "" {
-		return domain.SubmitResponse{}, errors.New("--lb-url is required")
-	}
 	if branch == "" {
-		return domain.SubmitResponse{}, errors.New("--lb-branch is required")
+		return domain.SubmitResponse{}, errors.New("--branch is required")
 	}
 
 	fmt.Printf("Submitting ISO build job...\n")
 	fmt.Printf("Distribution: %s\n", dist)
-	fmt.Printf("Repository: %s\n", repoURL)
 	fmt.Printf("Branch: %s\n", branch)
+	if noCache {
+		fmt.Println("Cacheless build: the worker will clear cache, chroot, auto and local first")
+	}
 
 	submission := domain.ISOSubmission{
 		Dist:    dist,
-		RepoURL: repoURL,
 		Branch:  branch,
+		NoCache: noCache,
 	}
 
 	resp, err := u.chief.SubmitISO(ctx, submission)

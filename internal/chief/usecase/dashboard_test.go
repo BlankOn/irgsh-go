@@ -341,10 +341,10 @@ func TestDashboardService_BuildISOJobViews(t *testing.T) {
 	isoStore := &mockISOJobStore{
 		getRecentISOJobsFn: func(limit int) ([]*monitoring.ISOJobInfo, error) {
 			return []*monitoring.ISOJobInfo{
-				{TaskUUID: "iso-1", RepoURL: "https://repo.example.com", Branch: "main", State: "SUCCESS", SubmittedAt: now},
-				{TaskUUID: "iso-2", RepoURL: "https://repo.example.com", Branch: "dev", State: "FAILURE", SubmittedAt: now},
-				{TaskUUID: "iso-3", RepoURL: "https://repo.example.com", Branch: "test", State: "STARTED", SubmittedAt: now},
-				{TaskUUID: "iso-4", RepoURL: "https://repo.example.com", Branch: "test", State: "PENDING", SubmittedAt: now},
+				{TaskUUID: "iso-1", Dist: "verbeek", Branch: "main", State: "SUCCESS", SubmittedAt: now},
+				{TaskUUID: "iso-2", Dist: "verbeek", Branch: "dev", State: "FAILURE", SubmittedAt: now},
+				{TaskUUID: "iso-3", Dist: "verbeek", Branch: "test", State: "STARTED", SubmittedAt: now},
+				{TaskUUID: "iso-4", Dist: "verbeek", Branch: "test", State: "PENDING", SubmittedAt: now},
 			}, nil
 		},
 	}
@@ -356,4 +356,7 @@ func TestDashboardService_BuildISOJobViews(t *testing.T) {
 	assert.Equal(t, "status-offline", views[1].StatusClass)
 	assert.Equal(t, "status-warning", views[2].StatusClass)
 	assert.Equal(t, "", views[3].StatusClass)
+	// The dashboard shows which distribution an ISO was built for; the
+	// live-build repository is the worker's own config and chief never sees it.
+	assert.Equal(t, "verbeek", views[0].Dist)
 }

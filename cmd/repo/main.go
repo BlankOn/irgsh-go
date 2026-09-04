@@ -68,6 +68,13 @@ func main() {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
 		}
 
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs are uploaded there and
+		// artifacts are fetched from it.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can reach chief for artifacts and logs", 1)
+		}
+
 		// Prepare workdir
 		err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
 		if err != nil {

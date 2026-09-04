@@ -55,9 +55,17 @@ repo:
   gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:
+  # The persistent live-build tree the build script runs in. chroot/, cache/,
+  # auto/ and local/ are reused between builds unless the job is submitted
+  # with --no-cache.
   workdir: '/var/lib/irgsh/iso'
   outputdir: '/tmp/jahitan'
   public_base_url: 'http://jahitan.blankonlinux.id'
   # The distribution this ISO builder instance builds for. Also its
   # Machinery queue identity (irgsh-<dist_codename>).
   dist_codename: 'verbeek'
+  # The live-build repository this worker builds from. It belongs to the
+  # worker, not the submission: irgsh-cli only names the branch.
+  repo_url: 'https://github.com/BlankOn/blankon-live-build.git'
+  # Optional. When empty the build script skips its Telegram announcement.
+  telegram_bot_key: ''

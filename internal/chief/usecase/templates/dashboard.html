@@ -294,7 +294,7 @@
             <thead>
                 <tr>
                     <th>Timestamp</th>
-                    <th>Repository</th>
+                    <th>Dist</th>
                     <th>Branch</th>
                     <th>Status</th>
                     <th>UUID</th>
@@ -304,9 +304,9 @@
             {{- range .ISOJobs}}
                 <tr>
                     <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
-                    <td>{{.RepoURL}}</td>
+                    <td>{{.Dist}}</td>
                     <td>{{.Branch}}</td>
-                    <td><span class="{{.StatusClass}}">{{.State}}</span></td>
+                    <td><span class="{{.StatusClass}}">{{.State}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=iso" target="_blank" style="font-size:0.85em;">log</a></td>
                     <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
                 </tr>
             {{- end}}

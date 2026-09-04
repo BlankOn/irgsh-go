@@ -89,7 +89,7 @@ type JobView struct {
 type ISOJobView struct {
 	TimeFormatted string
 	TimeRelative  string
-	RepoURL       string
+	Dist          string
 	Branch        string
 	State         string
 	StatusClass   string
@@ -438,7 +438,7 @@ func (d *DashboardService) buildISOJobViews() []ISOJobView {
 		views = append(views, ISOJobView{
 			TimeFormatted: jakartaTime.Format("2006-01-02 15:04:05 MST"),
 			TimeRelative:  formatRelativeTime(job.SubmittedAt),
-			RepoURL:       job.RepoURL,
+			Dist:          job.Dist,
 			Branch:        job.Branch,
 			State:         job.State,
 			StatusClass:   statusClass,

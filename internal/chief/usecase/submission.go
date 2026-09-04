@@ -253,9 +253,6 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 	if !domain.SafeIDPattern.MatchString(submission.Dist) {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
 	}
-	if submission.RepoURL == "" {
-		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "repoUrl is required")
-	}
 	if submission.Branch == "" {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch is required")
 	}
@@ -276,9 +273,11 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 
 	if ss.isoStore != nil {
 		isoJob := monitoring.ISOJobInfo{
-			TaskUUID:    submission.TaskUUID,
-			Dist:        submission.Dist,
-			RepoURL:     submission.RepoURL,
+			TaskUUID: submission.TaskUUID,
+			Dist:     submission.Dist,
+			// RepoURL is left empty: the live-build repository is the ISO
+			// worker's own config now, so chief never learns it. The column
+			// stays for existing databases.
 			Branch:      submission.Branch,
 			SubmittedAt: submission.Timestamp,
 			State:       "PENDING",

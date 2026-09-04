@@ -79,8 +79,12 @@ type ISOSubmission struct {
 	TaskUUID  string    `json:"taskUUID"`
 	Timestamp time.Time `json:"timestamp"`
 	// Dist is the target distribution this ISO is built for, e.g. "verbeek".
-	// It selects which ISO builder instance handles this job.
-	Dist    string `json:"dist"`
-	RepoURL string `json:"repoUrl"`
-	Branch  string `json:"branch"`
+	// It selects which ISO builder instance handles this job; that instance
+	// supplies the live-build repository URL from its own config, so chief
+	// never sees it.
+	Dist   string `json:"dist"`
+	Branch string `json:"branch"`
+	// NoCache asks the worker to clear the reusable live-build directories
+	// (cache, chroot, auto, local) before building.
+	NoCache bool `json:"noCache"`
 }
