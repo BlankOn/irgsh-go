@@ -36,17 +36,6 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
 
-	// Validate chief connectivity (unless ignoring checks)
-	if !params.IgnoreChecks {
-		versionResp, err := u.chief.GetVersion(ctx)
-		if err != nil {
-			return domain.SubmitResponse{}, fmt.Errorf("failed to connect to chief: %w", err)
-		}
-		if versionResp.Version != u.version {
-			return domain.SubmitResponse{}, fmt.Errorf("client version mismatch: local=%s, chief=%s. Please update your irgsh-cli", u.version, versionResp.Version)
-		}
-	}
-
 	// Defaults
 	component := params.Component
 	if component == "" {
@@ -77,6 +66,17 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	}
 	if pkgURL, err := url.Parse(params.PackageURL); err != nil || pkgURL.Host == "" || (pkgURL.Scheme != "http" && pkgURL.Scheme != "https") {
 		return domain.SubmitResponse{}, errors.New("--package must be a valid http or https URL")
+	}
+
+	// Validate chief connectivity (unless ignoring checks)
+	if !params.IgnoreChecks {
+		versionResp, err := u.chief.GetVersion(ctx)
+		if err != nil {
+			return domain.SubmitResponse{}, fmt.Errorf("failed to connect to chief: %w", err)
+		}
+		if versionResp.Version != u.version {
+			return domain.SubmitResponse{}, fmt.Errorf("client version mismatch: local=%s, chief=%s. Please update your irgsh-cli", u.version, versionResp.Version)
+		}
 	}
 
 	// Experimental prompt

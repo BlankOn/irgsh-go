@@ -70,6 +70,7 @@ type JobView struct {
 	FilterStatus    string
 	TimeFormatted   string
 	TimeRelative    string
+	Dist            string
 	PackageName     string
 	PackageVersion  string
 	Maintainer      string
@@ -394,6 +395,7 @@ func buildJobView(job *storage.JobInfo, loc *time.Location) JobView {
 		FilterStatus:    filterStatus,
 		TimeFormatted:   jakartaTime.Format("2006-01-02 15:04:05 MST"),
 		TimeRelative:    formatRelativeTime(job.SubmittedAt),
+		Dist:            job.Dist,
 		PackageName:     job.PackageName,
 		PackageVersion:  job.PackageVersion,
 		Maintainer:      job.Maintainer,

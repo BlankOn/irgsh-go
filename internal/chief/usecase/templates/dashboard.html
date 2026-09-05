@@ -209,6 +209,7 @@
             <thead>
                 <tr>
                     <th>Timestamp</th>
+                    <th>Dist</th>
                     <th>Package</th>
                     <th>Version</th>
                     <th>Maintainer</th>
@@ -223,6 +224,7 @@
             {{- range .Jobs}}
                 <tr data-status="{{.FilterStatus}}">
                     <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                    <td>{{.Dist}}</td>
                     <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span style="font-size: 0.85em; color: #666;">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
                     <td>{{.PackageVersion}}</td>
                     <td>{{.Maintainer}}</td>
@@ -255,7 +257,7 @@
                     <th>Packages</th>
                     <th>Importer</th>
                     <th>Source</th>
-                    <th>Suite</th>
+                    <th>Dist</th>
                     <th>Component</th>
                     <th>Status</th>
                     <th>UUID</th>

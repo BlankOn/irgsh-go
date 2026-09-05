@@ -97,6 +97,7 @@ func TestBuildJobView(t *testing.T) {
 	t.Run("done job", func(t *testing.T) {
 		job := &storage.JobInfo{
 			TaskUUID:       "test-uuid",
+			Dist:           "verbeek",
 			PackageName:    "pkg",
 			PackageVersion: "1.0",
 			Maintainer:     "User",
@@ -111,6 +112,7 @@ func TestBuildJobView(t *testing.T) {
 		}
 		v := buildJobView(job, loc)
 		assert.Equal(t, "DONE", v.FilterStatus)
+		assert.Equal(t, "verbeek", v.Dist)
 		assert.Equal(t, "status-online", v.StatusClass)
 		assert.Equal(t, "DONE", v.StatusText)
 		assert.False(t, v.ShowSpinner)
