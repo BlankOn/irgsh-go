@@ -308,7 +308,7 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	// The shared BlankOn top bar renders even with no jobs, and points at the
 	// logo route chief serves out of the binary.
 	assert.Contains(t, buf.String(), `id="nd-nav"`)
-	assert.Contains(t, buf.String(), `src="/assets/logo.png"`)
+	assert.Contains(t, buf.String(), `src="/assets/logo.png?version=2"`)
 }
 
 func TestDashboardService_LogoPNG(t *testing.T) {
