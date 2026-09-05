@@ -21,6 +21,18 @@ var dashboardTmplStr string
 //go:embed templates/logviewer.html
 var logViewerTmplStr string
 
+// The dashboard carries the same top bar as the rest of the BlankOn services,
+// wordmark included. Chief serves no static directory, so the asset is
+// embedded in the binary and handed out by its own route.
+//
+//go:embed assets/logo.png
+var logoPNG []byte
+
+// LogoPNG returns the wordmark shown in the top bar.
+func (d *DashboardService) LogoPNG() []byte {
+	return logoPNG
+}
+
 // View models for the dashboard template.
 
 type DashboardData struct {

@@ -304,6 +304,24 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	err = ds.RenderIndexHTML(&buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "1.0.0")
+	// The shared BlankOn top bar renders even with no jobs, and points at the
+	// logo route chief serves out of the binary.
+	assert.Contains(t, buf.String(), `id="nd-nav"`)
+	assert.Contains(t, buf.String(), `src="/assets/logo.png"`)
+}
+
+func TestDashboardService_LogoPNG(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	logo := ds.LogoPNG()
+	require.NotEmpty(t, logo)
+	assert.Equal(t, []byte("\x89PNG"), logo[:4])
 }
 
 func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
