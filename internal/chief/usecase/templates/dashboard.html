@@ -80,8 +80,9 @@
             height: 14px;
             flex: none;
             /* The paths stroke with currentColor, so this greys the symbol
-               without touching the colour of the label beside it. */
-            color: var(--muted);
+               without touching the colour of the label beside it. The site
+               renders this icon at muted/70. */
+            color: rgba(115, 115, 115, 0.7);
         }
         .section-title {
             font-size: 14px;
@@ -382,8 +383,9 @@
             height: 14px;
             flex: none;
             /* The paths stroke with currentColor, so this greys the symbol
-               without touching the colour of the label beside it. */
-            color: var(--muted);
+               without touching the colour of the label beside it. The site
+               renders this icon at muted/70. */
+            color: rgba(115, 115, 115, 0.7);
         }
         #nd-nav .nav-menu-list a {
             display: flex;
@@ -487,8 +489,8 @@
                             <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                         </button>
                         <ul class="nav-menu-list">
-                            <li><a href="https://blankonlinux.id/en/team" target="_blank" rel="noopener noreferrer">Team</a></li>
-                            <li><a href="https://irgsh.blankonlinux.id/" target="_blank" rel="noopener noreferrer">IRGSH</a></li>
+                            <li><a href="https://blankonlinux.id/en/team">Team</a></li>
+                            <li><a href="https://irgsh.blankonlinux.id/">IRGSH</a></li>
                             <li><a href="https://packages.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Packages</a></li>
                             <li><a href="https://security.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Security</a></li>
                             <li><a href="https://jahitan.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Jahitan<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
@@ -552,6 +554,32 @@
     {{- else}}
     <div class="empty-state">No worker instances found</div>
     {{- end}}
+{{- end}}
+
+<div class="section-title">Package Maintainers</div>
+{{- if .Maintainers}}
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>GPG Key</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{- range .Maintainers}}
+                <tr>
+                    <td class="mono">{{.KeyID}}</td>
+                    <td>{{.Name}}</td>
+                    <td>{{.Email}}</td>
+                </tr>
+            {{- end}}
+            </tbody>
+        </table>
+    </div>
+{{- else}}
+    <div class="empty-state">No maintainers found</div>
 {{- end}}
 
     {{- if or .Jobs .ISOJobs .ImportJobs}}
@@ -687,31 +715,6 @@
     </div>
     {{- end}}
 
-<div class="section-title">Package Maintainers</div>
-{{- if .Maintainers}}
-    <div class="table-scroll">
-        <table>
-            <thead>
-                <tr>
-                    <th>GPG Key</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                </tr>
-            </thead>
-            <tbody>
-            {{- range .Maintainers}}
-                <tr>
-                    <td class="mono">{{.KeyID}}</td>
-                    <td>{{.Name}}</td>
-                    <td>{{.Email}}</td>
-                </tr>
-            {{- end}}
-            </tbody>
-        </table>
-    </div>
-{{- else}}
-    <div class="empty-state">No maintainers found</div>
-{{- end}}
 
     <script>
     // Top bar. On a phone the links collapse behind the chevron, and the
