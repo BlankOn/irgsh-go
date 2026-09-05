@@ -82,11 +82,10 @@ type JobView struct {
 	FilterStatus    string
 	TimeFormatted   string
 	TimeRelative    string
-	Dist            string
+	DistComponent   string
 	PackageName     string
 	PackageVersion  string
 	Maintainer      string
-	Component       string
 	IsExperimental  bool
 	RepoLinks       []RepoLink
 	BuildStageClass string
@@ -113,9 +112,8 @@ type ImportJobView struct {
 	TimeFormatted  string
 	TimeRelative   string
 	SourceURL      string
-	Dist           string
+	DistComponent  string
 	Packages       string
-	Component      string
 	Maintainer     string
 	IsExperimental bool
 	State          string
@@ -407,11 +405,10 @@ func buildJobView(job *storage.JobInfo, loc *time.Location) JobView {
 		FilterStatus:    filterStatus,
 		TimeFormatted:   jakartaTime.Format("2006-01-02 15:04:05 MST"),
 		TimeRelative:    formatRelativeTime(job.SubmittedAt),
-		Dist:            job.Dist,
+		DistComponent:   joinDistComponent(job.Dist, job.Component),
 		PackageName:     job.PackageName,
 		PackageVersion:  job.PackageVersion,
 		Maintainer:      job.Maintainer,
-		Component:       job.Component,
 		IsExperimental:  job.IsExperimental,
 		RepoLinks:       repoLinks,
 		BuildStageClass: stageClass(job.BuildState),
@@ -488,9 +485,8 @@ func (d *DashboardService) buildImportJobViews() []ImportJobView {
 			TimeFormatted:  jakartaTime.Format("2006-01-02 15:04:05 MST"),
 			TimeRelative:   formatRelativeTime(job.SubmittedAt),
 			SourceURL:      job.SourceURL,
-			Dist:           job.Dist,
+			DistComponent:  joinDistComponent(job.Dist, job.Component),
 			Packages:       formatPackageList(job.Packages),
-			Component:      job.Component,
 			Maintainer:     job.Maintainer,
 			IsExperimental: job.IsExperimental,
 			State:          job.State,
@@ -556,6 +552,20 @@ func jobStateClass(state string) string {
 		return "status-warning"
 	}
 	return ""
+}
+
+// joinDistComponent renders the distribution and component a job targets as
+// one "dist/component" cell. Rows written before either was recorded still
+// show whichever half they have, rather than a stray slash.
+func joinDistComponent(dist, component string) string {
+	switch {
+	case dist == "":
+		return component
+	case component == "":
+		return dist
+	default:
+		return dist + "/" + component
+	}
 }
 
 func stageClass(state string) string {

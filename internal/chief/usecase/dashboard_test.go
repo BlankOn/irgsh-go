@@ -98,6 +98,7 @@ func TestBuildJobView(t *testing.T) {
 		job := &storage.JobInfo{
 			TaskUUID:       "test-uuid",
 			Dist:           "verbeek",
+			Component:      "main",
 			PackageName:    "pkg",
 			PackageVersion: "1.0",
 			Maintainer:     "User",
@@ -112,7 +113,7 @@ func TestBuildJobView(t *testing.T) {
 		}
 		v := buildJobView(job, loc)
 		assert.Equal(t, "DONE", v.FilterStatus)
-		assert.Equal(t, "verbeek", v.Dist)
+		assert.Equal(t, "verbeek/main", v.DistComponent)
 		assert.Equal(t, "status-online", v.StatusClass)
 		assert.Equal(t, "DONE", v.StatusText)
 		assert.False(t, v.ShowSpinner)
@@ -379,4 +380,12 @@ func TestDashboardService_BuildISOJobViews(t *testing.T) {
 	// The dashboard shows which distribution an ISO was built for; the
 	// live-build repository is the worker's own config and chief never sees it.
 	assert.Equal(t, "verbeek", views[0].Dist)
+}
+
+func TestJoinDistComponent(t *testing.T) {
+	assert.Equal(t, "verbeek/main", joinDistComponent("verbeek", "main"))
+	// Rows recorded before either half existed keep the half they have.
+	assert.Equal(t, "verbeek", joinDistComponent("verbeek", ""))
+	assert.Equal(t, "main", joinDistComponent("", "main"))
+	assert.Equal(t, "", joinDistComponent("", ""))
 }

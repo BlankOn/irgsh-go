@@ -149,30 +149,31 @@
         }
         .tabs {
             display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
+            gap: 24px;
+            border-bottom: 1px solid var(--hairline);
+            margin-bottom: 16px;
         }
         .tab-button {
-            background: #fff;
+            background: none;
             color: var(--muted);
-            border: 1px solid var(--hairline);
-            border-radius: var(--radius-sm);
-            padding: 10px 16px;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            margin-bottom: -1px;
+            padding: 10px 2px;
             font-family: inherit;
             font-size: 14px;
             line-height: 20px;
             font-weight: 500;
             cursor: pointer;
-            transition: color 0.15s, background 0.15s;
+            transition: color 0.15s, border-color 0.15s;
         }
         .tab-button:hover {
-            background: var(--surface);
             color: var(--primary);
         }
         .tab-button.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: var(--primary-fg);
+            color: var(--primary);
+            border-bottom-color: var(--primary);
         }
         .tab-pane {
             display: none;
@@ -346,7 +347,7 @@
         <div class="nav-blur">
             <nav class="nav-inner">
                 <a class="nav-title" href="https://blankonlinux.id/en">
-                    <img src="/assets/logo.png" alt="BlankOn" width="796" height="189">
+                    <img src="/assets/logo.png" alt="BlankOn Linux" width="572" height="63">
                 </a>
                 <ul class="nav-links">
                     <li><a class="nav-item" href="https://blankonlinux.id/en">Home</a></li>
@@ -378,7 +379,7 @@
     <div class="page">
     <div class="header">
         <h1>IRGSH Chief</h1>
-        <p class="subtitle">Distributed package builder for BlankOn Linux &mdash; {{.Version}}</p>
+        <p class="subtitle">Distributed packaging factory for BlankOn Linux - v{{.Version}}</p>
     </div>
 
 {{- if .HasMonitoring}}
@@ -443,26 +444,23 @@
             <thead>
                 <tr>
                     <th>Timestamp</th>
-                    <th>Dist</th>
+                    <th>Dist/Component</th>
                     <th>Package</th>
                     <th>Version</th>
                     <th>Maintainer</th>
-                    <th>Component</th>
                     <th>Build</th>
                     <th>Repo</th>
                     <th>Status</th>
-                    <th>UUID</th>
                 </tr>
             </thead>
             <tbody>
             {{- range .Jobs}}
                 <tr data-status="{{.FilterStatus}}">
                     <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
-                    <td>{{.Dist}}</td>
+                    <td>{{.DistComponent}}</td>
                     <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span class="metric">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
                     <td>{{.PackageVersion}}</td>
                     <td>{{.Maintainer}}</td>
-                    <td>{{.Component}}</td>
                     <td><span class="{{.BuildStageClass}}">{{.BuildStateText}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=build" target="_blank">log</a></td>
                     <td><span class="{{.RepoStageClass}}">{{.RepoStateText}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=repo" target="_blank">log</a></td>
                     <td>
@@ -472,7 +470,6 @@
                         <span class="{{.StatusClass}}">{{.StatusText}}</span>
                         {{- end}}
                     </td>
-                    <td class="mono">{{.TaskUUID}}</td>
                 </tr>
             {{- end}}
             </tbody>
@@ -491,10 +488,8 @@
                     <th>Packages</th>
                     <th>Importer</th>
                     <th>Source</th>
-                    <th>Dist</th>
-                    <th>Component</th>
+                    <th>Dist/Component</th>
                     <th>Status</th>
-                    <th>UUID</th>
                 </tr>
             </thead>
             <tbody>
@@ -504,8 +499,7 @@
                     <td>{{.Packages}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}</td>
                     <td>{{.Maintainer}}</td>
                     <td style="font-size: 0.9em;">{{.SourceURL}}</td>
-                    <td>{{.Dist}}</td>
-                    <td>{{.Component}}</td>
+                    <td>{{.DistComponent}}</td>
                     <td>
                         {{- if .ShowSpinner}}
                         <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -514,7 +508,6 @@
                         {{- end}}
                         <br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=import" target="_blank">log</a>
                     </td>
-                    <td class="mono">{{.TaskUUID}}</td>
                 </tr>
             {{- end}}
             </tbody>
