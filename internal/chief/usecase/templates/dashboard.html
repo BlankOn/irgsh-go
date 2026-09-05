@@ -308,17 +308,25 @@
         #nd-nav .nav-links {
             display: flex;
             flex-direction: row;
-            align-items: center;
+            /* Stretched, not centred: each item then spans the full 56px bar,
+               so the pointer keeps hovering all the way down to the dropdown. */
+            align-self: stretch;
+            align-items: stretch;
             gap: 8px;
             margin: 0;
             padding: 0 24px;
             list-style: none;
         }
+        #nd-nav .nav-links > li {
+            display: flex;
+            align-items: stretch;
+        }
         #nd-nav .nav-item {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            padding: 8px;
+            margin: 0;
+            padding: 0 8px;
             font-family: inherit;
             font-size: 14px;
             line-height: 20px;
@@ -366,17 +374,6 @@
         #nd-nav .nav-menu.open > .nav-menu-list {
             visibility: visible;
             opacity: 1;
-        }
-        /* A pointer that can hover opens the menu by hovering; a touch screen
-           has no hover state, so there it is opened by tapping (see script). */
-        @media (hover: hover) {
-            #nd-nav .nav-menu:hover > .nav-menu-list {
-                visibility: visible;
-                opacity: 1;
-            }
-            #nd-nav .nav-menu:hover > .nav-item .nav-chevron {
-                transform: rotate(180deg);
-            }
         }
         #nd-nav .nav-external {
             width: 14px;
@@ -458,6 +455,12 @@
             }
             #nd-nav .nav-menu.open > .nav-menu-list {
                 display: block;
+            }
+            #nd-nav .nav-links > li {
+                display: block;
+            }
+            #nd-nav .nav-item {
+                padding: 8px 0;
             }
             #nd-nav .nav-menu-list a {
                 padding-left: 0;
@@ -726,11 +729,19 @@
         var menu = document.querySelector('#nd-nav .nav-menu');
         var menuButton = document.getElementById('devMenuButton');
 
+        var closeTimer;
+
         function canHover() {
             return window.matchMedia('(hover: hover)').matches;
         }
+        function openMenu() {
+            if (!menu) return;
+            menu.classList.add('open');
+            if (menuButton) menuButton.setAttribute('aria-expanded', 'true');
+        }
         function closeMenu() {
             if (!menu) return;
+            clearTimeout(closeTimer);
             menu.classList.remove('open');
             if (menuButton) menuButton.setAttribute('aria-expanded', 'false');
         }
@@ -752,8 +763,24 @@
             menuButton.addEventListener('click', function () {
                 // Hovering already opened it; tapping toggles.
                 var open = canHover() ? true : !menu.classList.contains('open');
+                clearTimeout(closeTimer);
                 menu.classList.toggle('open', open);
                 menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+
+            // A pointer that can hover opens the menu by hovering; a touch
+            // screen has no hover state and opens it by tapping, above.
+            // Closing waits 100ms so the pointer can cross the gap between the
+            // button and the panel without the menu vanishing under it.
+            menu.addEventListener('mouseenter', function () {
+                if (!canHover()) return;
+                clearTimeout(closeTimer);
+                openMenu();
+            });
+            menu.addEventListener('mouseleave', function () {
+                if (!canHover()) return;
+                clearTimeout(closeTimer);
+                closeTimer = setTimeout(closeMenu, 100);
             });
         }
         document.addEventListener('pointerdown', function (event) {
