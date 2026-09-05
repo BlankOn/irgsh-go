@@ -1,3 +1,18 @@
+irgsh (2.0.1-1) unstable; urgency=medium
+
+  * Restyle the chief dashboard after blankonlinux.id: shared BlankOn top bar
+    (logo, links, Development menu, brand accent line), the site's neutral
+    palette and typography, and its bordered/rounded table styling
+  * Serve the BlankOn wordmark and favicon from the chief binary
+    (/assets/logo.png, /favicon.ico)
+  * Make the dashboard usable on phones: viewport meta tag, a collapsible top
+    bar menu, and job tables that scroll inside their own container
+  * Drop the 10-second meta refresh; the page is now reloaded manually
+  * Show dist and component as one column, and drop the UUID column from the
+    packaging and import job tables
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Sat, 05 Sep 2026 22:20:00 +0700
+
 irgsh (2.0.0-1) unstable; urgency=medium
 
   * Add multi-distribution support: chief is now distribution-agnostic and
