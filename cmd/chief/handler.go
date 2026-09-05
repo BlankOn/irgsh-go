@@ -17,6 +17,7 @@ type ChiefService interface {
 	GetVersion() string
 	RenderIndexHTML(w io.Writer) error
 	RenderLogViewerHTML(w io.Writer, taskUUID, logType string) error
+	LogoPNG() []byte
 	GetMaintainers() []domain.Maintainer
 	ListMaintainersRaw() (string, error)
 	SubmitPackage(domain.Submission) (domain.SubmitPayloadResponse, error)
@@ -72,6 +73,16 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 		return
 	}
 	writeJSONError(w, http.StatusInternalServerError, "internal server error")
+}
+
+// logoHandler serves the wordmark embedded in the binary for the top bar.
+func logoHandler(w http.ResponseWriter, r *http.Request) {
+	logo := chiefService.LogoPNG()
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if _, err := w.Write(logo); err != nil {
+		log.Printf("failed to write logo: %v\n", err)
+	}
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {

@@ -97,6 +97,10 @@ func (s *ChiefUsecase) RenderLogViewerHTML(w io.Writer, taskUUID, logType string
 	return s.dashboardSvc.RenderLogViewerHTML(w, taskUUID, logType)
 }
 
+func (s *ChiefUsecase) LogoPNG() []byte {
+	return s.dashboardSvc.LogoPNG()
+}
+
 func (s *ChiefUsecase) ImportPackages(submission domain.ImportSubmission) (domain.SubmitPayloadResponse, error) {
 	return s.submissionSvc.ImportPackages(submission)
 }

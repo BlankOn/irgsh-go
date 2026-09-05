@@ -2,118 +2,178 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="10">
     <title>IRGSH Chief</title>
     <style>
+        /* Styling follows blankonlinux.id/en/download: 30px/700 page title,
+           muted uppercase section labels, hairline rgba(204,204,204,.5)
+           borders at 10px radius, 10px/16px rows, #171717 primary buttons.
+           The dashboard's own layout and structure are unchanged. */
+        :root {
+            --blankon-red: #ff0000;
+            --fg: #09090b;
+            --muted: #737373;
+            --hairline: rgba(204, 204, 204, 0.5);
+            --surface: #f5f5f5;
+            --primary: #171717;
+            --primary-fg: #fafafa;
+            --radius: 10px;
+            --radius-sm: 8px;
+            --sans:
+                -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+                'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            --mono:
+                ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                'Liberation Mono', 'Courier New', monospace;
+        }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
         body {
-            font-family: monospace;
-            margin: 20px;
-            background-color: #f5f5f5;
+            font-family: var(--sans);
+            font-size: 14px;
+            line-height: 20px;
+            color: var(--fg);
+            margin: 0;
+            background-color: #fff;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .page {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 48px 16px 64px;
         }
         .header {
-            background: #333;
-            color: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 40px;
         }
-        .logo {
+        .header h1 {
+            font-size: 30px;
+            line-height: 36px;
+            font-weight: 700;
+            margin: 0;
+        }
+        .header .subtitle {
+            font-size: 16px;
+            line-height: 24px;
+            color: var(--muted);
+            margin: 12px 0 0 0;
+        }
+        .section-title {
             font-size: 14px;
-            line-height: 1.2;
-            margin-bottom: 10px;
-        }
-        .nav {
-            margin-top: 10px;
-        }
-        .nav a {
-            color: #4CAF50;
-            text-decoration: none;
-            margin-right: 10px;
-        }
-        .nav a:hover {
-            text-decoration: underline;
+            line-height: 20px;
+            font-weight: 600;
+            letter-spacing: 0.35px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 40px 0 12px 0;
         }
         table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             background: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius);
+            overflow: hidden;
         }
         th {
-            background: #333;
-            color: #fff;
-            padding: 12px;
+            background: var(--surface);
+            color: var(--muted);
+            padding: 10px 16px;
             text-align: left;
             font-size: 12px;
+            line-height: 16px;
+            font-weight: 600;
+            letter-spacing: 0.35px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--hairline);
+            white-space: nowrap;
         }
         td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #ddd;
-            font-size: 11px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--hairline);
+            font-size: 14px;
+            line-height: 20px;
+            vertical-align: top;
         }
-        tr:hover {
-            background-color: #f9f9f9;
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
+        tbody tr:hover {
+            background-color: var(--surface);
+        }
+        a {
+            color: var(--muted);
+        }
+        a:hover {
+            color: var(--primary);
+        }
+        .mono {
+            font-family: var(--mono);
         }
         .status-online {
-            color: #4CAF50;
-            font-weight: bold;
+            color: #16a34a;
+            font-weight: 500;
         }
         .status-offline {
-            color: #f44336;
-            font-weight: bold;
+            color: #dc2626;
+            font-weight: 500;
         }
         .status-warning {
-            color: #ff9800;
-            font-weight: bold;
+            color: #ca8a04;
+            font-weight: 500;
         }
         .badge {
             display: inline-block;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 16px;
+            font-weight: 500;
         }
         .badge-builder {
             background: #2196F3;
-            color: white;
+            color: #fff;
         }
         .badge-repo {
             background: #FF9800;
-            color: white;
+            color: #fff;
         }
         .badge-iso {
             background: #9C27B0;
-            color: white;
+            color: #fff;
         }
         .metric {
-            font-size: 11px;
-            color: #666;
-        }
-        .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            color: #333;
+            color: var(--muted);
         }
         .tabs {
-            margin-bottom: 10px;
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid var(--hairline);
+            margin-bottom: 16px;
         }
         .tab-button {
-            background: #ddd;
-            color: #333;
-            border: none;
-            padding: 8px 16px;
-            margin-right: 4px;
-            font-family: monospace;
-            font-size: 12px;
+            background: none;
+            color: var(--muted);
+            border: 0;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            margin-bottom: -1px;
+            padding: 10px 2px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 20px;
+            font-weight: 500;
             cursor: pointer;
-            border-radius: 3px 3px 0 0;
+            transition: color 0.15s, border-color 0.15s;
         }
         .tab-button:hover {
-            background: #ccc;
+            color: var(--primary);
         }
         .tab-button.active {
-            background: #333;
-            color: #fff;
+            color: var(--primary);
+            border-bottom-color: var(--primary);
         }
         .tab-pane {
             display: none;
@@ -121,16 +181,170 @@
         .tab-pane.active {
             display: block;
         }
-        .refresh-info {
-            color: #666;
-            font-size: 11px;
-            margin-top: 20px;
+        label {
+            color: var(--muted);
+        }
+        select {
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 20px;
+            color: var(--fg);
+            background: #fff;
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
         }
         .empty-state {
             background: #fff;
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius);
             padding: 40px;
             text-align: center;
-            color: #999;
+            color: var(--muted);
+        }
+        #nd-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            height: 56px;
+            font-family:
+                -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+                'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #nd-nav * {
+            box-sizing: border-box;
+        }
+        #nd-nav .nav-blur {
+            position: relative;
+            background: rgba(245, 245, 245, 0.8);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid #e4e4e7;
+        }
+        /* Brand red accent line under the top bar, fading out to both edges */
+        #nd-nav .nav-blur::after {
+            content: '';
+            position: absolute;
+            inset-inline: 0;
+            bottom: -2px;
+            height: 2px;
+            pointer-events: none;
+            background: linear-gradient(
+                to right,
+                transparent 0%,
+                transparent 30%,
+                var(--blankon-red) 50%,
+                transparent 70%,
+                transparent 100%
+            );
+        }
+        #nd-nav .nav-inner {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 1400px;
+            height: 56px;
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+        #nd-nav .nav-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            color: #09090b;
+            text-decoration: none;
+        }
+        #nd-nav .nav-title img {
+            display: block;
+            height: 24px;
+            width: auto;
+            max-width: 100%;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+        #nd-nav .nav-links {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+            padding: 0 24px;
+            list-style: none;
+        }
+        #nd-nav .nav-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 20px;
+            color: #737373;
+            text-decoration: none;
+            background: none;
+            border: 0;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        #nd-nav .nav-item:hover {
+            color: #171717;
+            text-decoration: none;
+        }
+        #nd-nav .nav-item svg {
+            width: 16px;
+            height: 16px;
+        }
+        #nd-nav .nav-menu {
+            position: relative;
+        }
+        #nd-nav .nav-chevron {
+            transition: transform 0.15s;
+        }
+        #nd-nav .nav-menu:hover .nav-chevron,
+        #nd-nav .nav-menu:focus-within .nav-chevron {
+            transform: rotate(180deg);
+        }
+        #nd-nav .nav-menu-list {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            z-index: 50;
+            margin: 4px 0 0 0;
+            padding: 4px 0;
+            min-width: 160px;
+            list-style: none;
+            background: #f5f5f5;
+            border: 1px solid rgba(204, 204, 204, 0.5);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.15s, visibility 0.15s;
+        }
+        #nd-nav .nav-menu:hover .nav-menu-list,
+        #nd-nav .nav-menu:focus-within .nav-menu-list {
+            visibility: visible;
+            opacity: 1;
+        }
+        #nd-nav .nav-menu-list a {
+            display: block;
+            padding: 8px 16px;
+            font-size: 14px;
+            line-height: 20px;
+            color: #737373;
+            text-decoration: none;
+        }
+        #nd-nav .nav-menu-list a:hover {
+            background: rgba(209, 209, 209, 0.5);
+            color: #171717;
+        }
+        @media (max-width: 640px) {
+            #nd-nav .nav-links {
+                display: none;
+            }
         }
         @keyframes spin-gear {
             from { transform: rotate(0deg); }
@@ -143,8 +357,42 @@
     </style>
 </head>
 <body>
+    <header id="nd-nav">
+        <div class="nav-blur">
+            <nav class="nav-inner">
+                <a class="nav-title" href="https://blankonlinux.id/en">
+                    <img src="/assets/logo.png" alt="BlankOn Linux" width="572" height="63">
+                </a>
+                <ul class="nav-links">
+                    <li><a class="nav-item" href="https://blankonlinux.id/en/download">Download</a></li>
+                    <li><a class="nav-item" href="https://blankonlinux.id/en/wiki/">Wiki</a></li>
+                    <li class="nav-menu">
+                        <button type="button" class="nav-item">
+                            Development
+                            <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                        </button>
+                        <ul class="nav-menu-list">
+                            <li><a href="https://blankonlinux.id/en/team">Team</a></li>
+                            <li><a href="https://irgsh.blankonlinux.id/">IRGSH</a></li>
+                            <li><a href="https://security.blankonlinux.id/">Security</a></li>
+                            <li><a href="https://packages.blankonlinux.id/">Packages</a></li>
+                            <li><a href="https://jahitan.blankonlinux.id/">Jahitan</a></li>
+                            <li><a href="https://arsip.blankonlinux.id/">Arsip</a></li>
+                            <li><a href="https://arsip-dev.blankonlinux.id/">Arsip Dev</a></li>
+                            <li><a href="https://github.com/blankon">Github</a></li>
+                        </ul>
+                    </li>
+                    <li><a class="nav-item" href="https://blankon.id/en/sponsorship">Sponsorship</a></li>
+                    <li><a class="nav-item" href="https://blankon.id/en/donate">Donate</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="page">
     <div class="header">
-        <div>irgsh-chief {{.Version}}</div>
+        <h1>IRGSH Chief</h1>
+        <p class="subtitle">Distributed packaging factory for BlankOn Linux - v{{.Version}}</p>
     </div>
 
 {{- if .HasMonitoring}}
@@ -195,9 +443,9 @@
 
     <div class="tab-pane" id="tab-packaging">
         {{- if .Jobs}}
-        <div style="margin-bottom: 10px;">
-            <label for="statusFilter" style="margin-right: 5px;">Filter by status:</label>
-            <select id="statusFilter" onchange="filterJobsByStatus(this.value)" style="padding: 4px 8px; font-size: 0.95em;">
+        <div style="margin-bottom: 12px;">
+            <label for="statusFilter" style="margin-right: 8px;">Filter by status:</label>
+            <select id="statusFilter" onchange="filterJobsByStatus(this.value)">
                 <option value="all">All</option>
                 <option value="DONE">DONE</option>
                 <option value="FAILED">FAILED</option>
@@ -209,26 +457,25 @@
             <thead>
                 <tr>
                     <th>Timestamp</th>
+                    <th>Dist</th>
                     <th>Package</th>
                     <th>Version</th>
                     <th>Maintainer</th>
-                    <th>Component</th>
                     <th>Build</th>
                     <th>Repo</th>
                     <th>Status</th>
-                    <th>UUID</th>
                 </tr>
             </thead>
             <tbody>
             {{- range .Jobs}}
                 <tr data-status="{{.FilterStatus}}">
-                    <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
-                    <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span style="font-size: 0.85em; color: #666;">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
+                    <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
+                    <td>{{.DistComponent}}</td>
+                    <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span class="metric">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
                     <td>{{.PackageVersion}}</td>
                     <td>{{.Maintainer}}</td>
-                    <td>{{.Component}}</td>
-                    <td><span class="{{.BuildStageClass}}">{{.BuildStateText}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=build" target="_blank" style="font-size:0.85em;">log</a></td>
-                    <td><span class="{{.RepoStageClass}}">{{.RepoStateText}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=repo" target="_blank" style="font-size:0.85em;">log</a></td>
+                    <td><span class="{{.BuildStageClass}}">{{.BuildStateText}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=build" target="_blank">log</a></td>
+                    <td><span class="{{.RepoStageClass}}">{{.RepoStateText}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=repo" target="_blank">log</a></td>
                     <td>
                         {{- if .ShowSpinner}}
                         <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -236,7 +483,6 @@
                         <span class="{{.StatusClass}}">{{.StatusText}}</span>
                         {{- end}}
                     </td>
-                    <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
                 </tr>
             {{- end}}
             </tbody>
@@ -255,30 +501,26 @@
                     <th>Packages</th>
                     <th>Importer</th>
                     <th>Source</th>
-                    <th>Suite</th>
-                    <th>Component</th>
+                    <th>Dist</th>
                     <th>Status</th>
-                    <th>UUID</th>
                 </tr>
             </thead>
             <tbody>
             {{- range .ImportJobs}}
                 <tr>
-                    <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                    <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
                     <td>{{.Packages}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}</td>
                     <td>{{.Maintainer}}</td>
                     <td style="font-size: 0.9em;">{{.SourceURL}}</td>
-                    <td>{{.Dist}}</td>
-                    <td>{{.Component}}</td>
+                    <td>{{.DistComponent}}</td>
                     <td>
                         {{- if .ShowSpinner}}
                         <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                         {{- else}}
                         <span class="{{.StatusClass}}">{{.State}}</span>
                         {{- end}}
-                        <br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=import" target="_blank" style="font-size:0.85em;">log</a>
+                        <br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=import" target="_blank">log</a>
                     </td>
-                    <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
                 </tr>
             {{- end}}
             </tbody>
@@ -303,11 +545,11 @@
             <tbody>
             {{- range .ISOJobs}}
                 <tr>
-                    <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
+                    <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
                     <td>{{.Dist}}</td>
                     <td>{{.Branch}}</td>
-                    <td><span class="{{.StatusClass}}">{{.State}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=iso" target="_blank" style="font-size:0.85em;">log</a></td>
-                    <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
+                    <td><span class="{{.StatusClass}}">{{.State}}</span><br><a href="/logs/stream?id={{.TaskUUID}}&amp;type=iso" target="_blank">log</a></td>
+                    <td class="mono">{{.TaskUUID}}</td>
                 </tr>
             {{- end}}
             </tbody>
@@ -331,7 +573,7 @@
         <tbody>
         {{- range .Maintainers}}
             <tr>
-                <td style="font-family: monospace;">{{.KeyID}}</td>
+                <td class="mono">{{.KeyID}}</td>
                 <td>{{.Name}}</td>
                 <td>{{.Email}}</td>
             </tr>
@@ -342,9 +584,6 @@
     <div class="empty-state">No maintainers found</div>
 {{- end}}
 
-    <div class="refresh-info">
-        Page auto-refreshes every 10 seconds
-    </div>
     <script>
     function filterJobsByStatus(status) {
         var table = document.getElementById('packagingJobsTable');
@@ -361,7 +600,7 @@
     }
 
     // Job tabs. The selected tab is kept in the URL fragment (not just JS
-    // state) so it survives this page's 10-second meta-refresh reload.
+    // state) so it survives a reload.
     var jobTabs = ['packaging', 'imports', 'iso'];
     function showJobTab(name) {
         if (jobTabs.indexOf(name) === -1) name = 'packaging';
@@ -380,5 +619,6 @@
     });
     showJobTab(location.hash.replace('#tab-', ''));
     </script>
+    </div>
 </body>
 </html>

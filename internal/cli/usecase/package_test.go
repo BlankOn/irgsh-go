@@ -64,6 +64,23 @@ func TestSubmitPackage_EmptyDist(t *testing.T) {
 	assert.Contains(t, err.Error(), "--dist is required")
 }
 
+func TestSubmitPackage_EmptyDistCheckedBeforeChief(t *testing.T) {
+	// A missing --dist must be reported without ever contacting chief, so the
+	// mock's failing GetVersion would surface as a different error if the
+	// connectivity check ran first.
+	svc := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		nil,
+		&mockChiefAPI{versionErr: errors.New("connection refused")},
+		nil, nil, nil, nil, nil, nil, nil, "1.0.0",
+	)
+	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		PackageURL: "https://git.example.com/pkg",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--dist is required")
+}
+
 func TestSubmitPackage_EmptyPackageURL(t *testing.T) {
 	svc := usecase.NewCLIUsecase(
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},

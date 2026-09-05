@@ -175,6 +175,8 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 
 	mux.HandleFunc("/maintainers", MaintainersHandler)
 
+	mux.HandleFunc("/assets/logo.png", logoHandler)
+
 	mux.HandleFunc("/", indexHandler)
 
 	artifactFs := http.FileServer(http.Dir(cfg.Chief.Workdir + "/artifacts"))

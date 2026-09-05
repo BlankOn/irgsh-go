@@ -97,6 +97,8 @@ func TestBuildJobView(t *testing.T) {
 	t.Run("done job", func(t *testing.T) {
 		job := &storage.JobInfo{
 			TaskUUID:       "test-uuid",
+			Dist:           "verbeek",
+			Component:      "main",
 			PackageName:    "pkg",
 			PackageVersion: "1.0",
 			Maintainer:     "User",
@@ -111,6 +113,7 @@ func TestBuildJobView(t *testing.T) {
 		}
 		v := buildJobView(job, loc)
 		assert.Equal(t, "DONE", v.FilterStatus)
+		assert.Equal(t, "verbeek/main", v.DistComponent)
 		assert.Equal(t, "status-online", v.StatusClass)
 		assert.Equal(t, "DONE", v.StatusText)
 		assert.False(t, v.ShowSpinner)
@@ -302,6 +305,24 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	err = ds.RenderIndexHTML(&buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "1.0.0")
+	// The shared BlankOn top bar renders even with no jobs, and points at the
+	// logo route chief serves out of the binary.
+	assert.Contains(t, buf.String(), `id="nd-nav"`)
+	assert.Contains(t, buf.String(), `src="/assets/logo.png"`)
+}
+
+func TestDashboardService_LogoPNG(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	logo := ds.LogoPNG()
+	require.NotEmpty(t, logo)
+	assert.Equal(t, []byte("\x89PNG"), logo[:4])
 }
 
 func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
@@ -359,4 +380,12 @@ func TestDashboardService_BuildISOJobViews(t *testing.T) {
 	// The dashboard shows which distribution an ISO was built for; the
 	// live-build repository is the worker's own config and chief never sees it.
 	assert.Equal(t, "verbeek", views[0].Dist)
+}
+
+func TestJoinDistComponent(t *testing.T) {
+	assert.Equal(t, "verbeek/main", joinDistComponent("verbeek", "main"))
+	// Rows recorded before either half existed keep the half they have.
+	assert.Equal(t, "verbeek", joinDistComponent("verbeek", ""))
+	assert.Equal(t, "main", joinDistComponent("", "main"))
+	assert.Equal(t, "", joinDistComponent("", ""))
 }

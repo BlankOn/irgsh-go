@@ -27,7 +27,7 @@ func (m *MachineryTaskQueue) SendBuildChain(taskUUID, dist string, payload []byt
 	}
 	repoSig := tasks.Signature{
 		Name:       "repo",
-		UUID:       taskUUID,
+		UUID:       repoTaskUUID(taskUUID),
 		RoutingKey: queue,
 	}
 	chain, err := tasks.NewChain(&buildSig, &repoSig)
@@ -60,7 +60,25 @@ func (m *MachineryTaskQueue) SendImportTask(taskUUID, dist string, payload []byt
 	return err
 }
 
+// repoTaskUUID is the task UUID the repo stage of a build chain runs under.
+//
+// Machinery keys task state by UUID alone - the task name is not part of the
+// key, and mergeNewTaskState even carries the original name forward - so a
+// build and a repo signature sharing one UUID share one state record. The repo
+// stage would then overwrite the build stage's result, making a successful
+// build look failed whenever the repo injection failed. Giving the repo stage
+// its own derived UUID keeps the two stages independently observable.
+//
+// The repo worker reads the pipeline ID from its payload, not from its own
+// signature, so the suffix stays inside chief.
+func repoTaskUUID(taskUUID string) string {
+	return taskUUID + "-repo"
+}
+
 func (m *MachineryTaskQueue) GetTaskState(taskName, taskUUID string) string {
+	if taskName == "repo" {
+		taskUUID = repoTaskUUID(taskUUID)
+	}
 	sig := tasks.Signature{
 		Name: taskName,
 		UUID: taskUUID,
