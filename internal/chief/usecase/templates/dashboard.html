@@ -2,7 +2,6 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="10">
     <title>IRGSH Chief</title>
     <style>
         /* Styling follows blankonlinux.id/en/download: 30px/700 page title,
@@ -10,6 +9,7 @@
            borders at 10px radius, 10px/16px rows, #171717 primary buttons.
            The dashboard's own layout and structure are unchanged. */
         :root {
+            --blankon-red: #ff0000;
             --fg: #09090b;
             --muted: #737373;
             --hairline: rgba(204, 204, 204, 0.5);
@@ -194,10 +194,6 @@
             border-radius: var(--radius-sm);
             padding: 8px 12px;
         }
-        .refresh-info {
-            color: var(--muted);
-            margin-top: 32px;
-        }
         .empty-state {
             background: #fff;
             border: 1px solid var(--hairline);
@@ -221,10 +217,28 @@
             box-sizing: border-box;
         }
         #nd-nav .nav-blur {
+            position: relative;
             background: rgba(245, 245, 245, 0.8);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid #e4e4e7;
+        }
+        /* Brand red accent line under the top bar, fading out to both edges */
+        #nd-nav .nav-blur::after {
+            content: '';
+            position: absolute;
+            inset-inline: 0;
+            bottom: -2px;
+            height: 2px;
+            pointer-events: none;
+            background: linear-gradient(
+                to right,
+                transparent 0%,
+                transparent 30%,
+                var(--blankon-red) 50%,
+                transparent 70%,
+                transparent 100%
+            );
         }
         #nd-nav .nav-inner {
             display: flex;
@@ -350,7 +364,6 @@
                     <img src="/assets/logo.png" alt="BlankOn Linux" width="572" height="63">
                 </a>
                 <ul class="nav-links">
-                    <li><a class="nav-item" href="https://blankonlinux.id/en">Home</a></li>
                     <li><a class="nav-item" href="https://blankonlinux.id/en/download">Download</a></li>
                     <li><a class="nav-item" href="https://blankonlinux.id/en/wiki/">Wiki</a></li>
                     <li class="nav-menu">
@@ -444,7 +457,7 @@
             <thead>
                 <tr>
                     <th>Timestamp</th>
-                    <th>Dist/Component</th>
+                    <th>Dist</th>
                     <th>Package</th>
                     <th>Version</th>
                     <th>Maintainer</th>
@@ -488,7 +501,7 @@
                     <th>Packages</th>
                     <th>Importer</th>
                     <th>Source</th>
-                    <th>Dist/Component</th>
+                    <th>Dist</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -571,9 +584,6 @@
     <div class="empty-state">No maintainers found</div>
 {{- end}}
 
-    <div class="refresh-info">
-        Page auto-refreshes every 10 seconds
-    </div>
     <script>
     function filterJobsByStatus(status) {
         var table = document.getElementById('packagingJobsTable');
@@ -590,7 +600,7 @@
     }
 
     // Job tabs. The selected tab is kept in the URL fragment (not just JS
-    // state) so it survives this page's 10-second meta-refresh reload.
+    // state) so it survives a reload.
     var jobTabs = ['packaging', 'imports', 'iso'];
     function showJobTab(name) {
         if (jobTabs.indexOf(name) === -1) name = 'packaging';
