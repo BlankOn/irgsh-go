@@ -18,6 +18,7 @@ type ChiefService interface {
 	RenderIndexHTML(w io.Writer) error
 	RenderLogViewerHTML(w io.Writer, taskUUID, logType string) error
 	LogoPNG() []byte
+	FaviconICO() []byte
 	GetMaintainers() []domain.Maintainer
 	ListMaintainersRaw() (string, error)
 	SubmitPackage(domain.Submission) (domain.SubmitPayloadResponse, error)
@@ -82,6 +83,16 @@ func logoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	if _, err := w.Write(logo); err != nil {
 		log.Printf("failed to write logo: %v\n", err)
+	}
+}
+
+// faviconHandler serves the site icon embedded in the binary.
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	icon := chiefService.FaviconICO()
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if _, err := w.Write(icon); err != nil {
+		log.Printf("failed to write favicon: %v\n", err)
 	}
 }
 

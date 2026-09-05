@@ -6,6 +6,7 @@
          viewport and then zooms out, so the mobile media queries never match. -->
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>IRGSH Chief</title>
+    <link rel="icon" href="/favicon.ico">
     <style>
         /* Styling follows blankonlinux.id/en/download: 30px/700 page title,
            muted uppercase section labels, hairline rgba(204,204,204,.5)
@@ -61,6 +62,23 @@
             line-height: 24px;
             color: var(--muted);
             margin: 12px 0 0 0;
+        }
+        .source-link {
+            margin: 8px 0 0 0;
+        }
+        .source-link a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            /* A long URL must wrap rather than push the page sideways on a phone. */
+            overflow-wrap: anywhere;
+            text-decoration: underline;
+            text-underline-offset: 4px;
+        }
+        .ext-icon {
+            width: 14px;
+            height: 14px;
+            flex: none;
         }
         .section-title {
             font-size: 14px;
@@ -356,8 +374,15 @@
                 transform: rotate(180deg);
             }
         }
+        #nd-nav .nav-external {
+            width: 14px;
+            height: 14px;
+            flex: none;
+        }
         #nd-nav .nav-menu-list a {
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 6px;
             padding: 8px 16px;
             font-size: 14px;
             line-height: 20px;
@@ -456,18 +481,18 @@
                             <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                         </button>
                         <ul class="nav-menu-list">
-                            <li><a href="https://blankonlinux.id/en/team">Team</a></li>
-                            <li><a href="https://irgsh.blankonlinux.id/">IRGSH</a></li>
-                            <li><a href="https://security.blankonlinux.id/">Security</a></li>
-                            <li><a href="https://packages.blankonlinux.id/">Packages</a></li>
-                            <li><a href="https://jahitan.blankonlinux.id/">Jahitan</a></li>
-                            <li><a href="https://arsip.blankonlinux.id/">Arsip</a></li>
-                            <li><a href="https://arsip-dev.blankonlinux.id/">Arsip Dev</a></li>
-                            <li><a href="https://github.com/blankon">Github</a></li>
+                            <li><a href="https://blankonlinux.id/en/team" target="_blank" rel="noopener noreferrer">Team</a></li>
+                            <li><a href="https://irgsh.blankonlinux.id/" target="_blank" rel="noopener noreferrer">IRGSH</a></li>
+                            <li><a href="https://packages.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Packages</a></li>
+                            <li><a href="https://security.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Security</a></li>
+                            <li><a href="https://jahitan.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Jahitan<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                            <li><a href="https://arsip.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Arsip<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                            <li><a href="https://arsip-dev.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Arsip Dev<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                            <li><a href="https://github.com/blankon" target="_blank" rel="noopener noreferrer">Github<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
                         </ul>
                     </li>
-                    <li><a class="nav-item" href="https://blankon.id/en/sponsorship">Sponsorship</a></li>
-                    <li><a class="nav-item" href="https://blankon.id/en/donate">Donate</a></li>
+                    <li><a class="nav-item" href="https://blankon.id/en/sponsorship" target="_blank" rel="noopener noreferrer">Sponsorship<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                    <li><a class="nav-item" href="https://blankon.id/en/donate" target="_blank" rel="noopener noreferrer">Donate<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
                 </ul>
                 <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
@@ -478,8 +503,9 @@
 
     <div class="page">
     <div class="header">
-        <h1>IRGSH Chief</h1>
+        <h1>IRGSH</h1>
         <p class="subtitle">Distributed packaging factory for BlankOn Linux - v{{.Version}}</p>
+        <p class="source-link"><a href="https://github.com/blankon/irgsh-go" target="_blank" rel="noopener noreferrer">https://github.com/blankon/irgsh-go<svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></p>
     </div>
 
 {{- if .HasMonitoring}}

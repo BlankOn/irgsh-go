@@ -28,9 +28,17 @@ var logViewerTmplStr string
 //go:embed assets/logo.png
 var logoPNG []byte
 
+//go:embed assets/favicon.ico
+var faviconICO []byte
+
 // LogoPNG returns the wordmark shown in the top bar.
 func (d *DashboardService) LogoPNG() []byte {
 	return logoPNG
+}
+
+// FaviconICO returns the site icon, the same one the BlankOn site uses.
+func (d *DashboardService) FaviconICO() []byte {
+	return faviconICO
 }
 
 // View models for the dashboard template.

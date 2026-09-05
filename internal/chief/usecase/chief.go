@@ -101,6 +101,10 @@ func (s *ChiefUsecase) LogoPNG() []byte {
 	return s.dashboardSvc.LogoPNG()
 }
 
+func (s *ChiefUsecase) FaviconICO() []byte {
+	return s.dashboardSvc.FaviconICO()
+}
+
 func (s *ChiefUsecase) ImportPackages(submission domain.ImportSubmission) (domain.SubmitPayloadResponse, error) {
 	return s.submissionSvc.ImportPackages(submission)
 }
