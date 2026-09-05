@@ -323,6 +323,10 @@ func TestDashboardService_LogoPNG(t *testing.T) {
 	logo := ds.LogoPNG()
 	require.NotEmpty(t, logo)
 	assert.Equal(t, []byte("\x89PNG"), logo[:4])
+
+	icon := ds.FaviconICO()
+	require.NotEmpty(t, icon)
+	assert.Equal(t, []byte{0x00, 0x00, 0x01, 0x00}, icon[:4], "ICO header")
 }
 
 func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
