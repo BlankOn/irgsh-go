@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/notification"
@@ -205,8 +206,12 @@ func BuildPackage(payload string) (next string, err error) {
 	)
 
 	// Building the package
+	// BUILD_ATTEMPTS lets /build.sh retry a build that failed on a transient
+	// network/DNS error; see builder/init.go to modify that script.
 	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-	cmdStr += ":/tmp/build --privileged=true --user 0:0 -i pbocker bash -c /build.sh" // See builder/init.go to modify this script
+	cmdStr += ":/tmp/build --privileged=true --user 0:0"
+	cmdStr += " -e BUILD_ATTEMPTS=" + strconv.Itoa(irgshConfig.Builder.Attempts())
+	cmdStr += " -i pbocker bash -c /build.sh"
 	fmt.Println(cmdStr)
 	_, err = systemutil.CmdExec(
 		cmdStr,
