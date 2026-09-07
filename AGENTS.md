@@ -230,6 +230,42 @@ imports anyway.
 4. Chief queues repo task on the same dist's queue
 5. Repo downloads artifacts, injects into reprepro repository
 
+### The pbocker Build Image
+`irgsh-builder init` builds a `pbocker` image: pbuilder inside a container,
+holding the `base.tgz` produced by `irgsh-builder init-base`. Its whole build
+context - `Dockerfile`, `pbuilderrc`, `build.sh` and `hooks/` - is generated as
+real files by `writePbockerContext` in `cmd/builder/init.go` and COPYied in, so
+changing what the builds see means editing those constants and re-running
+`irgsh-builder init`.
+
+DNS inside the build chroot is the one part worth knowing about. pbuilder
+copies the container's `/etc/resolv.conf` into the chroot, and that is usually
+Docker's single embedded forwarder - when its upstream drops a query the build
+fails far from the cause, as `Could not resolve host` out of apt or out of
+whatever the package's own build system fetches (cargo, npm, go). Two things
+soften that:
+
+- `hooks/D10resolvconf` runs inside the chroot before the build dependencies
+  are installed. It keeps the inherited resolvers, appends `builder.dns`
+  (default `1.1.1.1`, `8.8.8.8`), and sets `options timeout:2 attempts:3
+  rotate`. Only three nameservers are honoured by glibc, so inherited entries
+  are trimmed to leave room for the fallbacks rather than crowding them out.
+  This needs `HOOKDIR` in the image's `pbuilderrc`; pbuilder hook prefixes are
+  `A`/`B`/`C`/`D`/`E`/`F`/`I` only - a hook named `G01…` is silently ignored.
+- `hooks/D20cacerts` repairs the chroot's TLS trust store in the same window:
+  a buildd-variant chroot often has `ca-certificates` missing, or installed as
+  somebody's build dependency with the bundle never regenerated, and HTTPS
+  fetches then fail with curl's `[77] Problem with the SSL CA cert`. The hook
+  installs the package if needed and runs `update-ca-certificates --fresh`;
+  failing that, it copies the bundle staged in the hook dir, which the image
+  took from its own `ca-certificates` at build time - the hook dir is
+  bind-mounted into the chroot, so that copy is always reachable.
+- `/build.sh` retries the build when the log shows a transient network failure
+  (`Could not resolve`, `Failed to fetch`, `Connection timed out`, …), up to
+  `builder.build_attempts` (default 3) with a growing backoff. Any other
+  failure exits immediately - a package that genuinely does not build is not
+  rebuilt three times.
+
 ### ISO Flow
 `irgsh-cli build-iso --dist verbeek --branch without-praya` builds a live image.
 The live-build git repository is **not** part of the submission: it is the ISO
