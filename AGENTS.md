@@ -252,6 +252,14 @@ soften that:
   are trimmed to leave room for the fallbacks rather than crowding them out.
   This needs `HOOKDIR` in the image's `pbuilderrc`; pbuilder hook prefixes are
   `A`/`B`/`C`/`D`/`E`/`F`/`I` only - a hook named `G01…` is silently ignored.
+- `hooks/D20cacerts` repairs the chroot's TLS trust store in the same window:
+  a buildd-variant chroot often has `ca-certificates` missing, or installed as
+  somebody's build dependency with the bundle never regenerated, and HTTPS
+  fetches then fail with curl's `[77] Problem with the SSL CA cert`. The hook
+  installs the package if needed and runs `update-ca-certificates --fresh`;
+  failing that, it copies the bundle staged in the hook dir, which the image
+  took from its own `ca-certificates` at build time - the hook dir is
+  bind-mounted into the chroot, so that copy is always reachable.
 - `/build.sh` retries the build when the log shows a transient network failure
   (`Could not resolve`, `Failed to fetch`, `Connection timed out`, …), up to
   `builder.build_attempts` (default 3) with a growing backoff. Any other
