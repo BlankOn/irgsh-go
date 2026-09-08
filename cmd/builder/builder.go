@@ -56,7 +56,11 @@ func Build(payload string) (next string, err error) {
 		PackageName:    raw["packageName"].(string),
 		PackageVersion: raw["packageVersion"].(string),
 		Maintainer:     raw["maintainer"].(string),
+		Dist:           irgshConfig.Builder.DistCodename,
 		IsExperimental: raw["isExperimental"].(bool),
+	}
+	if component, ok := raw["component"].(string); ok {
+		jobInfo.Component = component
 	}
 	if sourceURL, ok := raw["sourceUrl"].(string); ok {
 		jobInfo.SourceURL = sourceURL

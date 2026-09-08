@@ -109,10 +109,13 @@ func Repo(payload string) (err error) {
 	packageName, _ := raw["packageName"].(string)
 	packageVersion, _ := raw["packageVersion"].(string)
 	maintainer, _ := raw["maintainer"].(string)
+	component, _ := raw["component"].(string)
 	jobInfo = notification.JobNotificationInfo{
 		PackageName:    packageName,
 		PackageVersion: packageVersion,
 		Maintainer:     maintainer,
+		Dist:           irgshConfig.Repo.DistCodename,
+		Component:      component,
 		IsExperimental: isExperimental,
 	}
 

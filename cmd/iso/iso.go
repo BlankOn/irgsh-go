@@ -98,6 +98,7 @@ func BuildISO(payload string) (next string, err error) {
 	// Extract job info for notifications
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:  "ISO Image",
+		Dist:         irgshConfig.ISO.DistCodename,
 		SourceURL:    irgshConfig.ISO.RepoURL,
 		SourceBranch: submission.Branch,
 	}

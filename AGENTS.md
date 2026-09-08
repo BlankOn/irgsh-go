@@ -186,6 +186,14 @@ When `notification.webhook_url` is configured, POST requests are sent on job com
 {"title": "IRGSH Build Job SUCCESS", "message": "Job ID: xxx\nStatus: SUCCESS\n..."}
 ```
 
+The message names its target as `[<suite>/<component>]`, e.g. `[verbeek/main]`
+or `[verbeek-experimental/extras]`, matching how reprepro addresses it. The
+suite is the worker's own `dist_codename`, with `-experimental` appended when
+the submission is experimental - experimental is a separate suite, not a
+component. The component is the submission's own `component` field (main,
+restricted, extras, ...). Either half is omitted when the job does not carry
+it, and a job with neither (ISO) gets no tag at all.
+
 ### Import Flow
 `irgsh-cli import` submits a request to import already built packages from an
 external Debian repository. The `import` task is handled by irgsh-repo:

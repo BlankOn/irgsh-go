@@ -28,6 +28,14 @@ type JobNotificationInfo struct {
 	PackageName    string
 	PackageVersion string
 	Maintainer     string
+	// Dist is the distribution the job belongs to (verbeek, sinambung, ...).
+	// With one builder/repo/iso instance per distribution, the notification is
+	// otherwise ambiguous about which one a job ran on.
+	Dist string
+	// Component is the repository component the package goes into (main,
+	// restricted, extras, ...) - the submission's own "component" field, not
+	// to be confused with the dev/experimental suite split below.
+	Component      string
 	IsExperimental bool
 	SourceURL      string
 	SourceBranch   string
@@ -110,10 +118,25 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 		emoji = "❌"
 	}
 
-	// Determine target repo
-	targetRepo := "dev"
+	// Determine the target as reprepro sees it: <suite>/<component>, e.g.
+	// "verbeek/main" or "verbeek-experimental/extras". The experimental split
+	// is a separate suite (<dist>-experimental), not a component - the
+	// component is what the maintainer submitted with --component.
+	suite := jobInfo.Dist
 	if jobInfo.IsExperimental {
-		targetRepo = "experimental"
+		if suite == "" {
+			suite = "experimental"
+		} else {
+			suite += "-experimental"
+		}
+	}
+	targetRepo := suite
+	if jobInfo.Component != "" {
+		if targetRepo == "" {
+			targetRepo = jobInfo.Component
+		} else {
+			targetRepo += "/" + jobInfo.Component
+		}
 	}
 
 	// Build source info (optional)
@@ -159,12 +182,16 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 		componentPrefix = "📦 "
 	}
 
-	// Format: 📦 irgsh-builder: bromo-theme_1.0.0 [experimental] by Herpiko, herpiko/source (branch), herpiko/package (branch) ✅
-	message := fmt.Sprintf("%s%s_%s [%s] by %s%s %s",
+	// Format: 📦 irgsh-builder: bromo-theme_1.0.0 [verbeek/main] by Herpiko, herpiko/source (branch), herpiko/package (branch) ✅
+	targetTag := ""
+	if targetRepo != "" {
+		targetTag = " [" + targetRepo + "]"
+	}
+	message := fmt.Sprintf("%s%s_%s%s by %s%s %s",
 		componentPrefix,
 		jobInfo.PackageName,
 		jobInfo.PackageVersion,
-		targetRepo,
+		targetTag,
 		jobInfo.Maintainer,
 		repoLinks,
 		emoji,
