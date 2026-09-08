@@ -36,27 +36,6 @@ var (
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	var err error
-	irgshConfig, err = config.LoadConfig(config.ComponentBuilder)
-	if err != nil {
-		log.Fatalln("couldn't load config : ", err)
-	}
-	// Config validation is scoped to this component's own section, so the
-	// chief address is not covered by it - but logs and artifacts go there.
-	if irgshConfig.Chief.Address == "" {
-		log.Fatalln("chief.address is required so the worker can upload logs and artifacts to chief")
-	}
-	// Prepare workdir
-	err = os.MkdirAll(irgshConfig.Builder.Workdir, 0755)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
-	if err != nil {
-		log.Printf("live log streaming disabled: %v\n", err)
-		logPublisher = nil
-	}
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -64,6 +43,48 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = version
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:        "config, c",
+			Usage:       "Path to config file. Defaults to the usual search path, starting with /etc/irgsh/config.yaml",
+			Destination: &configPath,
+		},
+	}
+
+	app.Before = func(c *cli.Context) error {
+		var err error
+		// Without -c we keep the historical search path
+		// (/etc/irgsh/config.yaml first); with it, that one file is the
+		// config, so several builders can run side by side on one machine.
+		if configPath == "" {
+			irgshConfig, err = config.LoadConfig(config.ComponentBuilder)
+		} else {
+			irgshConfig, err = config.LoadConfigFromPath(configPath, config.ComponentBuilder)
+		}
+		if err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
+		}
+
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs and artifacts go there.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can upload logs and artifacts to chief", 1)
+		}
+
+		// Prepare workdir
+		if err = os.MkdirAll(irgshConfig.Builder.Workdir, 0755); err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
+		}
+
+		logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("live log streaming disabled: %v\n", err)
+			logPublisher = nil
+		}
+
+		return nil
+	}
 
 	app.Commands = []cli.Command{
 		{
@@ -96,6 +117,7 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
+		var err error
 
 		go serve()
 

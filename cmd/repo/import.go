@@ -68,25 +68,13 @@ func Import(payload string) (err error) {
 	}
 	taskUUID := submission.TaskUUID
 
-	if submission.TargetDist != "" && submission.TargetDist != irgshConfig.Repo.DistCodename {
-		return fmt.Errorf("import task targeted dist %q but this repo instance serves %q",
-			submission.TargetDist, irgshConfig.Repo.DistCodename)
-	}
-
+	// Registered before the checks below, so a rejected or unloggable task
+	// still reports itself rather than failing silently.
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:    strings.Join(submission.PackageNames, " "),
 		IsExperimental: submission.IsExperimental,
 		SourceURL:      submission.SourceURL,
 	}
-
-	workdir := filepath.Join(irgshConfig.Repo.Workdir, "imports", taskUUID)
-	logPath := filepath.Join(workdir, "import.log")
-	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
-		return fmt.Errorf("unable to prepare log file %s: %w", logPath, prepErr)
-	}
-	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "import", logPath)
-	defer stopLogStream()
-
 	defer func() {
 		if err != nil {
 			sendRepoNotification(taskUUID, "FAILED", jobInfo)
@@ -94,6 +82,21 @@ func Import(payload string) (err error) {
 			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
 		}
 	}()
+
+	if submission.TargetDist != "" && submission.TargetDist != irgshConfig.Repo.DistCodename {
+		err = fmt.Errorf("import task targeted dist %q but this repo instance serves %q",
+			submission.TargetDist, irgshConfig.Repo.DistCodename)
+		return
+	}
+
+	workdir := filepath.Join(irgshConfig.Repo.Workdir, "imports", taskUUID)
+	logPath := filepath.Join(workdir, "import.log")
+	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
+		err = fmt.Errorf("unable to prepare log file %s: %w", logPath, prepErr)
+		return
+	}
+	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "import", logPath)
+	defer stopLogStream()
 
 	fail := func(stage string, cause error) error {
 		systemutil.WriteLog(logPath, "[ IMPORT FAILED ] "+stage+": "+systemutil.FailureSummary(cause))

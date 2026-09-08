@@ -145,6 +145,11 @@ possibly on different machines, without sharing one fully-populated file.
 irgsh-repo -c /path/to/config.yaml
 ```
 
+`irgsh-builder` accepts the same `-c/--config` flag, but it is optional: with
+no flag it falls back to the search path above (`/etc/irgsh/config.yaml`
+first), and with the flag that one file is the config - which is what lets
+several builders for different distributions run on one machine.
+
 ## Key Patterns
 
 ### Multi-Distribution Support

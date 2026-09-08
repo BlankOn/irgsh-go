@@ -83,24 +83,48 @@ func Repo(payload string) (err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	taskUUID := raw["taskUUID"].(string)
+	taskUUID, _ := raw["taskUUID"].(string)
+
+	// Registered before anything that can fail, so a task rejected for a dist
+	// mismatch, or one whose log file cannot be prepared, still reports itself
+	// instead of failing silently. jobInfo is filled in below - the closure
+	// reads it when it runs, not now.
+	var jobInfo notification.JobNotificationInfo
+	defer func() {
+		if err != nil {
+			sendRepoNotification(taskUUID, "FAILED", jobInfo)
+		} else {
+			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
+		}
+	}()
+
+	if taskUUID == "" {
+		err = fmt.Errorf("repo task payload carries no taskUUID")
+		return
+	}
+
+	// Filled in before the checks below so a rejected task still names the
+	// package it was carrying.
+	isExperimental, _ := raw["isExperimental"].(bool)
+	packageName, _ := raw["packageName"].(string)
+	packageVersion, _ := raw["packageVersion"].(string)
+	maintainer, _ := raw["maintainer"].(string)
+	jobInfo = notification.JobNotificationInfo{
+		PackageName:    packageName,
+		PackageVersion: packageVersion,
+		Maintainer:     maintainer,
+		IsExperimental: isExperimental,
+	}
 
 	if dist, ok := raw["dist"].(string); ok && dist != "" && dist != irgshConfig.Repo.DistCodename {
-		return fmt.Errorf("repo task targeted dist %q but this repo instance serves %q",
+		err = fmt.Errorf("repo task targeted dist %q but this repo instance serves %q",
 			dist, irgshConfig.Repo.DistCodename)
+		return
 	}
 
 	experimentalSuffix := "-experimental"
-	if !raw["isExperimental"].(bool) {
+	if !isExperimental {
 		experimentalSuffix = ""
-	}
-
-	// Extract job info for notifications
-	jobInfo := notification.JobNotificationInfo{
-		PackageName:    raw["packageName"].(string),
-		PackageVersion: raw["packageVersion"].(string),
-		Maintainer:     raw["maintainer"].(string),
-		IsExperimental: raw["isExperimental"].(bool),
 	}
 	if sourceURL, ok := raw["sourceUrl"].(string); ok {
 		jobInfo.SourceURL = sourceURL
@@ -127,15 +151,6 @@ func Repo(payload string) (err error) {
 	}
 	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "repo", logPath)
 	defer stopLogStream()
-
-	// Ensure notification is always sent on completion
-	defer func() {
-		if err != nil {
-			sendRepoNotification(taskUUID, "FAILED", jobInfo)
-		} else {
-			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
-		}
-	}()
 
 	artifactURL := fmt.Sprintf("%s/artifacts/%s.tar.gz", irgshConfig.Chief.Address, taskUUID)
 	artifactDir := fmt.Sprintf("%s/artifacts", irgshConfig.Repo.Workdir)
