@@ -1,3 +1,12 @@
+irgsh (2.0.3-1) unstable; urgency=medium
+
+  * Include the distribution in the monitoring instance ID
+    (hostname-type-dist), so builder/repo/iso instances for different
+    distributions on one host no longer overwrite each other's heartbeat and
+    all show up in the chief dashboard
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 08 Sep 2026 23:00:00 +0700
+
 irgsh (2.0.2-1) unstable; urgency=medium
 
   * irgsh-builder now accepts -c/--config to point at a specific config file;

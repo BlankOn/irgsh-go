@@ -176,6 +176,9 @@ Jobs are distributed via Redis using the machinery library:
 - Instances marked offline after 90 seconds without heartbeat
 - Job history retained for 7 days
 - Redis keys: `irgsh:instances:*`, `irgsh:jobs:*`
+- An instance's identity is `<hostname>-<type>-<dist_codename>`, so several
+  builders/repos/isos for different distributions can run on one host and each
+  keeps its own record, while a restart updates the record it already had
 
 ### Notifications
 When `notification.webhook_url` is configured, POST requests are sent on job completion:
