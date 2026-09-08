@@ -23,7 +23,7 @@ const (
 // InstanceInfo contains metadata about a worker instance
 type InstanceInfo struct {
 	// Identity
-	InstanceID   string       `json:"instance_id"`   // Unique identifier (hostname-type-PID-timestamp)
+	InstanceID   string       `json:"instance_id"`   // Unique identifier (hostname-type-dist)
 	InstanceType InstanceType `json:"instance_type"` // builder, repo, iso
 	Hostname     string       `json:"hostname"`      // Server hostname
 	PID          int          `json:"pid"`           // Process ID

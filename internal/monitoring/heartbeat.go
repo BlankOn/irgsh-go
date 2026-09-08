@@ -27,7 +27,7 @@ func StartHeartbeatLoop(
 	}
 	defer registry.Close()
 
-	instanceID := GenerateInstanceID(instanceType)
+	instanceID := GenerateInstanceID(instanceType, dist)
 	startTime := time.Now()
 
 	ticker := time.NewTicker(heartbeatInterval)

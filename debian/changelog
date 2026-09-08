@@ -1,3 +1,23 @@
+irgsh (2.0.4-1) unstable; urgency=medium
+
+  * Name the distribution and the real component in job notifications: the
+    target tag is now [<suite>/<component>], e.g. [verbeek/main] instead of
+    [dev], for build, repo and import jobs. The dev/experimental split is a
+    suite (<dist>-experimental), which the old tag reported as if it were the
+    component; the component now comes from the submission's own component
+    field. A job carrying neither (ISO) drops the tag
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 08 Sep 2026 23:30:00 +0700
+
+irgsh (2.0.3-1) unstable; urgency=medium
+
+  * Include the distribution in the monitoring instance ID
+    (hostname-type-dist), so builder/repo/iso instances for different
+    distributions on one host no longer overwrite each other's heartbeat and
+    all show up in the chief dashboard
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 08 Sep 2026 23:00:00 +0700
+
 irgsh (2.0.2-1) unstable; urgency=medium
 
   * irgsh-builder now accepts -c/--config to point at a specific config file;

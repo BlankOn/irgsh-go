@@ -176,12 +176,23 @@ Jobs are distributed via Redis using the machinery library:
 - Instances marked offline after 90 seconds without heartbeat
 - Job history retained for 7 days
 - Redis keys: `irgsh:instances:*`, `irgsh:jobs:*`
+- An instance's identity is `<hostname>-<type>-<dist_codename>`, so several
+  builders/repos/isos for different distributions can run on one host and each
+  keeps its own record, while a restart updates the record it already had
 
 ### Notifications
 When `notification.webhook_url` is configured, POST requests are sent on job completion:
 ```json
 {"title": "IRGSH Build Job SUCCESS", "message": "Job ID: xxx\nStatus: SUCCESS\n..."}
 ```
+
+The message names its target as `[<suite>/<component>]`, e.g. `[verbeek/main]`
+or `[verbeek-experimental/extras]`, matching how reprepro addresses it. The
+suite is the worker's own `dist_codename`, with `-experimental` appended when
+the submission is experimental - experimental is a separate suite, not a
+component. The component is the submission's own `component` field (main,
+restricted, extras, ...). Either half is omitted when the job does not carry
+it, and a job with neither (ISO) gets no tag at all.
 
 ### Import Flow
 `irgsh-cli import` submits a request to import already built packages from an

@@ -72,6 +72,8 @@ func Import(payload string) (err error) {
 	// still reports itself rather than failing silently.
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:    strings.Join(submission.PackageNames, " "),
+		Dist:           irgshConfig.Repo.DistCodename,
+		Component:      submission.Component,
 		IsExperimental: submission.IsExperimental,
 		SourceURL:      submission.SourceURL,
 	}
