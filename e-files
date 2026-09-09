@@ -1,0 +1,8 @@
+base-files:
+  Installed: 14.2
+  Candidate: 14.2
+  Version table:
+ *** 14.2 100
+        100 /var/lib/dpkg/status
+     14blankon5 500
+        500 http://arsip-dev.blankonlinux.id/sinambung sinambung/main amd64 Packages

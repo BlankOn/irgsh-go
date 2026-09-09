@@ -337,9 +337,13 @@ func submissionUploadHandler() http.HandlerFunc {
 		log.Printf("Content-Type: %s", r.Header.Get("Content-Type"))
 		log.Printf("Content-Length: %d", r.ContentLength)
 
-		if err := r.ParseMultipartForm(512 << 20); err != nil {
+		// maxMemory is the amount of the form kept in RAM; anything larger
+		// spills to a temp file. Submission tarballs are hundreds of MB, and
+		// the blob is written straight to disk below, so keep this small
+		// rather than buffering the whole upload per concurrent request.
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			log.Printf("ParseMultipartForm error: %v", err)
-			writeJSONError(w, http.StatusBadRequest, "invalid multipart form")
+			writeJSONError(w, http.StatusBadRequest, "invalid multipart form: "+err.Error())
 			return
 		}
 

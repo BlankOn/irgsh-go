@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,12 +28,33 @@ type configLoader interface {
 type HTTPChiefClient struct {
 	configStore configLoader
 	httpClient  *http.Client
+	// uploadClient is used for submission uploads only. It deliberately has
+	// no Client.Timeout: that is a deadline on the whole exchange, and a
+	// submission tarball of a few hundred MB on a maintainer's uplink takes
+	// longer than any fixed value worth setting. Stalls are caught by the
+	// transport's dial/handshake/response-header deadlines instead, and the
+	// caller's context still bounds the whole operation.
+	uploadClient *http.Client
 }
 
 func NewHTTPChiefClient(configStore configLoader) *HTTPChiefClient {
 	return &HTTPChiefClient{
 		configStore: configStore,
 		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		uploadClient: &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				TLSHandshakeTimeout:   15 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				// Applies only after the body has been written, so it caps a
+				// chief that accepted the upload and then went silent.
+				ResponseHeaderTimeout: 10 * time.Minute,
+			},
+		},
 	}
 }
 
@@ -124,75 +146,165 @@ func (pw *progressWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+// countingWriter counts bytes written and discards them.
+type countingWriter struct{ n int64 }
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	c.n += int64(len(p))
+	return len(p), nil
+}
+
+// uploadPart is one file field of the submission upload form.
+type uploadPart struct {
+	field string
+	path  string
+	size  int64
+}
+
+// multipartOverhead returns the exact number of bytes a multipart body with
+// the given boundary and parts costs on top of the part contents themselves,
+// by writing the same form with empty contents to a counter. Knowing it lets
+// the upload set a real Content-Length while streaming the parts from disk.
+func multipartOverhead(boundary string, parts []uploadPart) (int64, error) {
+	cw := &countingWriter{}
+	w := multipart.NewWriter(cw)
+	if err := w.SetBoundary(boundary); err != nil {
+		return 0, err
+	}
+	for _, p := range parts {
+		if _, err := w.CreateFormFile(p.field, path.Base(p.path)); err != nil {
+			return 0, err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return 0, err
+	}
+	return cw.n, nil
+}
+
+// uploadAttempts is how many times a submission upload is tried before giving
+// up. A dropped connection partway through a large tarball is common enough on
+// the links maintainers use that one attempt is not a fair test.
+const uploadAttempts = 3
+
 func (c *HTTPChiefClient) UploadSubmission(ctx context.Context, blobPath, tokenPath string, onProgress func(uploaded, total int64)) (domain.UploadResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {
 		return domain.UploadResponse{}, err
 	}
 
-	blobFile, err := os.Open(blobPath)
+	parts := []uploadPart{{field: "blob", path: blobPath}, {field: "token", path: tokenPath}}
+	for i := range parts {
+		info, err := os.Stat(parts[i].path)
+		if err != nil {
+			return domain.UploadResponse{}, fmt.Errorf("failed to stat %s file: %w", parts[i].field, err)
+		}
+		parts[i].size = info.Size()
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= uploadAttempts; attempt++ {
+		upload, retryable, err := c.uploadOnce(ctx, base, parts, onProgress)
+		if err == nil {
+			return upload, nil
+		}
+		lastErr = err
+		if !retryable || attempt == uploadAttempts || ctx.Err() != nil {
+			break
+		}
+		backoff := time.Duration(attempt) * 5 * time.Second
+		fmt.Printf("\nUpload attempt %d/%d failed (%v), retrying in %s...\n",
+			attempt, uploadAttempts, err, backoff)
+		select {
+		case <-ctx.Done():
+			return domain.UploadResponse{}, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return domain.UploadResponse{}, lastErr
+}
+
+// uploadOnce performs a single upload attempt. The multipart body is streamed
+// from disk through a pipe rather than buffered, so memory use does not scale
+// with the tarball. It reports whether the failure is worth retrying.
+func (c *HTTPChiefClient) uploadOnce(ctx context.Context, base string, parts []uploadPart, onProgress func(uploaded, total int64)) (domain.UploadResponse, bool, error) {
+	boundary := multipart.NewWriter(io.Discard).Boundary()
+
+	overhead, err := multipartOverhead(boundary, parts)
 	if err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to open blob file: %w", err)
+		return domain.UploadResponse{}, false, fmt.Errorf("failed to size multipart form: %w", err)
 	}
-	defer blobFile.Close()
-
-	tokenFile, err := os.Open(tokenPath)
-	if err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to open token file: %w", err)
-	}
-	defer tokenFile.Close()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	blobPart, err := writer.CreateFormFile("blob", path.Base(blobPath))
-	if err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to create blob form field: %w", err)
-	}
-	if _, err := io.Copy(blobPart, blobFile); err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to copy blob file: %w", err)
+	totalSize := overhead
+	for _, p := range parts {
+		totalSize += p.size
 	}
 
-	tokenPart, err := writer.CreateFormFile("token", path.Base(tokenPath))
-	if err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to create token form field: %w", err)
-	}
-	if _, err := io.Copy(tokenPart, tokenFile); err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to copy token file: %w", err)
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	if err := writer.SetBoundary(boundary); err != nil {
+		return domain.UploadResponse{}, false, err
 	}
 
-	if err := writer.Close(); err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to close multipart writer: %w", err)
-	}
+	go func() {
+		pw.CloseWithError(func() error {
+			for _, p := range parts {
+				f, err := os.Open(p.path)
+				if err != nil {
+					return fmt.Errorf("failed to open %s file: %w", p.field, err)
+				}
+				part, err := writer.CreateFormFile(p.field, path.Base(p.path))
+				if err != nil {
+					f.Close()
+					return fmt.Errorf("failed to create %s form field: %w", p.field, err)
+				}
+				if _, err := io.Copy(part, f); err != nil {
+					f.Close()
+					return fmt.Errorf("failed to copy %s file: %w", p.field, err)
+				}
+				f.Close()
+			}
+			return writer.Close()
+		}())
+	}()
+	defer pr.Close()
 
-	totalSize := int64(body.Len())
-	pw := &progressWriter{total: totalSize, onProgress: onProgress}
-	progressReader := io.TeeReader(body, pw)
+	progressReader := io.Reader(pr)
+	if onProgress != nil {
+		progressReader = io.TeeReader(pr, &progressWriter{total: totalSize, onProgress: onProgress})
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/submission-upload", progressReader)
 	if err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to create request: %w", err)
+		return domain.UploadResponse{}, false, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.ContentLength = totalSize
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.uploadClient.Do(req)
 	if err != nil {
-		return domain.UploadResponse{}, fmt.Errorf("failed to send request: %w", err)
+		// A connection dropped or reset mid-body is exactly the case a retry
+		// exists for; a cancelled context is not.
+		return domain.UploadResponse{}, ctx.Err() == nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		io.Copy(io.Discard, resp.Body) // drain remainder for connection reuse
-		return domain.UploadResponse{}, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
+		// 5xx and 408/429 are chief-side or transient; a 4xx means this
+		// submission will be rejected the same way every time.
+		retryable := resp.StatusCode >= 500 ||
+			resp.StatusCode == http.StatusRequestTimeout ||
+			resp.StatusCode == http.StatusTooManyRequests
+		return domain.UploadResponse{}, retryable,
+			fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var upload domain.UploadResponse
 	if err := decodeJSON(resp, "/api/v1/submission-upload", &upload); err != nil {
-		return domain.UploadResponse{}, err
+		return domain.UploadResponse{}, false, err
 	}
-	return upload, nil
+	return upload, false, nil
 }
 
 func (c *HTTPChiefClient) SubmitPackage(ctx context.Context, submission domain.Submission) (domain.SubmitResponse, error) {
