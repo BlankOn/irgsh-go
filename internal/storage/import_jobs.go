@@ -133,13 +133,13 @@ func (s *ImportJobStore) GetRecentImportJobs(limit int) ([]*ImportJobInfo, error
 }
 
 // UpdateImportJobState updates the state of an import job.
-// Terminal states (SUCCESS, DONE, FAILURE, FAILED) are never overwritten.
+// Terminal states (SUCCESS, DONE, FAILURE, FAILED, CANCELED) are never overwritten.
 func (s *ImportJobStore) UpdateImportJobState(taskUUID, state string) error {
 	query := `
 		UPDATE import_jobs
 		SET state = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
-		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED', 'CANCELED')
 	`
 
 	_, err := s.db.Exec(query, state, taskUUID)

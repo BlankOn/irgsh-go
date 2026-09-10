@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -26,6 +27,11 @@ type ISOSubmission struct {
 	NoCache   bool   `json:"noCache"`
 	Timestamp string `json:"timestamp"`
 }
+
+// errCanceled ends a job that was cancelled by a maintainer. Machinery records
+// it as a failure like any other error; chief reports the job as CANCELED from
+// its own record of the cancellation.
+var errCanceled = errors.New("job canceled on request")
 
 func uploadLog(logPath string, id string) {
 	// Upload the log to chief
@@ -118,19 +124,47 @@ func BuildISO(payload string) (next string, err error) {
 	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "iso", logPath)
 	defer stopLogStream()
 
+	// Cancelling the job cancels this context, which stops live-build and
+	// everything under it. The job may also be cancelled already, having been
+	// stopped while it sat in the queue.
+	job := cancelWatcher.Guard(taskUUID)
+	defer job.Release()
+	ctx := job.Context()
+
+	// Set where the job actually stops, rather than read off job.Requested():
+	// a request arriving after the build has finished changes nothing and
+	// should not be reported as a cancellation.
+	canceled := false
+
 	// Ensure notification is always sent on completion
 	defer func() {
-		if err != nil {
+		switch {
+		case canceled:
+			sendISONotification(taskUUID, "CANCELED", jobInfo)
+		case err != nil:
 			sendISONotification(taskUUID, "FAILED", jobInfo)
-		} else {
+		default:
 			sendISONotification(taskUUID, "SUCCESS", jobInfo)
 		}
 	}()
 
+	// fail ends the job. A cancelled build has not failed: live-build was
+	// killed on purpose, so its error describes the killing.
 	fail := func(cause error) (string, error) {
+		if job.Requested() {
+			canceled = true
+			systemutil.WriteLog(logPath, "[ ISO BUILD CANCELED ] The build was stopped on request")
+			uploadLog(logPath, taskUUID)
+			return "", errCanceled
+		}
 		systemutil.WriteLog(logPath, "[ ISO BUILD FAILED ] "+systemutil.FailureSummary(cause))
 		uploadLog(logPath, taskUUID)
 		return "", cause
+	}
+
+	if job.Requested() {
+		err = errCanceled
+		return fail(err)
 	}
 
 	if _, statErr := os.Stat(isoScriptPath); os.IsNotExist(statErr) {
@@ -149,7 +183,7 @@ func BuildISO(payload string) (next string, err error) {
 	if submission.NoCache {
 		systemutil.WriteLog(logPath, "[ ISO BUILD ] Cacheless build requested, clearing cache, chroot, auto and local")
 		cleanCmd := fmt.Sprintf("cd %s && sudo rm -rf cache chroot auto local", buildDir)
-		if _, cleanErr := systemutil.CmdExec(cleanCmd, "Clearing live-build cache", logPath); cleanErr != nil {
+		if _, cleanErr := systemutil.CmdExecContext(ctx, cleanCmd, "Clearing live-build cache", logPath); cleanErr != nil {
 			return fail(fmt.Errorf("unable to clear live-build directories: %w", cleanErr))
 		}
 	}
@@ -169,7 +203,8 @@ func BuildISO(payload string) (next string, err error) {
 		buildDir, isoScriptPath, irgshConfig.ISO.RepoURL, submission.Branch, logPath)
 
 	log.Println("Executing: " + cmdStr)
-	_, err = systemutil.CmdExec(
+	_, err = systemutil.CmdExecContext(
+		ctx,
 		cmdStr,
 		"Building ISO image",
 		logPath,

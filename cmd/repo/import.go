@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -77,10 +78,24 @@ func Import(payload string) (err error) {
 		IsExperimental: submission.IsExperimental,
 		SourceURL:      submission.SourceURL,
 	}
+	// An import can be stopped for as long as it is only downloading and
+	// checking; the injection at the end is protected separately below.
+	job := cancelWatcher.Guard(taskUUID)
+	defer job.Release()
+	ctx := job.Context()
+
+	// Set only where the job actually stops. A cancellation arriving once the
+	// injection is under way is ignored, and reporting it as a cancellation
+	// would misdescribe an import that went on to publish.
+	canceled := false
+
 	defer func() {
-		if err != nil {
+		switch {
+		case canceled:
+			sendRepoNotification(taskUUID, "CANCELED", jobInfo)
+		case err != nil:
 			sendRepoNotification(taskUUID, "FAILED", jobInfo)
-		} else {
+		default:
 			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
 		}
 	}()
@@ -100,10 +115,24 @@ func Import(payload string) (err error) {
 	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "import", logPath)
 	defer stopLogStream()
 
+	// fail ends the job. A cancelled import has not failed: the commands it
+	// was running were killed on purpose, so their errors describe the
+	// killing rather than the packages.
 	fail := func(stage string, cause error) error {
+		if job.Requested() {
+			canceled = true
+			systemutil.WriteLog(logPath, "[ IMPORT CANCELED ] "+stage+" was stopped on request")
+			uploadImportLog(logPath, taskUUID)
+			return errCanceled
+		}
 		systemutil.WriteLog(logPath, "[ IMPORT FAILED ] "+stage+": "+systemutil.FailureSummary(cause))
 		uploadImportLog(logPath, taskUUID)
 		return cause
+	}
+
+	if job.Requested() {
+		err = errCanceled
+		return fail("The import", err)
 	}
 
 	systemutil.WriteLog(logPath, fmt.Sprintf(
@@ -112,7 +141,7 @@ func Import(payload string) (err error) {
 		submission.SourceURL, submission.Dist, submission.SourceComponent,
 		irgshConfig.Repo.DistCodename+experimentalSuffix(submission.IsExperimental), submission.Component))
 
-	apt := newAptSandbox(workdir, submission)
+	apt := newAptSandbox(ctx, workdir, submission)
 	if err = apt.prepare(logPath); err != nil {
 		return fail("Failed to prepare the source repository", err)
 	}
@@ -148,7 +177,7 @@ func Import(payload string) (err error) {
 
 	// Check the packages against the repository they are going into before
 	// they go into it.
-	if depErr := checkDependencies(logPath, workdir, submission, debFiles); depErr != nil {
+	if depErr := checkDependencies(ctx, logPath, workdir, submission, debFiles); depErr != nil {
 		systemutil.WriteLog(logPath, "##### The imported packages cannot be installed on top of "+
 			irgshConfig.Repo.DistCodename+experimentalSuffix(submission.IsExperimental)+
 			" and its upstream distribution. See the unmet dependencies above.")
@@ -168,8 +197,29 @@ func Import(payload string) (err error) {
 		return nil
 	}
 
+	// Past this point the job stops being interruptible: injection is
+	// reprepro, and killing reprepro - during an export above all - can leave
+	// the repository database corrupted. A cancellation arriving now is
+	// recorded but the injection is allowed to finish.
+	job.Uninterruptible()
+	if job.Requested() {
+		canceled = true
+		systemutil.WriteLog(logPath, "[ IMPORT CANCELED ] Cancelled before anything was injected into the repository")
+		uploadImportLog(logPath, taskUUID)
+		err = errCanceled
+		return err
+	}
+
 	if err = injectImportedFiles(logPath, workdir, submission, metadata); err != nil {
 		return fail("Failed to inject the imported packages", err)
+	}
+
+	// A cancellation that arrived once injection was under way was ignored on
+	// purpose. Say so, rather than leaving a maintainer to wonder why the
+	// packages they cancelled are in the repository.
+	if job.Requested() {
+		systemutil.WriteLog(logPath, "##### The cancellation arrived after the repository injection had started "+
+			"and was ignored: interrupting reprepro can corrupt the repository database")
 	}
 
 	systemutil.WriteLog(logPath, "[ IMPORT DONE ]")
@@ -187,13 +237,17 @@ func experimentalSuffix(isExperimental bool) string {
 // aptSandbox is a self-contained apt root pointing at one external
 // repository, so importing never touches the worker's own apt configuration.
 type aptSandbox struct {
+	// ctx is the job's, so cancelling an import stops the fetch it is in the
+	// middle of instead of waiting out a whole archive.
+	ctx        context.Context
 	root       string
 	downloads  string
 	submission importSubmission
 }
 
-func newAptSandbox(workdir string, submission importSubmission) *aptSandbox {
+func newAptSandbox(ctx context.Context, workdir string, submission importSubmission) *aptSandbox {
 	return &aptSandbox{
+		ctx:        ctx,
 		root:       filepath.Join(workdir, "apt"),
 		downloads:  filepath.Join(workdir, "files"),
 		submission: submission,
@@ -394,7 +448,8 @@ func (a *aptSandbox) prepare(logPath string) error {
 	}
 	systemutil.WriteLog(logPath, "##### sources.list\n"+sourcesList)
 
-	out, err := systemutil.CmdExec(
+	out, err := systemutil.CmdExecContext(
+		a.ctx,
 		fmt.Sprintf("apt-get %s update", a.aptOpts()),
 		"Fetching the package indices of the source repository",
 		logPath,
@@ -415,7 +470,8 @@ func (a *aptSandbox) resolveSourcePackages(logPath string, packages []string) ([
 	var sources []string
 
 	for _, pkg := range packages {
-		out, err := systemutil.CmdExec(
+		out, err := systemutil.CmdExecContext(
+			a.ctx,
 			fmt.Sprintf("apt-cache %s showsrc %s | grep -m1 '^Package:' | cut -d' ' -f2", a.aptOpts(), sq(pkg)),
 			"Resolving the source package of "+pkg,
 			logPath,
@@ -450,7 +506,8 @@ type sourceMeta struct {
 // "No priority for '<source>', skipping." The index always has both.
 func (a *aptSandbox) sourceMetadata(logPath, source string) sourceMeta {
 	read := func(field string) string {
-		out, err := systemutil.CmdExec(
+		out, err := systemutil.CmdExecContext(
+			a.ctx,
 			fmt.Sprintf("apt-cache %s showsrc %s | grep -m1 '^%s:' | cut -d' ' -f2", a.aptOpts(), sq(source), field),
 			"Reading the "+strings.ToLower(field)+" of "+source,
 			logPath,
@@ -481,7 +538,8 @@ func normalizeSourceMeta(section, priority string) sourceMeta {
 }
 
 func (a *aptSandbox) fetchSource(logPath, source string) error {
-	_, err := systemutil.CmdExec(
+	_, err := systemutil.CmdExecContext(
+		a.ctx,
 		fmt.Sprintf("cd %s && apt-get %s source --download-only %s", sq(a.downloads), a.aptOpts(), sq(source)),
 		"Fetching the source package "+source,
 		logPath,
@@ -491,7 +549,8 @@ func (a *aptSandbox) fetchSource(logPath, source string) error {
 
 // binariesOf lists the binary packages built from a source package.
 func (a *aptSandbox) binariesOf(logPath, source string) ([]string, error) {
-	out, err := systemutil.CmdExec(
+	out, err := systemutil.CmdExecContext(
+		a.ctx,
 		fmt.Sprintf("apt-cache %s showsrc %s | grep -m1 '^Binary:' | cut -d' ' -f2- | tr -d ' ' | tr ',' '\\n'",
 			a.aptOpts(), sq(source)),
 		"Listing the binary packages built from "+source,
@@ -520,7 +579,8 @@ func (a *aptSandbox) binariesOf(logPath, source string) ([]string, error) {
 func (a *aptSandbox) fetchBinaries(logPath string, binaries []string) error {
 	var downloaded int
 	for _, binary := range binaries {
-		_, err := systemutil.CmdExec(
+		_, err := systemutil.CmdExecContext(
+			a.ctx,
 			fmt.Sprintf("cd %s && apt-get %s download %s", sq(a.downloads), a.aptOpts(), sq(binary)),
 			"Fetching the binary package "+binary,
 			logPath,
@@ -664,12 +724,14 @@ var errRepoNotExported = errors.New("the distribution has not been exported yet"
 // packages against that pair before injecting them catches it while the
 // repository is still clean.
 type targetSandbox struct {
+	ctx        context.Context
 	root       string
 	submission importSubmission
 }
 
-func newTargetSandbox(workdir string, submission importSubmission) *targetSandbox {
+func newTargetSandbox(ctx context.Context, workdir string, submission importSubmission) *targetSandbox {
 	return &targetSandbox{
+		ctx:        ctx,
 		root:       filepath.Join(workdir, "apt-target"),
 		submission: submission,
 	}
@@ -728,7 +790,8 @@ func (t *targetSandbox) prepare(logPath string) error {
 	}
 	systemutil.WriteLog(logPath, "##### Checking against\n"+sourcesList)
 
-	_, err := systemutil.CmdExec(
+	_, err := systemutil.CmdExecContext(
+		t.ctx,
 		fmt.Sprintf("apt-get %s update", t.aptOpts()),
 		"Fetching the package indices of the target repository",
 		logPath,
@@ -744,7 +807,8 @@ func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
 		quoted = append(quoted, sq(deb))
 	}
 
-	_, err := systemutil.CmdExec(
+	_, err := systemutil.CmdExecContext(
+		t.ctx,
 		fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s",
 			t.aptOpts(), strings.Join(quoted, " ")),
 		"Simulating the installation of the imported packages",
@@ -755,8 +819,8 @@ func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
 
 // checkDependencies reports whether the imported packages are installable on
 // a machine that has our repository and its upstream distribution.
-func checkDependencies(logPath, workdir string, submission importSubmission, debFiles []string) error {
-	target := newTargetSandbox(workdir, submission)
+func checkDependencies(ctx context.Context, logPath, workdir string, submission importSubmission, debFiles []string) error {
+	target := newTargetSandbox(ctx, workdir, submission)
 	if err := target.prepare(logPath); err != nil {
 		if errors.Is(err, errRepoNotExported) {
 			// Nothing has been published yet, so there is nothing to resolve

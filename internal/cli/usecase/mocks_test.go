@@ -93,6 +93,8 @@ type mockChiefAPI struct {
 	repoInfoErr     error
 	importSubmitted domain.ImportSubmission
 	retryResp       domain.RetryResponse
+	cancelResp      domain.CancelResponse
+	cancelErr       error
 	retryErr        error
 	fetchLogResp    string
 	fetchLogErr     error
@@ -138,6 +140,10 @@ func (m *mockChiefAPI) GetISOStatus(_ context.Context, _ string) (domain.ISOStat
 
 func (m *mockChiefAPI) Retry(_ context.Context, _ string) (domain.RetryResponse, error) {
 	return m.retryResp, m.retryErr
+}
+
+func (m *mockChiefAPI) Cancel(_ context.Context, _ string) (domain.CancelResponse, error) {
+	return m.cancelResp, m.cancelErr
 }
 
 func (m *mockChiefAPI) FetchLog(_ context.Context, _ string) (string, error) {

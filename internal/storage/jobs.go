@@ -156,22 +156,26 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 }
 
 // IsTerminalState returns true if the state is a final state that should not be overwritten.
+//
+// CANCELED is one of them: chief writes it the moment a cancellation is
+// accepted, and the worker's own report - a machinery FAILURE, once it gives
+// up on the job - must not replace it afterwards.
 func IsTerminalState(state string) bool {
 	switch state {
-	case "SUCCESS", "DONE", "FAILURE", "FAILED":
+	case "SUCCESS", "DONE", "FAILURE", "FAILED", "CANCELED":
 		return true
 	}
 	return false
 }
 
 // UpdateJobState updates the state of a job.
-// Terminal states (SUCCESS, DONE, FAILURE, FAILED) are never overwritten.
+// Terminal states (SUCCESS, DONE, FAILURE, FAILED, CANCELED) are never overwritten.
 func (s *JobStore) UpdateJobState(taskUUID, state string) error {
 	query := `
 		UPDATE jobs
 		SET state = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
-		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED', 'CANCELED')
 	`
 
 	result, err := s.db.Exec(query, state, taskUUID)
@@ -193,13 +197,13 @@ func (s *JobStore) UpdateJobState(taskUUID, state string) error {
 }
 
 // UpdateJobStages updates the build and repo states of a job.
-// Jobs already in a terminal state (SUCCESS, DONE, FAILURE, FAILED) are not updated.
+// Jobs already in a terminal state (SUCCESS, DONE, FAILURE, FAILED, CANCELED) are not updated.
 func (s *JobStore) UpdateJobStages(taskUUID, buildState, repoState, currentStage string) error {
 	query := `
 		UPDATE jobs
 		SET build_state = ?, repo_state = ?, current_stage = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
-		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED', 'CANCELED')
 	`
 
 	_, err := s.db.Exec(query, buildState, repoState, currentStage, taskUUID)

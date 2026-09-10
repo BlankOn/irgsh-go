@@ -22,6 +22,15 @@ type TaskQueue interface {
 	GetTaskState(taskName, taskUUID string) string
 }
 
+// CancelSignal records and announces job cancellations, and reports whether a
+// job carries one. It is backed by Redis, which is how a worker hears about a
+// cancellation while it is running, and how a job that is only queued is
+// refused when a worker eventually picks it up.
+type CancelSignal interface {
+	Request(taskUUID string) error
+	IsRequested(taskUUID string) bool
+}
+
 // GPGVerifier handles GPG key listing and signature verification.
 type GPGVerifier interface {
 	ListKeysWithColons() (string, error)

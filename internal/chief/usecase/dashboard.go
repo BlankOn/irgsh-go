@@ -368,6 +368,8 @@ func buildJobView(job *storage.JobInfo, loc *time.Location) JobView {
 			showSpinner = true
 		}
 		filterStatus = "PENDING"
+	case "CANCELED":
+		statusClass = "status-offline"
 	case "UNKNOWN":
 		statusClass = "status-offline"
 		statusText = "UNKNOWN"
@@ -543,7 +545,7 @@ func formatPackageList(packages string) string {
 // dashboard can show the same spinner the packaging jobs use.
 func isJobRunning(state string) bool {
 	switch state {
-	case "SUCCESS", "DONE", "FAILURE", "FAILED", "UNKNOWN", "":
+	case "SUCCESS", "DONE", "FAILURE", "FAILED", "CANCELED", "UNKNOWN", "":
 		return false
 	}
 	return true
@@ -554,7 +556,7 @@ func jobStateClass(state string) string {
 	switch state {
 	case "SUCCESS", "DONE":
 		return "status-online"
-	case "FAILURE", "FAILED":
+	case "FAILURE", "FAILED", "CANCELED":
 		return "status-offline"
 	case "STARTED", "RECEIVED":
 		return "status-warning"

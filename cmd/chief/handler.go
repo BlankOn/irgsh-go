@@ -23,6 +23,7 @@ type ChiefService interface {
 	ListMaintainersRaw() (string, error)
 	SubmitPackage(domain.Submission) (domain.SubmitPayloadResponse, error)
 	RetryPipeline(string) (domain.SubmitPayloadResponse, error)
+	CancelJob(string) (domain.CancelResponse, error)
 	BuildStatus(string) (domain.BuildStatusResponse, error)
 	ISOStatus(string) (string, string, error)
 	BuildISO(domain.ISOSubmission) (domain.SubmitPayloadResponse, error)
@@ -239,6 +240,25 @@ func RetryHandler(w http.ResponseWriter, r *http.Request) {
 	oldTaskUUID := keys[0]
 
 	payload, err := chiefService.RetryPipeline(oldTaskUUID)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, payload)
+}
+
+// CancelHandler stops a queued or running job. Every job can be cancelled
+// except a package pipeline that has reached its repo stage; see CancelService
+// for why reprepro is left alone once it is running.
+func CancelHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["uuid"]
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "uuid parameter is required")
+		return
+	}
+
+	payload, err := chiefService.CancelJob(keys[0])
 	if err != nil {
 		writeUsecaseError(w, err)
 		return

@@ -44,6 +44,7 @@ type ChiefAPI interface {
 	GetPackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	GetISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	Retry(ctx context.Context, pipelineID string) (domain.RetryResponse, error)
+	Cancel(ctx context.Context, pipelineID string) (domain.CancelResponse, error)
 	FetchLog(ctx context.Context, logPath string) (string, error)
 }
 

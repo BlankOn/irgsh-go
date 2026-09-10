@@ -13,6 +13,7 @@ import (
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
 
+	"github.com/blankon/irgsh-go/internal/cancel"
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
@@ -31,6 +32,12 @@ var (
 	// nil when Redis is unreachable: live streaming is an addition to the log
 	// file, never a reason to fail a job.
 	logPublisher *logstream.Publisher
+
+	// cancelWatcher listens for the cancellation of a job this worker holds.
+	// A repo job is only ever cancelled before it starts - see Repo - but an
+	// import job can be stopped while it downloads. A nil watcher hands out
+	// jobs that are never cancelled.
+	cancelWatcher *cancel.Watcher
 )
 
 func main() {
@@ -85,6 +92,12 @@ func main() {
 		if err != nil {
 			log.Printf("live log streaming disabled: %v\n", err)
 			logPublisher = nil
+		}
+
+		cancelWatcher, err = cancel.NewWatcher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("job cancellation disabled: %v\n", err)
+			cancelWatcher = nil
 		}
 
 		return nil

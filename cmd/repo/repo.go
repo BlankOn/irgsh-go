@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,11 @@ import (
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 	"github.com/manifoldco/promptui"
 )
+
+// errCanceled ends a job that was cancelled by a maintainer. Machinery records
+// it as a failure like any other error; chief reports the job as CANCELED from
+// its own record of the cancellation.
+var errCanceled = errors.New("job canceled on request")
 
 func uploadLog(logPath string, id string) {
 	// Upload the log to chief
@@ -89,11 +95,28 @@ func Repo(payload string) (err error) {
 	// mismatch, or one whose log file cannot be prepared, still reports itself
 	// instead of failing silently. jobInfo is filled in below - the closure
 	// reads it when it runs, not now.
+	// A repo job can be cancelled while it waits in the queue, and not after:
+	// it drives reprepro, and interrupting reprepro - during an export above
+	// all - can leave the repository database corrupted. Marking the job
+	// uninterruptible right here is what makes that true on this side; chief
+	// refuses the request on its side once the repo stage is running.
+	job := cancelWatcher.Guard(taskUUID)
+	job.Uninterruptible()
+	defer job.Release()
+
+	// Set only where the job actually stops. A cancellation that arrives
+	// after the checkpoint below is deliberately ignored, and reporting it as
+	// a cancellation would misdescribe a job that went on to publish.
+	canceled := false
+
 	var jobInfo notification.JobNotificationInfo
 	defer func() {
-		if err != nil {
+		switch {
+		case canceled:
+			sendRepoNotification(taskUUID, "CANCELED", jobInfo)
+		case err != nil:
 			sendRepoNotification(taskUUID, "FAILED", jobInfo)
-		} else {
+		default:
 			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
 		}
 	}()
@@ -154,6 +177,16 @@ func Repo(payload string) (err error) {
 	}
 	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "repo", logPath)
 	defer stopLogStream()
+
+	// The last point at which this job can still be dropped without reprepro
+	// having been touched.
+	if job.Requested() {
+		canceled = true
+		systemutil.WriteLog(logPath, "[ REPO CANCELED ] The job was cancelled before the repository was touched")
+		uploadLog(logPath, taskUUID)
+		err = errCanceled
+		return
+	}
 
 	artifactURL := fmt.Sprintf("%s/artifacts/%s.tar.gz", irgshConfig.Chief.Address, taskUUID)
 	artifactDir := fmt.Sprintf("%s/artifacts", irgshConfig.Repo.Workdir)
@@ -343,6 +376,14 @@ func Repo(payload string) (err error) {
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
+	}
+
+	// A cancellation that arrived after the checkpoint at the top was ignored
+	// on purpose. Say so, rather than leaving a maintainer to wonder why the
+	// package they cancelled is in the repository.
+	if job.Requested() {
+		systemutil.WriteLog(logPath, "##### The cancellation arrived after the repository injection had started "+
+			"and was ignored: interrupting reprepro can corrupt the repository database")
 	}
 
 	systemutil.WriteLog(logPath, "[ REPO DONE ]")

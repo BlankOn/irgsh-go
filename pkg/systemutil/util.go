@@ -9,7 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/hpcloud/tail"
 )
@@ -73,6 +76,13 @@ func FailureSummary(err error) string {
 
 // CmdExec run os command
 func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err error) {
+	return CmdExecContext(context.Background(), cmdStr, cmdDesc, logPath)
+}
+
+// CmdExecContext is CmdExec with a lifetime: cancelling ctx terminates the
+// command and everything it started. A job the maintainer cancelled is stopped
+// through this.
+func CmdExecContext(ctx context.Context, cmdStr string, cmdDesc string, logPath string) (out string, err error) {
 	if len(cmdStr) == 0 {
 		return "", errors.New("No command string provided.")
 	}
@@ -104,7 +114,24 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err err
 		cmdStr = "{ " + cmdStr + "\n} 2>&1 | tee -a " + logPath
 	}
 	// `set -o pipefail` will forces to return the original exit code
-	output, err := exec.Command("bash", "-c", "set -o pipefail && "+cmdStr).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "bash", "-c", "set -o pipefail && "+cmdStr)
+	// The command gets its own process group so that cancelling it reaches
+	// everything it started: a pbuilder or live-build run is a whole tree of
+	// processes, and killing only the bash at its root would leave the rest
+	// running.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Closed once the command is done, so a pending SIGKILL is dropped rather
+	// than aimed at whatever process group has since taken over the id.
+	exited := make(chan struct{})
+	cmd.Cancel = func() error {
+		terminateGroup(cmd.Process.Pid, exited)
+		return nil
+	}
+	// Go's own fallback kill only reaches the direct child, so leave it well
+	// after terminateGroup has escalated to SIGKILL itself.
+	cmd.WaitDelay = killGrace + 10*time.Second
+	output, err := cmd.CombinedOutput()
+	close(exited)
 	out = string(output)
 	if err != nil {
 		cmdErr := &CommandError{
@@ -124,6 +151,46 @@ func CmdExec(cmdStr string, cmdDesc string, logPath string) (out string, err err
 	}
 
 	return
+}
+
+// killGrace is how long a cancelled command's process group is given to exit
+// on SIGTERM before it is killed outright. A build that traps the signal to
+// clean up - the ISO build script releases its lockfile that way - needs the
+// room; a build that ignores it does not get to keep the worker.
+const killGrace = 15 * time.Second
+
+// terminateGroup asks a command's whole process group to stop, and kills what
+// is still there after killGrace. A group that exits in time closes exited and
+// is never killed.
+func terminateGroup(pid int, exited <-chan struct{}) {
+	signalGroup(pid, "TERM")
+	go func() {
+		select {
+		case <-exited:
+		case <-time.After(killGrace):
+			signalGroup(pid, "KILL")
+		}
+	}()
+}
+
+// signalGroup signals every process in the group led by pid.
+//
+// It then repeats the signal through passwordless sudo, because a command run
+// under sudo (the ISO build is) leaves root owned processes that a worker
+// running as an ordinary user may not signal itself. That second attempt fails
+// harmlessly where there is no passwordless sudo.
+func signalGroup(pid int, sig string) {
+	var signum syscall.Signal
+	switch sig {
+	case "KILL":
+		signum = syscall.SIGKILL
+	default:
+		signum = syscall.SIGTERM
+	}
+	if err := syscall.Kill(-pid, signum); err != nil && !errors.Is(err, syscall.ESRCH) {
+		log.Printf("systemutil: unable to send SIG%s to process group %d: %v\n", sig, pid, err)
+	}
+	_ = exec.Command("sudo", "-n", "bash", "-c", "kill -"+sig+" -"+strconv.Itoa(pid)).Run()
 }
 
 // outputExcerpt returns the last few lines of a command output so the error
