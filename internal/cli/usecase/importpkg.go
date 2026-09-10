@@ -105,49 +105,29 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		IgnoreDependencies: params.IgnoreDependencies,
 	}
 
-	// Check here first: the maintainer's machine runs the distribution these
-	// packages are going into, so it can answer before anything is queued.
+	// Resolve before anything is queued: the maintainer can be told what the
+	// import really costs while it is still cheap to say no.
 	if !params.SkipCheck {
-		// Ask chief where these packages are going, rather than assuming this
-		// machine is configured with the same repository.
-		var targets []string
-		var targetDesc string
-		info, infoErr := u.chief.GetRepoInfo(ctx, params.Dist)
-		if infoErr != nil {
-			fmt.Printf("Could not ask chief which repository this targets (%v), falling back to this machine's sources\n", infoErr)
-		}
-		targets, targetDesc, infoErr = targetSources(info)
-		if infoErr != nil {
-			fmt.Printf("Skipping the local dependency check: %v\n", infoErr)
-			targets = nil
-		}
-
-		if len(targets) > 0 {
-			fmt.Println("Checking the packages against " + targetDesc + " ...")
-		}
-		switch checkErr := u.checkImportLocally(ImportCheckParams{
-			SourceURL:       params.SourceURL,
-			SourceDist:      params.SourceDist,
-			SourceComponent: sourceComponent,
-			PackageNames:    params.PackageNames,
-			TargetSources:   targets,
-		}); {
+		names, checkErr := u.planImport(ctx, params, sourceComponent)
+		switch {
 		case checkErr == nil:
-			fmt.Println("Dependency check passed.")
-		case errors.Is(checkErr, errCheckUnavailable), errors.Is(checkErr, errNoSystemSources), errors.Is(checkErr, errNoTarget):
-			fmt.Printf("Skipping the local dependency check: %v\n", checkErr)
+			submission.PackageNames = names
+		case errors.Is(checkErr, errImportDeclined):
+			return domain.SubmitResponse{}, checkErr
+		case errors.Is(checkErr, errCheckUnavailable), errors.Is(checkErr, errNoTarget):
+			fmt.Printf("Skipping the dependency check: %v\n", checkErr)
 			fmt.Println("The repo worker will still check before injecting.")
 		default:
 			var depErr *ImportDependencyError
 			if errors.As(checkErr, &depErr) && !params.IgnoreDependencies {
-				return domain.SubmitResponse{}, fmt.Errorf("%s: %w\n\n"+
+				return domain.SubmitResponse{}, fmt.Errorf("%w\n\n"+
 					"Import it anyway with --ignore-dependencies, or check without submitting with --dry-run",
-					targetDesc, depErr)
+					depErr)
 			}
 			if errors.As(checkErr, &depErr) {
-				fmt.Println("Warning: the packages are not installable here, importing anyway (--ignore-dependencies)")
+				fmt.Println("Warning: the packages are not installable, importing anyway (--ignore-dependencies)")
 			} else {
-				fmt.Printf("Skipping the local dependency check: %v\n", checkErr)
+				fmt.Printf("Skipping the dependency check: %v\n", checkErr)
 			}
 		}
 	}
@@ -211,4 +191,88 @@ func (u *CLIUsecase) ImportLog(ctx context.Context, pipelineID string) (string, 
 	}
 
 	return logResult, nil
+}
+
+// errImportDeclined reports that the maintainer said no to the extra packages
+// an import would pull in.
+var errImportDeclined = errors.New("import cancelled")
+
+// planImport resolves what has to be imported and, when that is more than was
+// asked for, puts the bill in front of the maintainer before anything is
+// queued. It returns the package list to submit.
+func (u *CLIUsecase) planImport(ctx context.Context, params domain.ImportParams, sourceComponent string) ([]string, error) {
+	// Ask chief where these packages are going, rather than assuming this
+	// machine is configured with the same repository.
+	info, infoErr := u.chief.GetRepoInfo(ctx, params.Dist)
+	if infoErr != nil {
+		return nil, fmt.Errorf("%w: chief could not be asked which repository this targets (%v)",
+			errNoTarget, infoErr)
+	}
+	targets, targetDesc, err := targetSources(info)
+	if err != nil {
+		return nil, err
+	}
+
+	checkParams := ImportCheckParams{
+		SourceURL:       params.SourceURL,
+		SourceDist:      params.SourceDist,
+		SourceComponent: sourceComponent,
+		PackageNames:    params.PackageNames,
+		TargetSources:   targets,
+	}
+
+	fmt.Println("Checking the packages against " + targetDesc + " ...")
+
+	sandbox, err := u.newImportSandbox(checkParams)
+	if err != nil {
+		return nil, err
+	}
+	defer sandbox.close()
+
+	targetView, err := u.newTargetView(checkParams)
+	if err != nil {
+		return nil, err
+	}
+	defer targetView.close()
+
+	plan, err := u.resolveImport(sandbox, targetView, params.PackageNames)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(plan.Blockers) > 0 {
+		return nil, &ImportDependencyError{Output: renderBlockers(plan.Blockers) + "\n" + plan.Output}
+	}
+	if plan.Output != "" {
+		return nil, &ImportDependencyError{Output: plan.Output}
+	}
+
+	pulled := plan.Set.pulled()
+	if len(pulled) == 0 {
+		fmt.Println("Dependency check passed.")
+		return params.PackageNames, nil
+	}
+
+	fmt.Print(renderPulledReport(params.PackageNames, pulled))
+
+	// The extra packages are the maintainer's call: they are what turns
+	// "import strongswan" into a much larger change to the repository.
+	switch {
+	case params.AssumeYes:
+		fmt.Println("Importing them as well (--yes)")
+	case u.prompter == nil:
+		return nil, fmt.Errorf("%w: there is no way to ask about the extra packages here, "+
+			"re-run with --yes to accept them", errImportDeclined)
+	default:
+		confirmed, confirmErr := u.prompter.Confirm(
+			fmt.Sprintf("Import all of them into %s/%s?", params.Dist, params.Component))
+		if confirmErr != nil || !confirmed {
+			return nil, fmt.Errorf("%w: the extra packages were not accepted", errImportDeclined)
+		}
+	}
+
+	// Everything the resolver added has to be named in the submission, or the
+	// repo worker would import only what was asked for and inject a set that
+	// does not resolve.
+	return plan.Set.representatives(params.PackageNames), nil
 }

@@ -206,7 +206,11 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.BoolFlag{
 					Name:  "skip-check",
-					Usage: "Do not check the packages against this machine's repositories before submitting",
+					Usage: "Do not resolve or check the packages against the target repository before submitting",
+				},
+				cli.BoolFlag{
+					Name:  "yes, y",
+					Usage: "Accept the extra packages a dependency resolution pulls in, without prompting",
 				},
 			},
 			Action: importSubmitAction(ctx, svc),
@@ -342,6 +346,7 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 
 			IgnoreDependencies: c.Bool("ignore-dependencies"),
 			SkipCheck:          c.Bool("skip-check"),
+			AssumeYes:          c.Bool("yes"),
 		}
 		_, err := svc.SubmitImport(ctx, params)
 		return err

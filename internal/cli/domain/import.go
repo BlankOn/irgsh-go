@@ -58,4 +58,7 @@ type ImportParams struct {
 
 	IgnoreDependencies bool
 	SkipCheck          bool
+	// AssumeYes accepts the extra packages a dependency resolution pulls in
+	// without prompting, for a non-interactive run.
+	AssumeYes bool
 }

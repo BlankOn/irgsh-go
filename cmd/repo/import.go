@@ -742,8 +742,11 @@ var errRepoNotExported = errors.New("the distribution has not been exported yet"
 // packages against that pair before injecting them catches it while the
 // repository is still clean.
 type targetSandbox struct {
-	ctx        context.Context
-	root       string
+	ctx  context.Context
+	root string
+	// downloads is where the fetched packages are, indexed as a repository of
+	// their own so each can be tested without installing all of them.
+	downloads  string
 	submission importSubmission
 }
 
@@ -751,6 +754,7 @@ func newTargetSandbox(ctx context.Context, workdir string, submission importSubm
 	return &targetSandbox{
 		ctx:        ctx,
 		root:       filepath.Join(workdir, "apt-target"),
+		downloads:  filepath.Join(workdir, "files"),
 		submission: submission,
 	}
 }
@@ -803,6 +807,17 @@ func (t *targetSandbox) prepare(logPath string) error {
 		components = t.submission.Component
 	}
 	sourcesList := fmt.Sprintf("deb [trusted=yes] file://%s %s %s\n", ourRepo, dist, components)
+
+	// The downloaded packages are indexed as a repository of their own rather
+	// than being passed to apt as files. A file on the apt command line is a
+	// package to install; in an index it is merely available, which is what
+	// lets each package be tested on its own while its siblings stay
+	// resolvable.
+	if err := t.indexDownloads(logPath); err != nil {
+		return err
+	}
+	sourcesList += fmt.Sprintf("deb [trusted=yes] file://%s ./\n", t.downloads)
+
 	if err := os.WriteFile(filepath.Join(t.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
 		return fmt.Errorf("failed to write the target sources list: %w", err)
 	}
@@ -817,22 +832,69 @@ func (t *targetSandbox) prepare(logPath string) error {
 	return err
 }
 
-// simulate asks apt to resolve the downloaded packages against the target,
-// exactly as it would on a user's machine.
-func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
-	var quoted []string
-	for _, deb := range debFiles {
-		quoted = append(quoted, sq(deb))
-	}
-
+// indexDownloads writes a Packages index over the downloaded .deb files so
+// apt can resolve them by name.
+//
+// apt-ftparchive (apt-utils) and dpkg-scanpackages (dpkg-dev) do the same job;
+// whichever the worker has is used.
+func (t *targetSandbox) indexDownloads(logPath string) error {
 	_, err := systemutil.CmdExecContext(
 		t.ctx,
-		fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s",
-			t.aptOpts(), strings.Join(quoted, " ")),
-		"Simulating the installation of the imported packages",
+		fmt.Sprintf("cd %s && { apt-ftparchive packages . > Packages || dpkg-scanpackages --multiversion . > Packages; }",
+			sq(t.downloads)),
+		"Indexing the downloaded packages",
 		logPath,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to index the downloaded packages: %w", err)
+	}
+	return nil
+}
+
+// simulate asks apt to resolve the downloaded packages against the target,
+// exactly as it would on a user's machine.
+//
+// Each package is resolved on its own. Asking apt for all of them at once
+// answers a different question - whether they are co-installable - which a
+// repository never requires: strongswan-charon and charon-systemd declare
+// Conflicts on each other, and both still belong in the archive. The other
+// downloaded files are still on the apt command line as local candidates, so
+// a package may satisfy its dependencies from its own siblings.
+func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
+	var failed []string
+	for _, deb := range debFiles {
+		name, err := packageNameOf(deb)
+		if err != nil {
+			return err
+		}
+		_, err = systemutil.CmdExecContext(
+			t.ctx,
+			fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s", t.aptOpts(), sq(name)),
+			"Simulating the installation of "+name,
+			logPath,
+		)
+		if err != nil {
+			failed = append(failed, name)
+		}
+	}
+
+	if len(failed) > 0 {
+		return fmt.Errorf("not installable on top of the repository: %s", strings.Join(failed, ", "))
+	}
+	return nil
+}
+
+// packageNameOf reads the package name out of a .deb file.
+func packageNameOf(debFile string) (string, error) {
+	out, err := systemutil.CmdExec("dpkg-deb --field "+sq(debFile)+" Package", "", "")
+	if err != nil {
+		return "", fmt.Errorf("failed to read the package name of %s: %w", filepath.Base(debFile), err)
+	}
+	name := strings.TrimSpace(lastLine(out))
+	if name == "" {
+		return "", fmt.Errorf("%s carries no package name", filepath.Base(debFile))
+	}
+	return name, nil
 }
 
 // checkDependencies reports whether the imported packages are installable on

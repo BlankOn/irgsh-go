@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -199,13 +200,25 @@ func TestSubmitImport_LocalCheckFails(t *testing.T) {
            Depends: libvpx12 (>= 1.16.0) but it is not installable`
 
 	// Every command succeeds except the simulation, which reports the unmet
-	// dependencies and exits non-zero.
+	// dependencies and exits non-zero. libc6 is in the target repository
+	// already, so it is a blocker rather than something more to import.
 	shell := &scriptedShell{
 		outputs: map[string]shellResult{
 			"--simulate": {out: unmet, err: errors.New("exit status 100")},
 		},
+		srcPackages: map[string]scriptedSource{
+			"firefox": {version: "128.0-1", binaries: []string{"firefox"}},
+		},
+		targetPackages: map[string]string{"libc6": "2.41-12+deb13u3", "libvpx12": "1.15.0-1"},
 	}
-	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+	chief := &mockChiefAPI{
+		importResp: domain.SubmitResponse{PipelineID: "id"},
+		repoInfo: domain.RepoInfo{
+			PublicURL:      "http://arsip-dev.blankonlinux.id/dev",
+			DistCodename:   "verbeek",
+			DistComponents: "main restricted extras",
+		},
+	}
 
 	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
 		SubmitImport(context.Background(), domain.ImportParams{
@@ -227,8 +240,18 @@ func TestSubmitImport_LocalCheckOverridden(t *testing.T) {
 		outputs: map[string]shellResult{
 			"--simulate": {out: "unmet dependencies", err: errors.New("exit status 100")},
 		},
+		srcPackages: map[string]scriptedSource{
+			"firefox": {version: "128.0-1", binaries: []string{"firefox"}},
+		},
 	}
-	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}}
+	chief := &mockChiefAPI{
+		importResp: domain.SubmitResponse{PipelineID: "id"},
+		repoInfo: domain.RepoInfo{
+			PublicURL:      "http://arsip-dev.blankonlinux.id/dev",
+			DistCodename:   "verbeek",
+			DistComponents: "main restricted extras",
+		},
+	}
 
 	_, err := newImportUsecaseWithShell(t, chief, &mockPipelineStore{}, shell).
 		SubmitImport(context.Background(), domain.ImportParams{
@@ -271,11 +294,36 @@ type shellResult struct {
 	err error
 }
 
+// scriptedSource is one source package in the scripted source repository.
+type scriptedSource struct {
+	version  string
+	binaries []string
+	// sizes is the download size of each binary, keyed by binary name.
+	sizes map[string]int64
+}
+
 // scriptedShell answers by substring: any command containing a key returns
 // that result, everything else succeeds.
+//
+// The resolver also asks apt-cache what a source package is made of and what
+// the target repository already carries; srcPackages and targetPackages
+// answer those, so a test describes two repositories rather than a dozen
+// command lines.
 type scriptedShell struct {
-	outputs   map[string]shellResult
-	simulated bool
+	outputs map[string]shellResult
+	// srcPackages are the source packages of the source repository, keyed by
+	// source name.
+	srcPackages map[string]scriptedSource
+	// targetPackages are the versions the target repository carries, keyed by
+	// binary name.
+	targetPackages map[string]string
+	// simulateSeq answers the installability test per package, one entry per
+	// round, so a test can describe a set that only resolves once more has
+	// been added to it. An exhausted entry means the package installs.
+	simulateSeq map[string][]shellResult
+	// simulatedPackages records every package the check tried to install.
+	simulatedPackages []string
+	simulated         bool
 	// sourcesListContent and preferencesContent snapshot the sandbox files
 	// while the check still has them on disk: checkImportLocally removes its
 	// directory (defer os.RemoveAll) before returning, so a test cannot read
@@ -337,13 +385,124 @@ func (s *scriptedShell) result(cmd string) shellResult {
 	s.snapshotSandbox(cmd)
 	if strings.Contains(cmd, "--simulate") {
 		s.simulated = true
+		name := quotedTail(cmd)
+		if name != "" {
+			s.simulatedPackages = append(s.simulatedPackages, name)
+		}
+		if queued, ok := s.simulateSeq[name]; ok {
+			if len(queued) == 0 {
+				return shellResult{}
+			}
+			s.simulateSeq[name] = queued[1:]
+			return queued[0]
+		}
 	}
+	// Explicit scripting wins over the repository descriptions.
 	for key, result := range s.outputs {
 		if strings.Contains(cmd, key) {
 			return result
 		}
 	}
+	if out, answered := s.aptCache(cmd); answered {
+		return shellResult{out: out}
+	}
 	return shellResult{}
+}
+
+// aptCache answers the resolver's apt-cache queries out of the scripted
+// repositories.
+func (s *scriptedShell) aptCache(cmd string) (string, bool) {
+	if !strings.Contains(cmd, "apt-cache") {
+		return "", false
+	}
+
+	// The target view lives in its own directory, and only ever asks what
+	// version the target repository has.
+	if strings.Contains(cmd, "irgsh-import-target") {
+		version := s.targetPackages[quotedArgAfter(cmd, "show ")]
+		return version, true
+	}
+
+	if name := quotedArgAfter(cmd, "showsrc "); name != "" {
+		source, found := s.findSource(name)
+		if !found {
+			return "", true
+		}
+		switch {
+		case strings.Contains(cmd, "'^Version:'"):
+			return source.version, true
+		case strings.Contains(cmd, "'^Binary:'"):
+			return strings.Join(source.binaries, "\n"), true
+		default:
+			return source.name, true
+		}
+	}
+
+	// Sizes: one `apt-cache --no-all-versions show a b c | grep ^Size:`.
+	if strings.Contains(cmd, "'^Size:'") {
+		var sizes []string
+		for _, source := range s.srcPackages {
+			for binary, size := range source.sizes {
+				if strings.Contains(cmd, "'"+binary+"'") {
+					sizes = append(sizes, strconv.FormatInt(size, 10))
+				}
+			}
+		}
+		return strings.Join(sizes, "\n"), true
+	}
+
+	return "", false
+}
+
+// findSource looks a source package up by its own name or by any binary it
+// produces, the way apt-cache showsrc does.
+func (s *scriptedShell) findSource(name string) (struct {
+	name string
+	scriptedSource
+}, bool) {
+	type result = struct {
+		name string
+		scriptedSource
+	}
+	if source, ok := s.srcPackages[name]; ok {
+		return result{name: name, scriptedSource: source}, true
+	}
+	for sourceName, source := range s.srcPackages {
+		for _, binary := range source.binaries {
+			if binary == name {
+				return result{name: sourceName, scriptedSource: source}, true
+			}
+		}
+	}
+	return result{}, false
+}
+
+// quotedArgAfter returns the single-quoted argument following a marker.
+func quotedArgAfter(cmd, marker string) string {
+	i := strings.Index(cmd, marker+"'")
+	if i < 0 {
+		return ""
+	}
+	rest := cmd[i+len(marker)+1:]
+	end := strings.Index(rest, "'")
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+// quotedTail returns the last single-quoted argument on a command line, which
+// for the simulation is the package being tested.
+func quotedTail(cmd string) string {
+	end := strings.LastIndex(cmd, "'")
+	if end < 0 {
+		return ""
+	}
+	start := strings.LastIndex(cmd[:end], "'")
+	if start < 0 {
+		return ""
+	}
+	return cmd[start+1 : end]
 }
 
 func (s *scriptedShell) Output(cmd string) (string, error) {
@@ -357,7 +516,11 @@ func (s *scriptedShell) RunInteractive(cmd string) error { return s.result(cmd).
 // The target is whatever chief publishes to, not whatever this machine
 // happens to have in its sources.list.
 func TestSubmitImport_ChecksAgainstTheRepositoryChiefPublishesTo(t *testing.T) {
-	shell := &scriptedShell{}
+	shell := &scriptedShell{
+		srcPackages: map[string]scriptedSource{
+			"firefox": {version: "128.0-1", binaries: []string{"firefox"}},
+		},
+	}
 	chief := &mockChiefAPI{
 		importResp: domain.SubmitResponse{PipelineID: "id"},
 		repoInfo: domain.RepoInfo{

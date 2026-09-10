@@ -1,3 +1,29 @@
+irgsh (2.3.0-1) unstable; urgency=medium
+
+  * The import dependency check now resolves against the repository chief
+    names for the target dist (repo.public_url, over /api/v1/repo-info)
+    instead of falling back to the maintainer's own apt sources, which do not
+    have to describe the distribution being imported into. Without a
+    published public_url the check is skipped with a note rather than
+    answering against the wrong repository and blocking a good import
+  * Fix two false negatives in that check. Every binary of a source package
+    is now resolvable, not just the ones named on the command line - an
+    import brings all of them anyway, and pinning only the named ones made
+    apt report siblings like libstrongswan as uninstallable. And each package
+    is tested on its own instead of all at once, so alternatives that declare
+    Conflicts on each other (strongswan-charon and charon-systemd) no longer
+    fail a check that a repository never asks them to pass. The repo worker's
+    pre-injection check gets the same two fixes
+  * irgsh-cli import now works out what else has to be imported when a
+    package needs something the target repository lacks, shows it as a table
+    with binary counts and download size, and asks y/N before queueing
+    anything. --yes accepts without prompting. A dependency the target
+    already has at an older version is reported as a blocker instead:
+    importing a newer libc6 would replace the C library the distribution is
+    built on
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 23:15:00 +0700
+
 irgsh (2.2.0-1) unstable; urgency=medium
 
   * irgsh-cli import: --dist now names our distribution to import into, the
