@@ -44,8 +44,8 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 	if params.Dist == "" {
 		return domain.SubmitResponse{}, errors.New("--dist is required")
 	}
-	if params.TargetDist == "" {
-		return domain.SubmitResponse{}, errors.New("--repo-dist is required")
+	if params.SourceDist == "" {
+		return domain.SubmitResponse{}, errors.New("--source-dist is required")
 	}
 	if len(params.PackageNames) == 0 {
 		return domain.SubmitResponse{}, errors.New("--package-name is required")
@@ -73,8 +73,8 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 	}
 
 	fmt.Println("Submitting package import job...")
-	fmt.Printf("Target distribution: %s\n", params.TargetDist)
-	fmt.Printf("Source: %s (%s/%s)\n", params.SourceURL, params.Dist, sourceComponent)
+	fmt.Printf("Target distribution: %s\n", params.Dist)
+	fmt.Printf("Source: %s (%s/%s)\n", params.SourceURL, params.SourceDist, sourceComponent)
 	fmt.Printf("Packages: %s\n", strings.Join(params.PackageNames, ", "))
 	fmt.Printf("Target component: %s\n", component)
 	fmt.Printf("Importer: %s\n", maintainer)
@@ -91,7 +91,7 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 	submission := domain.ImportSubmission{
 		SourceURL:       params.SourceURL,
 		Dist:            params.Dist,
-		TargetDist:      params.TargetDist,
+		SourceDist:      params.SourceDist,
 		SourceComponent: sourceComponent,
 		PackageNames:    params.PackageNames,
 		Component:       component,
@@ -112,7 +112,7 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		// machine is configured with the same repository.
 		var targets []string
 		var targetDesc string
-		info, infoErr := u.chief.GetRepoInfo(ctx, params.TargetDist)
+		info, infoErr := u.chief.GetRepoInfo(ctx, params.Dist)
 		if infoErr != nil {
 			fmt.Printf("Could not ask chief which repository this targets (%v), falling back to this machine's sources\n", infoErr)
 		}
@@ -127,7 +127,7 @@ func (u *CLIUsecase) SubmitImport(ctx context.Context, params domain.ImportParam
 		}
 		switch checkErr := u.checkImportLocally(ImportCheckParams{
 			SourceURL:       params.SourceURL,
-			Dist:            params.Dist,
+			SourceDist:      params.SourceDist,
 			SourceComponent: sourceComponent,
 			PackageNames:    params.PackageNames,
 			TargetSources:   targets,

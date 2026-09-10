@@ -157,9 +157,10 @@ several builders for different distributions run on one machine.
 Chief is distribution-agnostic: it holds no dist config of its own and just
 routes tasks. Builder, repo, and iso each have a fixed distribution identity
 (`dist_codename` in their own config section), and only ever handle tasks for
-that one distribution. `irgsh-cli` picks the target with `--dist verbeek`
-(package/ISO submit) or `--repo-dist verbeek` (import, since `import` already
-uses `--dist` for the *source* suite being imported from).
+that one distribution. `irgsh-cli` always picks the target with `--dist
+verbeek`, for package submit, ISO submit and import alike. `import` names the
+other side with `--source-dist sid`, pairing with the `--component` /
+`--source-component` split the same way.
 
 ### Task Queue (Machinery)
 Jobs are distributed via Redis using the machinery library:
@@ -198,9 +199,9 @@ it, and a job with neither (ISO) gets no tag at all.
 ### Import Flow
 `irgsh-cli import` submits a request to import already built packages from an
 external Debian repository. The `import` task is handled by irgsh-repo:
-1. CLI submits `--source`, `--dist` (source suite), `--repo-dist` (our
-   distribution to inject into) and `--package-name` to chief
-2. Chief queues an `import` task to the `--repo-dist` distribution's queue
+1. CLI submits `--source`, `--source-dist` (the suite to import from),
+   `--dist` (our distribution to inject into) and `--package-name` to chief
+2. Chief queues an `import` task to the `--dist` distribution's queue
 3. Repo worker builds a throwaway apt root pointing at the source repository,
    resolves each binary package to its source package, then downloads the
    `.dsc` with its tarballs and every binary built from that source
@@ -226,7 +227,7 @@ that nobody can install gets in, so dependencies are checked twice:
 
 - **In the CLI, before submitting.** The maintainer's machine already runs the
   distribution, so its own apt sources are the target. The source repository is
-  added as an extra source, pinned (`Pin: release n=<dist>`, priority -1) so
+  added as an extra source, pinned (`Pin: release n=<source-dist>`, priority -1) so
   only the named packages may come from it and their dependencies must be
   satisfied by the distribution. `--skip-check` bypasses it; a machine without
   apt skips it with a note.
@@ -383,9 +384,22 @@ a map:
 - `internal/chief/domain/submission.go` (`ImportSubmission`, chief receives)
 - `cmd/repo/import.go` (`importSubmission`, repo consumes)
 
-Its `dist` field means the *source* suite being imported from, so it carries
-a separate `targetDist` field (CLI flag `--repo-dist`) naming which of our
-distributions - and therefore which repo instance's queue - to route to.
+Its `dist` field means our distribution - which repo instance's queue to route
+to - exactly as it does for a package or ISO submission, and `sourceDist` is
+the suite being imported from.
+
+Up to 2.1.0 those two were the other way round (`dist` was the source suite,
+`targetDist` ours), which read backwards against every other submission and
+routed on the wrong half if misread. Both chief and the repo worker normalize
+an old payload - one carrying `targetDist` and no `sourceDist` - back into the
+current shape (`domain.ImportSubmission.Normalize`, `importSubmission.normalize`),
+so an un-upgraded irgsh-cli or chief keeps working. Chief clears `targetDist`
+after normalizing, so what reaches a worker is always the current shape. Drop
+the fallback once every deployment is past 2.2.0.
+
+The stored `import_jobs` columns deliberately keep their original meaning -
+`dist` is the suite imported from, `target_dist` ours - so rows written before
+the swap still read correctly on the dashboard.
 
 The ISO job likewise unmarshals into a struct rather than a map:
 - `internal/cli/domain/iso.go` (CLI sends)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -189,5 +190,35 @@ func TestUpstreamComponents(t *testing.T) {
 		if got := upstreamComponents(configured); got != want {
 			t.Fatalf("upstreamComponents(%q) = %q, want %q", configured, got, want)
 		}
+	}
+}
+
+// A chief of 2.1.0 or older sends the two distributions the other way round.
+// The worker has to read that as the source suite, or it would build its apt
+// sandbox against its own distribution instead of the one being imported from.
+func TestImportSubmission_NormalizeLegacyPayload(t *testing.T) {
+	var submission importSubmission
+	if err := json.Unmarshal([]byte(
+		`{"sourceUrl":"http://deb.debian.org/debian","dist":"sid","targetDist":"verbeek"}`), &submission); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	submission.normalize()
+
+	if submission.Dist != "verbeek" {
+		t.Errorf("dist = %q, want the distribution being imported into", submission.Dist)
+	}
+	if submission.SourceDist != "sid" {
+		t.Errorf("sourceDist = %q, want the suite imported from", submission.SourceDist)
+	}
+}
+
+func TestImportSubmission_NormalizeLeavesCurrentPayloadAlone(t *testing.T) {
+	submission := importSubmission{Dist: "verbeek", SourceDist: "sid"}
+
+	submission.normalize()
+
+	if submission.Dist != "verbeek" || submission.SourceDist != "sid" {
+		t.Errorf("normalize altered a current payload: %+v", submission)
 	}
 }

@@ -162,11 +162,11 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.StringFlag{
 					Name:  "dist",
-					Usage: "Suite to import from in the source repository, e.g. sid",
+					Usage: "Our distribution to import the packages into, e.g. verbeek (required)",
 				},
 				cli.StringFlag{
-					Name:  "repo-dist",
-					Usage: "Our distribution to import the packages into, e.g. verbeek (required)",
+					Name:  "source-dist",
+					Usage: "Suite to import from in the source repository, e.g. sid (required)",
 				},
 				cli.StringFlag{
 					Name:  "source-component",
@@ -330,7 +330,7 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 		params := domain.ImportParams{
 			SourceURL:       c.String("source"),
 			Dist:            c.String("dist"),
-			TargetDist:      c.String("repo-dist"),
+			SourceDist:      c.String("source-dist"),
 			SourceComponent: c.String("source-component"),
 			PackageNames:    usecase.SplitPackageNames(c.String("package-name")),
 			Component:       c.String("component"),

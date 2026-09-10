@@ -1,3 +1,20 @@
+irgsh (2.2.0-1) unstable; urgency=medium
+
+  * irgsh-cli import: --dist now names our distribution to import into, the
+    way it already does for package and ISO submissions, and the suite to
+    import from moves from --dist to a new --source-dist. --repo-dist is
+    gone. The flags now pair up: --dist/--component describe our side,
+    --source-dist/--source-component theirs
+  * The import wire format follows: "dist" is the target and what the job is
+    routed on, "sourceDist" the suite imported from. Chief and the repo
+    worker still accept the old shape (a payload carrying "targetDist" and no
+    "sourceDist"), so an un-upgraded irgsh-cli or chief keeps working; the
+    fallback can be dropped once every deployment is past this release
+  * The import_jobs table is unchanged: its dist column still holds the suite
+    imported from and target_dist ours, so existing rows read correctly
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 22:05:00 +0700
+
 irgsh (2.1.0-1) unstable; urgency=medium
 
   * New command: irgsh-cli cancel <pipeline-id> stops a queued or running

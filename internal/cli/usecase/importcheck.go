@@ -67,7 +67,7 @@ func (u *CLIUsecase) checkImportLocally(params ImportCheckParams) error {
 // ImportCheckParams is what the local check needs to know.
 type ImportCheckParams struct {
 	SourceURL       string
-	Dist            string
+	SourceDist      string
 	SourceComponent string
 	PackageNames    []string
 	// TargetSources are the sources.list entries of the repository the
@@ -103,7 +103,7 @@ func (u *CLIUsecase) writeCheckSandbox(root string, params ImportCheckParams) er
 	}
 
 	sources := append([]string{}, params.TargetSources...)
-	sources = append(sources, fmt.Sprintf("deb %s %s %s", params.SourceURL, params.Dist, params.SourceComponent))
+	sources = append(sources, fmt.Sprintf("deb %s %s %s", params.SourceURL, params.SourceDist, params.SourceComponent))
 	if err := os.WriteFile(filepath.Join(root, "sources.list"), []byte(strings.Join(sources, "\n")+"\n"), 0644); err != nil {
 		return fmt.Errorf("failed to write the sources list: %w", err)
 	}
@@ -118,7 +118,7 @@ Pin-Priority: -1
 Package: %s
 Pin: release n=%s
 Pin-Priority: 990
-`, params.Dist, strings.Join(params.PackageNames, " "), params.Dist)
+`, params.SourceDist, strings.Join(params.PackageNames, " "), params.SourceDist)
 
 	return os.WriteFile(filepath.Join(root, "preferences"), []byte(preferences), 0644)
 }

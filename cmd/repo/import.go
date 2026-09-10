@@ -21,11 +21,16 @@ import (
 type importSubmission struct {
 	TaskUUID  string `json:"taskUUID"`
 	SourceURL string `json:"sourceUrl"`
-	Dist      string `json:"dist"`
-	// TargetDist is which of our distributions this import is destined for.
-	// It's what routed this task to this repo instance's queue in the first
-	// place; kept here only to detect a misrouted task defensively.
-	TargetDist      string   `json:"targetDist"`
+	// Dist is which of our distributions this import is destined for. It's
+	// what routed this task to this repo instance's queue in the first place;
+	// kept here only to detect a misrouted task defensively.
+	Dist string `json:"dist"`
+	// SourceDist is the suite in the source repository to fetch from.
+	SourceDist string `json:"sourceDist"`
+	// TargetDist is how a chief older than 2.2.0 named our distribution, back
+	// when Dist meant the source suite. normalize folds it into the current
+	// fields; nothing else should read it.
+	TargetDist      string   `json:"targetDist,omitempty"`
 	SourceComponent string   `json:"sourceComponent"`
 	PackageNames    []string `json:"packageNames"`
 	Component       string   `json:"component"`
@@ -39,6 +44,18 @@ type importSubmission struct {
 	DryRun bool `json:"dryRun"`
 	// IgnoreDependencies imports even when the dependency check fails.
 	IgnoreDependencies bool `json:"ignoreDependencies"`
+}
+
+// normalize rewrites the payload of an older chief into the current field
+// shape. Up to 2.1.0 an import named the source suite in "dist" and our
+// distribution in "targetDist"; they were swapped so that "dist" names the
+// target, as it does in every other task. See domain.ImportSubmission.
+func (s *importSubmission) normalize() {
+	if s.SourceDist == "" && s.TargetDist != "" {
+		s.SourceDist = s.Dist
+		s.Dist = s.TargetDist
+	}
+	s.TargetDist = ""
 }
 
 func uploadImportLog(logPath string, id string) {
@@ -67,6 +84,7 @@ func Import(payload string) (err error) {
 	if err = json.Unmarshal([]byte(payload), &submission); err != nil {
 		return fmt.Errorf("invalid import payload: %w", err)
 	}
+	submission.normalize()
 	taskUUID := submission.TaskUUID
 
 	// Registered before the checks below, so a rejected or unloggable task
@@ -100,9 +118,9 @@ func Import(payload string) (err error) {
 		}
 	}()
 
-	if submission.TargetDist != "" && submission.TargetDist != irgshConfig.Repo.DistCodename {
+	if submission.Dist != "" && submission.Dist != irgshConfig.Repo.DistCodename {
 		err = fmt.Errorf("import task targeted dist %q but this repo instance serves %q",
-			submission.TargetDist, irgshConfig.Repo.DistCodename)
+			submission.Dist, irgshConfig.Repo.DistCodename)
 		return
 	}
 
@@ -138,7 +156,7 @@ func Import(payload string) (err error) {
 	systemutil.WriteLog(logPath, fmt.Sprintf(
 		"##### Importing %s\n##### from %s (%s/%s) into %s/%s",
 		strings.Join(submission.PackageNames, ", "),
-		submission.SourceURL, submission.Dist, submission.SourceComponent,
+		submission.SourceURL, submission.SourceDist, submission.SourceComponent,
 		irgshConfig.Repo.DistCodename+experimentalSuffix(submission.IsExperimental), submission.Component))
 
 	apt := newAptSandbox(ctx, workdir, submission)
@@ -441,8 +459,8 @@ func (a *aptSandbox) prepare(logPath string) error {
 		trusted = "[trusted=yes] "
 	}
 	sourcesList := fmt.Sprintf("deb %s%s %s %s\ndeb-src %s%s %s %s\n",
-		trusted, a.submission.SourceURL, a.submission.Dist, a.submission.SourceComponent,
-		trusted, a.submission.SourceURL, a.submission.Dist, a.submission.SourceComponent)
+		trusted, a.submission.SourceURL, a.submission.SourceDist, a.submission.SourceComponent,
+		trusted, a.submission.SourceURL, a.submission.SourceDist, a.submission.SourceComponent)
 	if err := os.WriteFile(filepath.Join(a.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
 		return fmt.Errorf("failed to write the sources list: %w", err)
 	}
@@ -479,7 +497,7 @@ func (a *aptSandbox) resolveSourcePackages(logPath string, packages []string) ([
 		source := strings.TrimSpace(lastLine(out))
 		if err != nil || source == "" {
 			return nil, fmt.Errorf("no source package found for %q in %s %s: %w",
-				pkg, a.submission.SourceURL, a.submission.Dist, err)
+				pkg, a.submission.SourceURL, a.submission.SourceDist, err)
 		}
 		if !seen[source] {
 			seen[source] = true
