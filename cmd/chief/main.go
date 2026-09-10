@@ -96,12 +96,25 @@ func main() {
 		}
 
 		taskQueue := chiefrepository.NewMachineryTaskQueue(server)
+
+		// Cancellation travels over Redis, so without it jobs simply cannot
+		// be cancelled - that is a reason to refuse the request, not a reason
+		// to refuse to start.
+		var cancelSignal chiefusecase.CancelSignal
+		if requester, cancelErr := chiefrepository.NewCancelSignal(irgshConfig.Redis); cancelErr != nil {
+			log.Printf("Job cancellation disabled: %v\n", cancelErr)
+		} else {
+			cancelSignal = requester
+			defer requester.Close()
+		}
+
 		svc, err := chiefusecase.NewChiefUsecase(
 			irgshConfig,
 			taskQueue,
 			monitoringRegistry,
 			chiefStorage,
 			chiefGPG,
+			cancelSignal,
 			version,
 		)
 		if err != nil {
@@ -160,6 +173,7 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	mux.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	mux.HandleFunc("/api/v1/status", BuildStatusHandler)
 	mux.HandleFunc("/api/v1/retry", RetryHandler)
+	mux.HandleFunc("/api/v1/cancel", CancelHandler)
 	mux.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	mux.HandleFunc("/api/v1/log-upload", logUploadHandler())
 	mux.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())

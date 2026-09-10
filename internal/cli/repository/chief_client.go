@@ -524,6 +524,34 @@ func (c *HTTPChiefClient) GetISOStatus(ctx context.Context, pipelineID string) (
 	return is, nil
 }
 
+func (c *HTTPChiefClient) Cancel(ctx context.Context, pipelineID string) (domain.CancelResponse, error) {
+	base, err := c.baseURL()
+	if err != nil {
+		return domain.CancelResponse{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/cancel?uuid="+url.QueryEscape(pipelineID), nil)
+	if err != nil {
+		return domain.CancelResponse{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return domain.CancelResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return domain.CancelResponse{}, err
+	}
+
+	var cr domain.CancelResponse
+	if err := decodeJSON(resp, "/api/v1/cancel", &cr); err != nil {
+		return domain.CancelResponse{}, err
+	}
+	return cr, nil
+}
+
 func (c *HTTPChiefClient) Retry(ctx context.Context, pipelineID string) (domain.RetryResponse, error) {
 	base, err := c.baseURL()
 	if err != nil {

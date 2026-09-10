@@ -85,10 +85,10 @@ graph LR
 | `cmd/iso/` | ISO image builder (port 8083) |
 | `cmd/cli/` | Client CLI tool for package maintainers |
 | `internal/chief/domain/` | Chief domain types: `Submission`, `ISOSubmission`, `Maintainer`, `SubmitPayloadResponse`, `BuildStatusResponse`, status derivation, ID validation |
-| `internal/chief/usecase/` | Chief business logic split into services (`ChiefUsecase`, `MaintainerService`, `StatusService`, `SubmissionService`, `UploadService`, `DashboardService`), port interfaces (`TaskQueue`, `GPGVerifier`, `FileStorage`, `JobStore`, `ISOJobStore`, `InstanceRegistry`), and embedded dashboard template |
-| `internal/chief/repository/` | Chief repository adapters: `GPG` (signature verification), `Storage` (on-disk file management), `Machinery` (task queue) |
+| `internal/chief/usecase/` | Chief business logic split into services (`ChiefUsecase`, `MaintainerService`, `StatusService`, `SubmissionService`, `CancelService`, `UploadService`, `DashboardService`), port interfaces (`TaskQueue`, `GPGVerifier`, `FileStorage`, `JobStore`, `ISOJobStore`, `InstanceRegistry`, `CancelSignal`), and embedded dashboard template |
+| `internal/chief/repository/` | Chief repository adapters: `GPG` (signature verification), `Storage` (on-disk file management), `Machinery` (task queue), `CancelSignal` (job cancellation) |
 | `internal/cli/domain/` | CLI domain types: `Config`, `Submission`, `SubmitParams`, `ISOSubmission`, API response structs (`PackageStatus`, `ISOStatus`, `SubmitResponse`, etc.) |
-| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): config, package submit/status/log, ISO submit/status/log, retry, update; port interfaces (`ConfigStore`, `PipelineStore`, `ChiefAPI`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, etc.) |
+| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): config, package submit/status/log, ISO submit/status/log, retry, cancel, update; port interfaces (`ConfigStore`, `PipelineStore`, `ChiefAPI`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, etc.) |
 | `internal/cli/repository/` | CLI repository adapters: `HTTPChiefClient`, `ConfigStore`, `PipelineStore`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, `ReleaseFetcher`, `UpdateApplier`, `Prompter` |
 | `internal/config/` | Configuration loading and validation from YAML |
 | `internal/monitoring/` | Worker health tracking, heartbeats, job history, instance registry |
@@ -96,6 +96,7 @@ graph LR
 | `internal/artifact/` | Artifact storage using repo/service/endpoint pattern |
 | `internal/storage/` | SQLite database for persistent job, ISO job and import job data |
 | `internal/logstream/` | Live job log streaming from workers to chief over Redis |
+| `internal/cancel/` | Job cancellation signalling from chief to the workers over Redis |
 | `pkg/httputil/` | JSON response helpers, `HTTPError`, `HTTPStatusError`, retry utilities |
 | `pkg/systemutil/` | Shell command execution and log streaming |
 | `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile, Containerfiles (`containers/`), Podman Quadlet units (`quadlets/`) |
@@ -239,12 +240,59 @@ that nobody can install gets in, so dependencies are checked twice:
 `--dry-run` fetches and checks without injecting; `--ignore-dependencies`
 imports anyway.
 
+### Cancelling a Job
+`irgsh-cli cancel <pipeline-id>` stops a job, queued or running. It works for
+every kind of job with one exception, described below.
+
+Machinery cannot withdraw a task once it has been sent, so cancellation is a
+mark in Redis rather than a queue operation (`internal/cancel`):
+
+	irgsh:cancel:<taskUUID>   the mark, read by a worker as it starts a job
+	irgsh:cancel:live         pub/sub channel of task UUIDs, for running jobs
+
+Chief sets the mark and announces it. A worker already running that job hears
+the announcement and its `cancel.Job` context is cancelled, which kills the
+command tree the job is running (`systemutil.CmdExecContext`: the command gets
+its own process group, is sent SIGTERM, then SIGKILL after 15s, and the same
+signals are retried through passwordless sudo for a root owned tree like the
+ISO build). A worker that only picks the job up later reads the mark and
+refuses to start it, which is what makes a merely queued job cancellable.
+
+Killing `docker run` would leave the build container running, so the builder
+writes a `--cidfile` and removes the container itself.
+
+**The repo stage cannot be cancelled once it is running.** It drives reprepro,
+and interrupting reprepro - during an export above all - can leave the
+repository database corrupted. Two things enforce that:
+
+- chief refuses the request when the repo task is `RECEIVED` or `STARTED`
+- the repo worker calls `job.Uninterruptible()` at the top of `Repo`, and only
+  honours a cancellation at one checkpoint before it touches reprepro
+
+The import job runs on the repo worker too and ends in reprepro, so it is
+interruptible while it downloads and dependency-checks, and calls
+`job.Uninterruptible()` just before injecting. A cancellation arriving after
+that is recorded but ignored, and the job log says so.
+
+Chief writes `CANCELED` into the job store as soon as it accepts the request,
+so the dashboard stops showing the job as running without waiting for a worker
+to report back. `CANCELED` is a terminal state (`storage.IsTerminalState`), so
+the `FAILURE` machinery records once the worker abandons the job does not
+overwrite it. Status queries consult the mark for the same reason.
+
+Cancellation needs Redis on both sides. Chief refuses the request when it has
+no Redis connection; a worker without one hands out jobs that are simply never
+cancelled.
+
 ### Pipeline Flow
 1. CLI validates and submits package (GPG signed) with `--dist <target>`
 2. Chief queues build task to the target dist's queue (`irgsh-<dist>`)
 3. Builder downloads, builds with pbuilder, uploads artifacts
 4. Chief queues repo task on the same dist's queue
 5. Repo downloads artifacts, injects into reprepro repository
+
+A pipeline can be stopped with `irgsh-cli cancel` up to the point its repo
+stage starts - see Cancelling a Job.
 
 ### The pbocker Build Image
 `irgsh-builder init` builds a `pbocker` image: pbuilder inside a container,
@@ -363,8 +411,11 @@ cmd/builder/init_test.go             # integration (requires -tags integration)
 cmd/repo/repo_test.go                # integration (requires -tags integration)
 internal/artifact/repo/file_impl_test.go
 internal/artifact/service/artifact_test.go
+internal/cancel/cancel_test.go
+internal/chief/usecase/cancel_test.go
 internal/cli/repository/config_store_test.go
 internal/cli/repository/pipeline_store_test.go
+internal/cli/usecase/cancel_test.go
 internal/cli/usecase/config_test.go
 internal/cli/usecase/iso_test.go
 internal/cli/usecase/mocks_test.go

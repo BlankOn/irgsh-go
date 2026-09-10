@@ -1,3 +1,23 @@
+irgsh (2.1.0-1) unstable; urgency=medium
+
+  * New command: irgsh-cli cancel <pipeline-id> stops a queued or running
+    package, ISO or import job. Cancellation is a mark in Redis
+    (irgsh:cancel:*), so a running worker stops at once and a worker that
+    only picks the job up later refuses to start it
+  * A cancelled job's commands are killed as a process group, so the whole
+    build tree stops rather than just the shell at its root; the builder
+    removes the container its docker run left behind
+  * The repo stage cannot be cancelled once it is running, on either side:
+    chief refuses the request and the repo worker ignores it. Interrupting
+    reprepro, during an export above all, can corrupt the repository
+    database. An import is interruptible while it downloads and becomes
+    uninterruptible just before it injects
+  * Chief records the job as CANCELED as soon as it accepts the request, so
+    the dashboard stops showing a spinner for it without waiting for the
+    worker; CANCELED is a terminal state and is not overwritten afterwards
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 21:10:00 +0700
+
 irgsh (2.0.4-1) unstable; urgency=medium
 
   * Name the distribution and the real component in job notifications: the

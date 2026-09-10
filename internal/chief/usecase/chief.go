@@ -19,6 +19,7 @@ type ChiefUsecase struct {
 	version            string
 	maintainerSvc      *MaintainerService
 	uploadSvc          *UploadService
+	cancelSvc          *CancelService
 	statusSvc          *StatusService
 	submissionSvc      *SubmissionService
 	dashboardSvc       *DashboardService
@@ -30,9 +31,11 @@ func NewChiefUsecase(
 	registry *monitoring.Registry,
 	storage *chiefrepository.Storage,
 	gpg *chiefrepository.GPG,
+	cancelSignal CancelSignal,
 	version string,
 ) (*ChiefUsecase, error) {
 	maintainerSvc := NewMaintainerService(gpg)
+	cancelSvc := newCancelSvc(taskQueue, cancelSignal, registry)
 	dashSvc, err := newDashboardSvc(version, taskQueue, maintainerSvc, registry)
 	if err != nil {
 		return nil, fmt.Errorf("init dashboard service: %w", err)
@@ -46,7 +49,8 @@ func NewChiefUsecase(
 		version:            version,
 		maintainerSvc:      maintainerSvc,
 		uploadSvc:          NewUploadService(storage, gpg),
-		statusSvc:          NewStatusService(taskQueue),
+		cancelSvc:          cancelSvc,
+		statusSvc:          NewStatusService(taskQueue, cancelSvc),
 		submissionSvc:      newSubmissionSvc(taskQueue, storage, gpg, registry),
 		dashboardSvc:       dashSvc,
 	}, nil
@@ -64,6 +68,20 @@ func newSubmissionSvc(tq TaskQueue, st FileStorage, gpg GPGVerifier, reg *monito
 		imp = reg
 	}
 	return NewSubmissionService(tq, st, gpg, js, is, imp)
+}
+
+// newCancelSvc constructs a CancelService, avoiding a non-nil interface
+// wrapping a nil *Registry pointer.
+func newCancelSvc(tq TaskQueue, signal CancelSignal, reg *monitoring.Registry) *CancelService {
+	var js JobStore
+	var is ISOJobStore
+	var imp ImportJobStore
+	if reg != nil {
+		js = reg
+		is = reg
+		imp = reg
+	}
+	return NewCancelService(tq, signal, js, is, imp)
 }
 
 func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
@@ -147,6 +165,11 @@ func (s *ChiefUsecase) BuildStatus(UUID string) (domain.BuildStatusResponse, err
 
 func (s *ChiefUsecase) ISOStatus(UUID string) (string, string, error) {
 	return s.statusSvc.ISOStatus(UUID)
+}
+
+// CancelJob stops a queued or running job.
+func (s *ChiefUsecase) CancelJob(taskUUID string) (domain.CancelResponse, error) {
+	return s.cancelSvc.CancelJob(taskUUID)
 }
 
 func (s *ChiefUsecase) RetryPipeline(oldTaskUUID string) (domain.SubmitPayloadResponse, error) {

@@ -22,6 +22,7 @@ type CLIService interface {
 	ImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error)
 	ImportLog(ctx context.Context, pipelineID string) (string, error)
 	RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error)
+	CancelPipeline(ctx context.Context, pipelineID string) (domain.CancelResponse, error)
 	UpdateCLI(ctx context.Context) error
 }
 
@@ -112,6 +113,13 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			Name:   "retry",
 			Usage:  "Retry a failed pipeline",
 			Action: retryAction(ctx, svc),
+		},
+		{
+			Name: "cancel",
+			Usage: "Cancel a queued or running job, e.g. irgsh-cli cancel <pipeline-id>. " +
+				"A package pipeline that has reached its repo stage cannot be cancelled: " +
+				"interrupting reprepro can corrupt the repository database",
+			Action: cancelAction(ctx, svc),
 		},
 		{
 			Name:  "build-iso",
@@ -369,6 +377,13 @@ func retryAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		_, err := svc.RetryPipeline(ctx, pipelineID)
+		return err
+	}
+}
+
+func cancelAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		_, err := svc.CancelPipeline(ctx, c.Args().First())
 		return err
 	}
 }
