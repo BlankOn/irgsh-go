@@ -40,8 +40,8 @@ func (m *mockImportJobStore) UpdateImportJobState(taskUUID, state string) error 
 func validImportSubmission() domain.ImportSubmission {
 	return domain.ImportSubmission{
 		SourceURL:    "https://kartolo.sby.datautama.net.id/debian/",
-		Dist:         "sid",
-		TargetDist:   "verbeek",
+		Dist:         "verbeek",
+		SourceDist:   "sid",
 		PackageNames: []string{"grub-efi-amd64-bin", "calamares"},
 		Maintainer:   "Herpiko Dwi Aguno <herpiko@gmail.com>",
 	}
@@ -55,9 +55,9 @@ func TestImportPackages_ValidationErrors(t *testing.T) {
 		"missing source":     {func(s *domain.ImportSubmission) { s.SourceURL = "" }, "sourceUrl is required"},
 		"malformed source":   {func(s *domain.ImportSubmission) { s.SourceURL = "not a url" }, "not a valid URL"},
 		"missing dist":       {func(s *domain.ImportSubmission) { s.Dist = "" }, "dist is required"},
-		"unsafe dist":        {func(s *domain.ImportSubmission) { s.Dist = "sid; rm -rf /" }, "unsupported characters"},
-		"missing targetDist": {func(s *domain.ImportSubmission) { s.TargetDist = "" }, "targetDist is required"},
-		"unsafe targetDist":  {func(s *domain.ImportSubmission) { s.TargetDist = "verbeek; rm -rf /" }, "unsupported characters"},
+		"unsafe dist":        {func(s *domain.ImportSubmission) { s.Dist = "verbeek; rm -rf /" }, "unsupported characters"},
+		"missing sourceDist": {func(s *domain.ImportSubmission) { s.SourceDist = "" }, "sourceDist is required"},
+		"unsafe sourceDist":  {func(s *domain.ImportSubmission) { s.SourceDist = "sid; rm -rf /" }, "unsupported characters"},
 		"no packages":        {func(s *domain.ImportSubmission) { s.PackageNames = nil }, "packageNames is required"},
 		"unsafe package":     {func(s *domain.ImportSubmission) { s.PackageNames = []string{"grub$(id)"} }, "invalid package name"},
 		"unsafe component":   {func(s *domain.ImportSubmission) { s.Component = "main;evil" }, "invalid component"},
@@ -80,9 +80,11 @@ func TestImportPackages_ValidationErrors(t *testing.T) {
 func TestImportPackages_QueuesTaskAndRecordsJob(t *testing.T) {
 	var queuedUUID string
 	var queuedPayload []byte
+	var queuedDist string
 	tq := &mockTaskQueue{
 		sendImportTaskFn: func(taskUUID, dist string, payload []byte) error {
 			queuedUUID = taskUUID
+			queuedDist = dist
 			queuedPayload = payload
 			return nil
 		},
@@ -96,12 +98,18 @@ func TestImportPackages_QueuesTaskAndRecordsJob(t *testing.T) {
 	assert.Equal(t, queuedUUID, resp.PipelineID)
 	assert.True(t, strings.HasSuffix(resp.PipelineID, "_import"),
 		"the task UUID must be recognisable as an import job: %s", resp.PipelineID)
+	// Routed on the distribution being imported into, not the source suite.
+	assert.Equal(t, "verbeek", queuedDist)
 
 	// The worker receives the submission with the defaults applied.
 	var queued domain.ImportSubmission
 	require.NoError(t, json.Unmarshal(queuedPayload, &queued))
 	assert.Equal(t, "main", queued.Component)
 	assert.Equal(t, "main", queued.SourceComponent)
+	assert.Equal(t, "verbeek", queued.Dist)
+	assert.Equal(t, "sid", queued.SourceDist)
+	assert.Empty(t, queued.TargetDist,
+		"the legacy targetDist field must not be forwarded to the worker")
 	assert.Equal(t, []string{"grub-efi-amd64-bin", "calamares"}, queued.PackageNames)
 	assert.Equal(t, queuedUUID, queued.TaskUUID)
 	assert.False(t, queued.Timestamp.IsZero())
@@ -110,7 +118,10 @@ func TestImportPackages_QueuesTaskAndRecordsJob(t *testing.T) {
 	recorded := store.recorded[0]
 	assert.Equal(t, queuedUUID, recorded.TaskUUID)
 	assert.Equal(t, "grub-efi-amd64-bin, calamares", recorded.Packages)
+	// The stored columns keep their original meaning: dist is the suite
+	// imported from, target_dist ours.
 	assert.Equal(t, "sid", recorded.Dist)
+	assert.Equal(t, "verbeek", recorded.TargetDist)
 	assert.Equal(t, "PENDING", recorded.State)
 	assert.Equal(t, "Herpiko Dwi Aguno <herpiko@gmail.com>", recorded.Maintainer,
 		"the dashboard needs to show who triggered the import")

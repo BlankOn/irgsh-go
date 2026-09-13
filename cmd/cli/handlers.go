@@ -162,11 +162,11 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.StringFlag{
 					Name:  "dist",
-					Usage: "Suite to import from in the source repository, e.g. sid",
+					Usage: "Our distribution to import the packages into, e.g. verbeek (required)",
 				},
 				cli.StringFlag{
-					Name:  "repo-dist",
-					Usage: "Our distribution to import the packages into, e.g. verbeek (required)",
+					Name:  "source-dist",
+					Usage: "Suite to import from in the source repository, e.g. sid (required)",
 				},
 				cli.StringFlag{
 					Name:  "source-component",
@@ -206,7 +206,11 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.BoolFlag{
 					Name:  "skip-check",
-					Usage: "Do not check the packages against this machine's repositories before submitting",
+					Usage: "Do not resolve or check the packages against the target repository before submitting",
+				},
+				cli.BoolFlag{
+					Name:  "yes, y",
+					Usage: "Accept the extra packages a dependency resolution pulls in, without prompting",
 				},
 			},
 			Action: importSubmitAction(ctx, svc),
@@ -330,7 +334,7 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 		params := domain.ImportParams{
 			SourceURL:       c.String("source"),
 			Dist:            c.String("dist"),
-			TargetDist:      c.String("repo-dist"),
+			SourceDist:      c.String("source-dist"),
 			SourceComponent: c.String("source-component"),
 			PackageNames:    usecase.SplitPackageNames(c.String("package-name")),
 			Component:       c.String("component"),
@@ -342,6 +346,7 @@ func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 
 			IgnoreDependencies: c.Bool("ignore-dependencies"),
 			SkipCheck:          c.Bool("skip-check"),
+			AssumeYes:          c.Bool("yes"),
 		}
 		_, err := svc.SubmitImport(ctx, params)
 		return err

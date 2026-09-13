@@ -5,11 +5,12 @@ package domain
 // The JSON tags must stay in sync with internal/chief/domain/submission.go.
 type ImportSubmission struct {
 	SourceURL string `json:"sourceUrl"`
-	// Dist is the suite in the source repository, e.g. "sid".
+	// Dist is the distribution of ours to inject into, e.g. "verbeek", and
+	// therefore which repo worker's queue this job is routed to. It means the
+	// target here exactly as it does in a package or ISO submission.
 	Dist string `json:"dist"`
-	// TargetDist is which of our distributions (and therefore which repo
-	// worker's queue) to inject the imported packages into, e.g. "verbeek".
-	TargetDist      string   `json:"targetDist"`
+	// SourceDist is the suite in the source repository, e.g. "sid".
+	SourceDist      string   `json:"sourceDist"`
 	SourceComponent string   `json:"sourceComponent"`
 	PackageNames    []string `json:"packageNames"`
 	Component       string   `json:"component"`
@@ -41,9 +42,11 @@ type ImportStatus struct {
 
 // ImportParams holds the CLI input parameters for an import submission.
 type ImportParams struct {
-	SourceURL       string
-	Dist            string
-	TargetDist      string
+	SourceURL string
+	// Dist is our distribution to import into (--dist).
+	Dist string
+	// SourceDist is the suite to import from (--source-dist).
+	SourceDist      string
 	SourceComponent string
 	PackageNames    []string
 	Component       string
@@ -55,4 +58,7 @@ type ImportParams struct {
 
 	IgnoreDependencies bool
 	SkipCheck          bool
+	// AssumeYes accepts the extra packages a dependency resolution pulls in
+	// without prompting, for a non-interactive run.
+	AssumeYes bool
 }

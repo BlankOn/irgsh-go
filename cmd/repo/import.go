@@ -21,11 +21,16 @@ import (
 type importSubmission struct {
 	TaskUUID  string `json:"taskUUID"`
 	SourceURL string `json:"sourceUrl"`
-	Dist      string `json:"dist"`
-	// TargetDist is which of our distributions this import is destined for.
-	// It's what routed this task to this repo instance's queue in the first
-	// place; kept here only to detect a misrouted task defensively.
-	TargetDist      string   `json:"targetDist"`
+	// Dist is which of our distributions this import is destined for. It's
+	// what routed this task to this repo instance's queue in the first place;
+	// kept here only to detect a misrouted task defensively.
+	Dist string `json:"dist"`
+	// SourceDist is the suite in the source repository to fetch from.
+	SourceDist string `json:"sourceDist"`
+	// TargetDist is how a chief older than 2.2.0 named our distribution, back
+	// when Dist meant the source suite. normalize folds it into the current
+	// fields; nothing else should read it.
+	TargetDist      string   `json:"targetDist,omitempty"`
 	SourceComponent string   `json:"sourceComponent"`
 	PackageNames    []string `json:"packageNames"`
 	Component       string   `json:"component"`
@@ -39,6 +44,18 @@ type importSubmission struct {
 	DryRun bool `json:"dryRun"`
 	// IgnoreDependencies imports even when the dependency check fails.
 	IgnoreDependencies bool `json:"ignoreDependencies"`
+}
+
+// normalize rewrites the payload of an older chief into the current field
+// shape. Up to 2.1.0 an import named the source suite in "dist" and our
+// distribution in "targetDist"; they were swapped so that "dist" names the
+// target, as it does in every other task. See domain.ImportSubmission.
+func (s *importSubmission) normalize() {
+	if s.SourceDist == "" && s.TargetDist != "" {
+		s.SourceDist = s.Dist
+		s.Dist = s.TargetDist
+	}
+	s.TargetDist = ""
 }
 
 func uploadImportLog(logPath string, id string) {
@@ -67,6 +84,7 @@ func Import(payload string) (err error) {
 	if err = json.Unmarshal([]byte(payload), &submission); err != nil {
 		return fmt.Errorf("invalid import payload: %w", err)
 	}
+	submission.normalize()
 	taskUUID := submission.TaskUUID
 
 	// Registered before the checks below, so a rejected or unloggable task
@@ -100,9 +118,9 @@ func Import(payload string) (err error) {
 		}
 	}()
 
-	if submission.TargetDist != "" && submission.TargetDist != irgshConfig.Repo.DistCodename {
+	if submission.Dist != "" && submission.Dist != irgshConfig.Repo.DistCodename {
 		err = fmt.Errorf("import task targeted dist %q but this repo instance serves %q",
-			submission.TargetDist, irgshConfig.Repo.DistCodename)
+			submission.Dist, irgshConfig.Repo.DistCodename)
 		return
 	}
 
@@ -138,7 +156,7 @@ func Import(payload string) (err error) {
 	systemutil.WriteLog(logPath, fmt.Sprintf(
 		"##### Importing %s\n##### from %s (%s/%s) into %s/%s",
 		strings.Join(submission.PackageNames, ", "),
-		submission.SourceURL, submission.Dist, submission.SourceComponent,
+		submission.SourceURL, submission.SourceDist, submission.SourceComponent,
 		irgshConfig.Repo.DistCodename+experimentalSuffix(submission.IsExperimental), submission.Component))
 
 	apt := newAptSandbox(ctx, workdir, submission)
@@ -441,8 +459,8 @@ func (a *aptSandbox) prepare(logPath string) error {
 		trusted = "[trusted=yes] "
 	}
 	sourcesList := fmt.Sprintf("deb %s%s %s %s\ndeb-src %s%s %s %s\n",
-		trusted, a.submission.SourceURL, a.submission.Dist, a.submission.SourceComponent,
-		trusted, a.submission.SourceURL, a.submission.Dist, a.submission.SourceComponent)
+		trusted, a.submission.SourceURL, a.submission.SourceDist, a.submission.SourceComponent,
+		trusted, a.submission.SourceURL, a.submission.SourceDist, a.submission.SourceComponent)
 	if err := os.WriteFile(filepath.Join(a.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
 		return fmt.Errorf("failed to write the sources list: %w", err)
 	}
@@ -479,7 +497,7 @@ func (a *aptSandbox) resolveSourcePackages(logPath string, packages []string) ([
 		source := strings.TrimSpace(lastLine(out))
 		if err != nil || source == "" {
 			return nil, fmt.Errorf("no source package found for %q in %s %s: %w",
-				pkg, a.submission.SourceURL, a.submission.Dist, err)
+				pkg, a.submission.SourceURL, a.submission.SourceDist, err)
 		}
 		if !seen[source] {
 			seen[source] = true
@@ -724,8 +742,11 @@ var errRepoNotExported = errors.New("the distribution has not been exported yet"
 // packages against that pair before injecting them catches it while the
 // repository is still clean.
 type targetSandbox struct {
-	ctx        context.Context
-	root       string
+	ctx  context.Context
+	root string
+	// downloads is where the fetched packages are, indexed as a repository of
+	// their own so each can be tested without installing all of them.
+	downloads  string
 	submission importSubmission
 }
 
@@ -733,6 +754,7 @@ func newTargetSandbox(ctx context.Context, workdir string, submission importSubm
 	return &targetSandbox{
 		ctx:        ctx,
 		root:       filepath.Join(workdir, "apt-target"),
+		downloads:  filepath.Join(workdir, "files"),
 		submission: submission,
 	}
 }
@@ -785,6 +807,17 @@ func (t *targetSandbox) prepare(logPath string) error {
 		components = t.submission.Component
 	}
 	sourcesList := fmt.Sprintf("deb [trusted=yes] file://%s %s %s\n", ourRepo, dist, components)
+
+	// The downloaded packages are indexed as a repository of their own rather
+	// than being passed to apt as files. A file on the apt command line is a
+	// package to install; in an index it is merely available, which is what
+	// lets each package be tested on its own while its siblings stay
+	// resolvable.
+	if err := t.indexDownloads(logPath); err != nil {
+		return err
+	}
+	sourcesList += fmt.Sprintf("deb [trusted=yes] file://%s ./\n", t.downloads)
+
 	if err := os.WriteFile(filepath.Join(t.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
 		return fmt.Errorf("failed to write the target sources list: %w", err)
 	}
@@ -799,22 +832,69 @@ func (t *targetSandbox) prepare(logPath string) error {
 	return err
 }
 
-// simulate asks apt to resolve the downloaded packages against the target,
-// exactly as it would on a user's machine.
-func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
-	var quoted []string
-	for _, deb := range debFiles {
-		quoted = append(quoted, sq(deb))
-	}
-
+// indexDownloads writes a Packages index over the downloaded .deb files so
+// apt can resolve them by name.
+//
+// apt-ftparchive (apt-utils) and dpkg-scanpackages (dpkg-dev) do the same job;
+// whichever the worker has is used.
+func (t *targetSandbox) indexDownloads(logPath string) error {
 	_, err := systemutil.CmdExecContext(
 		t.ctx,
-		fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s",
-			t.aptOpts(), strings.Join(quoted, " ")),
-		"Simulating the installation of the imported packages",
+		fmt.Sprintf("cd %s && { apt-ftparchive packages . > Packages || dpkg-scanpackages --multiversion . > Packages; }",
+			sq(t.downloads)),
+		"Indexing the downloaded packages",
 		logPath,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to index the downloaded packages: %w", err)
+	}
+	return nil
+}
+
+// simulate asks apt to resolve the downloaded packages against the target,
+// exactly as it would on a user's machine.
+//
+// Each package is resolved on its own. Asking apt for all of them at once
+// answers a different question - whether they are co-installable - which a
+// repository never requires: strongswan-charon and charon-systemd declare
+// Conflicts on each other, and both still belong in the archive. The other
+// downloaded files are still on the apt command line as local candidates, so
+// a package may satisfy its dependencies from its own siblings.
+func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
+	var failed []string
+	for _, deb := range debFiles {
+		name, err := packageNameOf(deb)
+		if err != nil {
+			return err
+		}
+		_, err = systemutil.CmdExecContext(
+			t.ctx,
+			fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s", t.aptOpts(), sq(name)),
+			"Simulating the installation of "+name,
+			logPath,
+		)
+		if err != nil {
+			failed = append(failed, name)
+		}
+	}
+
+	if len(failed) > 0 {
+		return fmt.Errorf("not installable on top of the repository: %s", strings.Join(failed, ", "))
+	}
+	return nil
+}
+
+// packageNameOf reads the package name out of a .deb file.
+func packageNameOf(debFile string) (string, error) {
+	out, err := systemutil.CmdExec("dpkg-deb --field "+sq(debFile)+" Package", "", "")
+	if err != nil {
+		return "", fmt.Errorf("failed to read the package name of %s: %w", filepath.Base(debFile), err)
+	}
+	name := strings.TrimSpace(lastLine(out))
+	if name == "" {
+		return "", fmt.Errorf("%s carries no package name", filepath.Base(debFile))
+	}
+	return name, nil
 }
 
 // checkDependencies reports whether the imported packages are installable on

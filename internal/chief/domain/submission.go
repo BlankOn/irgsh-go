@@ -33,12 +33,16 @@ type ImportSubmission struct {
 	Timestamp time.Time `json:"timestamp"`
 	// SourceURL is the base URL of the Debian repository to import from.
 	SourceURL string `json:"sourceUrl"`
-	// Dist is the suite in the source repository, e.g. "sid".
+	// Dist is the distribution of ours to inject into, e.g. "verbeek", and so
+	// which repo worker's queue this job is routed to. It names the target
+	// here exactly as it does in Submission and ISOSubmission.
 	Dist string `json:"dist"`
-	// TargetDist is which of our distributions (and therefore which repo
-	// worker's queue) to inject the imported packages into, e.g. "verbeek".
-	// Distinct from Dist, which names the source suite.
-	TargetDist string `json:"targetDist"`
+	// SourceDist is the suite in the source repository, e.g. "sid".
+	SourceDist string `json:"sourceDist"`
+	// TargetDist is how an irgsh-cli older than 2.2.0 named our distribution,
+	// back when Dist meant the source suite. Normalize folds it into the
+	// current fields; nothing else should read it.
+	TargetDist string `json:"targetDist,omitempty"`
 	// SourceComponent is the component to look in on the source side,
 	// defaulting to "main".
 	SourceComponent string `json:"sourceComponent"`
@@ -63,6 +67,27 @@ type ImportSubmission struct {
 	// IgnoreDependencies injects the packages even when they are not
 	// installable on top of our repository.
 	IgnoreDependencies bool `json:"ignoreDependencies"`
+}
+
+// Normalize rewrites the payload of an older irgsh-cli into the current field
+// shape.
+//
+// Up to 2.1.0 an import named the source suite in "dist" and our distribution
+// in "targetDist", which read backwards against every other submission, where
+// "dist" is the target and is what the job is routed on. The flags were
+// swapped to match (--dist for ours, --source-dist for theirs) and the wire
+// format with them.
+//
+// An old payload is the one that carries "targetDist" and no "sourceDist";
+// its two fields are simply the wrong way round. Normalize leaves a current
+// payload untouched, and clears TargetDist either way so that what chief
+// forwards to the worker is always the current shape.
+func (s *ImportSubmission) Normalize() {
+	if s.SourceDist == "" && s.TargetDist != "" {
+		s.SourceDist = s.Dist
+		s.Dist = s.TargetDist
+	}
+	s.TargetDist = ""
 }
 
 // RepoInfo describes the repository packages are published to, so that a

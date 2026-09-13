@@ -88,7 +88,7 @@ graph LR
 | `internal/chief/usecase/` | Chief business logic split into services (`ChiefUsecase`, `MaintainerService`, `StatusService`, `SubmissionService`, `CancelService`, `UploadService`, `DashboardService`), port interfaces (`TaskQueue`, `GPGVerifier`, `FileStorage`, `JobStore`, `ISOJobStore`, `InstanceRegistry`, `CancelSignal`), and embedded dashboard template |
 | `internal/chief/repository/` | Chief repository adapters: `GPG` (signature verification), `Storage` (on-disk file management), `Machinery` (task queue), `CancelSignal` (job cancellation) |
 | `internal/cli/domain/` | CLI domain types: `Config`, `Submission`, `SubmitParams`, `ISOSubmission`, API response structs (`PackageStatus`, `ISOStatus`, `SubmitResponse`, etc.) |
-| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): config, package submit/status/log, ISO submit/status/log, retry, cancel, update; port interfaces (`ConfigStore`, `PipelineStore`, `ChiefAPI`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, etc.) |
+| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): config, package submit/status/log, ISO submit/status/log, import resolution and dependency checking, retry, cancel, update; port interfaces (`ConfigStore`, `PipelineStore`, `ChiefAPI`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, etc.) |
 | `internal/cli/repository/` | CLI repository adapters: `HTTPChiefClient`, `ConfigStore`, `PipelineStore`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, `ReleaseFetcher`, `UpdateApplier`, `Prompter` |
 | `internal/config/` | Configuration loading and validation from YAML |
 | `internal/monitoring/` | Worker health tracking, heartbeats, job history, instance registry |
@@ -157,9 +157,10 @@ several builders for different distributions run on one machine.
 Chief is distribution-agnostic: it holds no dist config of its own and just
 routes tasks. Builder, repo, and iso each have a fixed distribution identity
 (`dist_codename` in their own config section), and only ever handle tasks for
-that one distribution. `irgsh-cli` picks the target with `--dist verbeek`
-(package/ISO submit) or `--repo-dist verbeek` (import, since `import` already
-uses `--dist` for the *source* suite being imported from).
+that one distribution. `irgsh-cli` always picks the target with `--dist
+verbeek`, for package submit, ISO submit and import alike. `import` names the
+other side with `--source-dist sid`, pairing with the `--component` /
+`--source-component` split the same way.
 
 ### Task Queue (Machinery)
 Jobs are distributed via Redis using the machinery library:
@@ -198,9 +199,9 @@ it, and a job with neither (ISO) gets no tag at all.
 ### Import Flow
 `irgsh-cli import` submits a request to import already built packages from an
 external Debian repository. The `import` task is handled by irgsh-repo:
-1. CLI submits `--source`, `--dist` (source suite), `--repo-dist` (our
-   distribution to inject into) and `--package-name` to chief
-2. Chief queues an `import` task to the `--repo-dist` distribution's queue
+1. CLI submits `--source`, `--source-dist` (the suite to import from),
+   `--dist` (our distribution to inject into) and `--package-name` to chief
+2. Chief queues an `import` task to the `--dist` distribution's queue
 3. Repo worker builds a throwaway apt root pointing at the source repository,
    resolves each binary package to its source package, then downloads the
    `.dsc` with its tarballs and every binary built from that source
@@ -224,18 +225,55 @@ is elsewhere, or `--insecure` to skip verification.
 Importing from a newer suite than the repository is based on is how a package
 that nobody can install gets in, so dependencies are checked twice:
 
-- **In the CLI, before submitting.** The maintainer's machine already runs the
-  distribution, so its own apt sources are the target. The source repository is
-  added as an extra source, pinned (`Pin: release n=<dist>`, priority -1) so
-  only the named packages may come from it and their dependencies must be
-  satisfied by the distribution. `--skip-check` bypasses it; a machine without
-  apt skips it with a note.
-- **In the repo worker, before injecting.** The downloaded `.deb` files are
-  resolved against the exported distribution in
-  `<repo workdir>/<codename>/www`. The configured upstream is deliberately not
-  added: the repository merges upstream into itself, so what users can install
-  is what we have published, and adding the live upstream would satisfy
+- **In the CLI, before submitting.** The target is the repository chief names
+  for that dist (`/api/v1/repo-info`, fed by the repo worker's
+  `repo.public_url` heartbeat) - never the maintainer's own machine, which does
+  not have to be running the distribution being imported into. Without a
+  published `public_url` the check is skipped with a note rather than answered
+  against the wrong repository. The source repository is added as an extra
+  source, pinned (`Pin: release n=<source-dist>`, priority -1) so only the
+  packages actually being imported may come from it. `--skip-check` bypasses
+  the whole thing; a machine without apt skips it with a note.
+- **In the repo worker, before injecting.** The downloaded packages are indexed
+  as a repository of their own and resolved against the exported distribution
+  in `<repo workdir>/<codename>/www`. The configured upstream is deliberately
+  not added: the repository merges upstream into itself, so what users can
+  install is what we have published, and adding the live upstream would satisfy
   dependencies from the very suite the packages come from.
+
+Two things both checks get right, and got wrong before 2.3.0:
+
+- **The whole source package is resolvable, not just the named binaries.**
+  Importing `strongswan` injects every binary of that source, so pinning only
+  the named ones made apt report `libstrongswan` as "not going to be installed"
+  when the import was always going to bring it.
+- **Each package is tested on its own.** Asking apt to install them together
+  answers whether they are *co-installable*, which a repository never requires:
+  `strongswan-charon` and `charon-systemd` declare `Conflicts` on each other and
+  both belong in the archive. The worker indexes the downloads (`apt-ftparchive
+  packages`, falling back to `dpkg-scanpackages`) so a package can still resolve
+  against its siblings without all of them being installed at once.
+
+### Resolving what an import drags in
+When a package needs something the target repository does not have, the CLI
+works out what else would have to be imported rather than just refusing
+(`internal/cli/usecase/importresolve.go`). It widens the pinned set one round
+at a time: whatever apt still reports as missing is looked up in the source
+repository, resolved to its source package, and added, until everything
+resolves or nothing new can be added (capped at `maxResolveRounds`).
+
+The boundary is what makes this safe. A dependency the target repository does
+not have **at all** becomes another source package to import. A dependency it
+**does** have, only at the wrong version, is a *blocker*: importing a newer
+`libc6` out of the source suite replaces the C library the distribution is
+built on, which is never what a maintainer means by "import strongswan". Those
+are reported as a reason to stop, never offered as a choice.
+
+Anything the resolver adds is shown as a table (source, version, binary count,
+download size) and confirmed with y/N before a job is queued; `--yes` accepts
+without prompting for a non-interactive run. The submission names the packages
+the maintainer asked for plus one binary of each added source - the worker
+expands each back to its whole source package anyway.
 
 `--dry-run` fetches and checks without injecting; `--ignore-dependencies`
 imports anyway.
@@ -383,9 +421,22 @@ a map:
 - `internal/chief/domain/submission.go` (`ImportSubmission`, chief receives)
 - `cmd/repo/import.go` (`importSubmission`, repo consumes)
 
-Its `dist` field means the *source* suite being imported from, so it carries
-a separate `targetDist` field (CLI flag `--repo-dist`) naming which of our
-distributions - and therefore which repo instance's queue - to route to.
+Its `dist` field means our distribution - which repo instance's queue to route
+to - exactly as it does for a package or ISO submission, and `sourceDist` is
+the suite being imported from.
+
+Up to 2.1.0 those two were the other way round (`dist` was the source suite,
+`targetDist` ours), which read backwards against every other submission and
+routed on the wrong half if misread. Both chief and the repo worker normalize
+an old payload - one carrying `targetDist` and no `sourceDist` - back into the
+current shape (`domain.ImportSubmission.Normalize`, `importSubmission.normalize`),
+so an un-upgraded irgsh-cli or chief keeps working. Chief clears `targetDist`
+after normalizing, so what reaches a worker is always the current shape. Drop
+the fallback once every deployment is past 2.2.0.
+
+The stored `import_jobs` columns deliberately keep their original meaning -
+`dist` is the suite imported from, `target_dist` ours - so rows written before
+the swap still read correctly on the dashboard.
 
 The ISO job likewise unmarshals into a struct rather than a map:
 - `internal/cli/domain/iso.go` (CLI sends)
@@ -417,6 +468,8 @@ internal/cli/repository/config_store_test.go
 internal/cli/repository/pipeline_store_test.go
 internal/cli/usecase/cancel_test.go
 internal/cli/usecase/config_test.go
+internal/cli/usecase/importparse_test.go
+internal/cli/usecase/importresolve_test.go
 internal/cli/usecase/iso_test.go
 internal/cli/usecase/mocks_test.go
 internal/cli/usecase/package_test.go

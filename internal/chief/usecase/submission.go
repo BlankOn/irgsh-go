@@ -293,6 +293,10 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 // ImportPackages queues a job that pulls already built packages out of an
 // external Debian repository and injects them into ours.
 func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) (domain.SubmitPayloadResponse, error) {
+	// An irgsh-cli older than 2.2.0 sends the two distributions the other way
+	// round; fold it into the current shape before anything reads them.
+	submission.Normalize()
+
 	if submission.SourceURL == "" {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceUrl is required")
 	}
@@ -305,11 +309,11 @@ func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) 
 	if !domain.SafeIDPattern.MatchString(submission.Dist) {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
 	}
-	if submission.TargetDist == "" {
-		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "targetDist is required")
+	if submission.SourceDist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceDist is required")
 	}
-	if !domain.SafeIDPattern.MatchString(submission.TargetDist) {
-		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "targetDist contains unsupported characters")
+	if !domain.SafeIDPattern.MatchString(submission.SourceDist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceDist contains unsupported characters")
 	}
 	if len(submission.PackageNames) == 0 {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "packageNames is required")
@@ -351,17 +355,20 @@ func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) 
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	if err := ss.taskQueue.SendImportTask(submission.TaskUUID, submission.TargetDist, jsonStr); err != nil {
+	if err := ss.taskQueue.SendImportTask(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send import task: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if ss.importStore != nil {
+		// The stored columns keep the meaning they were created with - dist
+		// is the suite imported from, target_dist ours - so that rows written
+		// before the fields were swapped still read correctly.
 		importJob := monitoring.ImportJobInfo{
 			TaskUUID:       submission.TaskUUID,
 			SourceURL:      submission.SourceURL,
-			Dist:           submission.Dist,
-			TargetDist:     submission.TargetDist,
+			Dist:           submission.SourceDist,
+			TargetDist:     submission.Dist,
 			Packages:       strings.Join(submission.PackageNames, ", "),
 			Component:      submission.Component,
 			Maintainer:     submission.Maintainer,

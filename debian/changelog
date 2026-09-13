@@ -1,3 +1,46 @@
+irgsh (2.3.0-1) unstable; urgency=medium
+
+  * The import dependency check now resolves against the repository chief
+    names for the target dist (repo.public_url, over /api/v1/repo-info)
+    instead of falling back to the maintainer's own apt sources, which do not
+    have to describe the distribution being imported into. Without a
+    published public_url the check is skipped with a note rather than
+    answering against the wrong repository and blocking a good import
+  * Fix two false negatives in that check. Every binary of a source package
+    is now resolvable, not just the ones named on the command line - an
+    import brings all of them anyway, and pinning only the named ones made
+    apt report siblings like libstrongswan as uninstallable. And each package
+    is tested on its own instead of all at once, so alternatives that declare
+    Conflicts on each other (strongswan-charon and charon-systemd) no longer
+    fail a check that a repository never asks them to pass. The repo worker's
+    pre-injection check gets the same two fixes
+  * irgsh-cli import now works out what else has to be imported when a
+    package needs something the target repository lacks, shows it as a table
+    with binary counts and download size, and asks y/N before queueing
+    anything. --yes accepts without prompting. A dependency the target
+    already has at an older version is reported as a blocker instead:
+    importing a newer libc6 would replace the C library the distribution is
+    built on
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 23:15:00 +0700
+
+irgsh (2.2.0-1) unstable; urgency=medium
+
+  * irgsh-cli import: --dist now names our distribution to import into, the
+    way it already does for package and ISO submissions, and the suite to
+    import from moves from --dist to a new --source-dist. --repo-dist is
+    gone. The flags now pair up: --dist/--component describe our side,
+    --source-dist/--source-component theirs
+  * The import wire format follows: "dist" is the target and what the job is
+    routed on, "sourceDist" the suite imported from. Chief and the repo
+    worker still accept the old shape (a payload carrying "targetDist" and no
+    "sourceDist"), so an un-upgraded irgsh-cli or chief keeps working; the
+    fallback can be dropped once every deployment is past this release
+  * The import_jobs table is unchanged: its dist column still holds the suite
+    imported from and target_dist ours, so existing rows read correctly
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 22:05:00 +0700
+
 irgsh (2.1.0-1) unstable; urgency=medium
 
   * New command: irgsh-cli cancel <pipeline-id> stops a queued or running
