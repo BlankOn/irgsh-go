@@ -288,6 +288,9 @@ func aptOptsFor(root string, insecure bool) string {
 		// Verify against the keyrings collected in prepare(), which is what
 		// makes importing from a Debian mirror work out of the box.
 		"-o Dir::Etc::trustedparts=" + sq(filepath.Join(root, "trusted.gpg.d")),
+		// The sandbox's own pinning, never the host's /etc/apt/preferences.
+		"-o Dir::Etc::preferences=" + sq(filepath.Join(root, "preferences")),
+		"-o Dir::Etc::preferencesparts=" + sq(filepath.Join(root, "preferences.d")),
 		"-o APT::Get::List-Cleanup=false",
 		"-o Acquire::Languages=none",
 		// apt drops to the _apt user for downloads, which cannot read the
@@ -430,6 +433,7 @@ func prepareAptRoot(root, keyringPath string, extraDirs ...string) (int, error) 
 	dirs := append([]string{
 		filepath.Join(root, "state", "lists", "partial"),
 		filepath.Join(root, "cache", "archives", "partial"),
+		filepath.Join(root, "preferences.d"),
 	}, extraDirs...)
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -438,6 +442,9 @@ func prepareAptRoot(root, keyringPath string, extraDirs ...string) (int, error) 
 	}
 	if err := os.WriteFile(filepath.Join(root, "state", "status"), nil, 0644); err != nil {
 		return 0, fmt.Errorf("failed to create the apt status file: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "preferences"), nil, 0644); err != nil {
+		return 0, fmt.Errorf("failed to create the apt preferences file: %w", err)
 	}
 	return collectKeyrings(systemKeyringDirs, keyringPath, filepath.Join(root, "trusted.gpg.d"))
 }
@@ -565,11 +572,20 @@ func (a *aptSandbox) fetchSource(logPath, source string) error {
 	return err
 }
 
+// binaryFieldAwk prints the Binary field of the first paragraph apt-cache
+// showsrc prints, continuation lines included. A large source wraps that
+// field over several lines - libreoffice lists some 200 binaries on five -
+// and reading only the "Binary:" line itself silently dropped every binary
+// past the first line (libreoffice-report-builder-bin, ure, the libuno
+// libraries). It reads to the end rather than exiting early, so apt-cache is
+// never cut off with SIGPIPE under pipefail.
+const binaryFieldAwk = `awk '!done && /^Binary:/ {p=1; sub(/^Binary:[ \t]*/, ""); print; next} p && /^[ \t]/ {print; next} p {p=0; done=1}'`
+
 // binariesOf lists the binary packages built from a source package.
 func (a *aptSandbox) binariesOf(logPath, source string) ([]string, error) {
 	out, err := systemutil.CmdExecContext(
 		a.ctx,
-		fmt.Sprintf("apt-cache %s showsrc %s | grep -m1 '^Binary:' | cut -d' ' -f2- | tr -d ' ' | tr ',' '\\n'",
+		fmt.Sprintf("apt-cache %s showsrc %s | "+binaryFieldAwk+" | tr -d ' \\t' | tr ',' '\\n'",
 			a.aptOpts(), sq(source)),
 		"Listing the binary packages built from "+source,
 		logPath,
@@ -912,7 +928,7 @@ func exportedRepoDir(dist string) string {
 	return filepath.Join(irgshConfig.Repo.Workdir, dist, "www")
 }
 
-func (t *targetSandbox) prepare(logPath string) error {
+func (t *targetSandbox) prepare(logPath string, debFiles []string) error {
 	if _, err := prepareAptRoot(t.root, t.submission.KeyringPath); err != nil {
 		return err
 	}
@@ -948,6 +964,10 @@ func (t *targetSandbox) prepare(logPath string) error {
 	}
 	sourcesList += fmt.Sprintf("deb [trusted=yes] file://%s ./\n", t.downloads)
 
+	if err := t.pinDownloads(logPath, debFiles); err != nil {
+		return err
+	}
+
 	if err := os.WriteFile(filepath.Join(t.root, "sources.list"), []byte(sourcesList), 0644); err != nil {
 		return fmt.Errorf("failed to write the target sources list: %w", err)
 	}
@@ -960,6 +980,36 @@ func (t *targetSandbox) prepare(logPath string) error {
 		logPath,
 	)
 	return err
+}
+
+// pinDownloads makes every downloaded version the candidate for its package,
+// so the check sees the repository as it will be once the import is in: an
+// imported package replaces what our repository carries, older or newer (see
+// clearExistingVersions).
+//
+// Without it apt prefers the higher version, and importing an older
+// libreoffice failed on python3-uno wanting libreoffice-core (= 4:25...)
+// while apt insisted on the 4:26 copy already in the repository - the very
+// copy the import removes. Nothing is installed in the sandbox, so 990 is
+// enough to win over the default 500 without having to allow downgrades.
+func (t *targetSandbox) pinDownloads(logPath string, debFiles []string) error {
+	var stanzas []string
+	for _, deb := range debFiles {
+		name, version, _, err := debIdentity(deb)
+		if err != nil {
+			return err
+		}
+		stanzas = append(stanzas, pinStanza(name, version))
+	}
+	if err := os.WriteFile(filepath.Join(t.root, "preferences"), []byte(strings.Join(stanzas, "\n")), 0644); err != nil {
+		return fmt.Errorf("failed to write the target preferences: %w", err)
+	}
+	systemutil.WriteLog(logPath, fmt.Sprintf("##### Preferring the %d imported package version(s) over the repository's own", len(stanzas)))
+	return nil
+}
+
+func pinStanza(name, version string) string {
+	return fmt.Sprintf("Package: %s\nPin: version %s\nPin-Priority: 990\n", name, version)
 }
 
 // indexDownloads writes a Packages index over the downloaded .deb files so
@@ -1021,7 +1071,7 @@ func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
 // a machine that has our repository and its upstream distribution.
 func checkDependencies(ctx context.Context, logPath, workdir string, submission importSubmission, debFiles []string) error {
 	target := newTargetSandbox(ctx, workdir, submission)
-	if err := target.prepare(logPath); err != nil {
+	if err := target.prepare(logPath, debFiles); err != nil {
 		if errors.Is(err, errRepoNotExported) {
 			// Nothing has been published yet, so there is nothing to resolve
 			// against. Say so rather than reporting a pass.

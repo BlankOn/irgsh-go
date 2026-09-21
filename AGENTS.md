@@ -223,9 +223,13 @@ Unlike the packaging flow, reprepro runs without `--nothingiserror`, so the
 exact version our repository already carries is skipped rather than failing
 the job. Use `--force-version` to remove and re-inject it anyway.
 
-The worker's dependency check installs each package as `name=version`, so a
-downgrade is checked as the version being imported rather than the newer one
-already in the repository.
+The worker's dependency check models the repository as it will be once the
+import is in. Each package is installed as `name=version`, and every downloaded
+version is pinned at 990 in the sandbox's own `preferences` (never the host's).
+Without the pin apt prefers the higher version already in the repository, so
+importing an older libreoffice failed on `python3-uno` wanting
+`libreoffice-core (= 4:25...)` - a sibling the import brings - while apt stuck
+to the 4:26 copy the import is about to remove.
 
 The source repository is verified against every keyring installed on the repo
 worker, collected from both `/etc/apt/trusted.gpg.d` and `/usr/share/keyrings`
@@ -264,6 +268,12 @@ Two things both checks get right, and got wrong before 2.3.0:
   both belong in the archive. The worker indexes the downloads (`apt-ftparchive
   packages`, falling back to `dpkg-scanpackages`) so a package can still resolve
   against its siblings without all of them being installed at once.
+
+A source's binaries are read from the `Binary:` field of `apt-cache showsrc`,
+which wraps over several lines for a large source (libreoffice: ~211 binaries
+on five lines). Both the worker and the CLI read it with `binaryFieldAwk`,
+continuation lines included; reading only the first line, as `grep -m1` did
+before 2.3.1, silently drops most of them.
 
 ### Resolving what an import drags in
 When a package needs something the target repository does not have, the CLI
