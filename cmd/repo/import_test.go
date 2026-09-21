@@ -295,3 +295,12 @@ func TestDscIdentity_MissingVersion(t *testing.T) {
 		t.Fatal("expected an error for a .dsc without a version")
 	}
 }
+
+// The imported version has to win over a newer copy already in the
+// repository, or a sibling's exact-version dependency cannot be satisfied.
+func TestPinStanza(t *testing.T) {
+	want := "Package: libreoffice-core-nogui\nPin: version 4:25.2.3-2+deb13u6\nPin-Priority: 990\n"
+	if got := pinStanza("libreoffice-core-nogui", "4:25.2.3-2+deb13u6"); got != want {
+		t.Fatalf("pinStanza = %q, want %q", got, want)
+	}
+}
