@@ -1,3 +1,17 @@
+irgsh (2.3.1-1) unstable; urgency=medium
+
+  * An import now replaces the version our repository carries, older or
+    newer. reprepro only upgrades on its own and skipped a downgrade with
+    "as it has already <newer version>"; the repo worker now removes an
+    imported source or binary whose listed version differs before
+    injecting it. The exact same version is still skipped, and
+    --force-version re-injects even that
+  * The repo worker's dependency check installs each imported package as
+    name=version, so a downgrade is checked as the version being imported
+    rather than the newer copy already in the repository
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Mon, 21 Sep 2026 12:00:00 +0700
+
 irgsh (2.3.0-1) unstable; urgency=medium
 
   * The import dependency check now resolves against the repository chief

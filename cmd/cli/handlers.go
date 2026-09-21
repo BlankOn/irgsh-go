@@ -186,7 +186,7 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.BoolFlag{
 					Name:  "force-version",
-					Usage: "Replace the package version if our repository already has it",
+					Usage: "Re-inject even the exact version our repository already has (a different version, older or newer, is always replaced)",
 				},
 				cli.StringFlag{
 					Name:  "keyring",

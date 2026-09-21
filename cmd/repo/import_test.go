@@ -222,3 +222,76 @@ func TestImportSubmission_NormalizeLeavesCurrentPayloadAlone(t *testing.T) {
 		t.Errorf("normalize altered a current payload: %+v", submission)
 	}
 }
+
+// reprepro only upgrades on its own; an import of an older version has to
+// remove the newer one first, or it is skipped with "as it has already".
+func TestNeedsReplacing(t *testing.T) {
+	cases := []struct {
+		name     string
+		existing []string
+		version  string
+		force    bool
+		want     bool
+	}{
+		{"not in the repository", nil, "4:25.2.3-2", false, false},
+		{"not in the repository, forced", nil, "4:25.2.3-2", true, false},
+		{"downgrade", []string{"4:26.8.0.3-2"}, "4:25.2.3-2+deb13u6", false, true},
+		{"upgrade", []string{"4:24.2.0-1"}, "4:25.2.3-2", false, true},
+		{"same version", []string{"4:25.2.3-2"}, "4:25.2.3-2", false, false},
+		{"same version, forced", []string{"4:25.2.3-2"}, "4:25.2.3-2", true, true},
+		{"one of several differs", []string{"4:25.2.3-2", "4:26.8.0.3-2"}, "4:25.2.3-2", false, true},
+	}
+	for _, c := range cases {
+		if got := needsReplacing(c.existing, c.version, c.force); got != c.want {
+			t.Errorf("%s: needsReplacing(%v, %q, %v) = %v, want %v", c.name, c.existing, c.version, c.force, got, c.want)
+		}
+	}
+}
+
+func TestUniqueLines(t *testing.T) {
+	got := uniqueLines("4:26.8.0.3-2\n4:26.8.0.3-2\n\n1.0-1\n")
+	if strings.Join(got, ",") != "4:26.8.0.3-2,1.0-1" {
+		t.Fatalf("uniqueLines = %v", got)
+	}
+}
+
+// The .dsc filename drops the epoch, so the version reprepro compares against
+// has to come from the file itself.
+func TestDscIdentity_ReadsEpochFromSignedDsc(t *testing.T) {
+	dsc := `-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Format: 3.0 (quilt)
+Source: libreoffice
+Binary: libreoffice, python3-scriptforge
+Architecture: any all
+Version: 4:25.2.3-2+deb13u6
+Checksums-Sha256:
+ abc 123 libreoffice_25.2.3.orig.tar.xz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEE
+-----END PGP SIGNATURE-----
+`
+	path := filepath.Join(t.TempDir(), "libreoffice_25.2.3-2+deb13u6.dsc")
+	if err := os.WriteFile(path, []byte(dsc), 0644); err != nil {
+		t.Fatal(err)
+	}
+	source, version, err := dscIdentity(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if source != "libreoffice" || version != "4:25.2.3-2+deb13u6" {
+		t.Fatalf("dscIdentity = %q %q", source, version)
+	}
+}
+
+func TestDscIdentity_MissingVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "broken_1.dsc")
+	if err := os.WriteFile(path, []byte("Source: broken\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := dscIdentity(path); err == nil {
+		t.Fatal("expected an error for a .dsc without a version")
+	}
+}

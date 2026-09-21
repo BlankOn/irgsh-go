@@ -212,9 +212,20 @@ external Debian repository. The `import` task is handled by irgsh-repo:
    supplying `--section`/`--priority` from the source index because a `.dsc`
    usually carries neither
 
-Unlike the packaging flow, reprepro runs without `--nothingiserror`, so a
-version our repository already carries is skipped rather than failing the job.
-Use `--force-version` to replace it.
+An import replaces whatever version our repository carries, **older or
+newer** - the maintainer asked for that version. reprepro on its own only
+upgrades (it skips a package whose existing version is higher, with "as it has
+already ..."), so before injecting, the worker lists each imported source and
+binary in the repository and removes it (`removesrc` / `remove`) when the
+listed version differs (`clearExistingVersions` in `cmd/repo/import.go`).
+
+Unlike the packaging flow, reprepro runs without `--nothingiserror`, so the
+exact version our repository already carries is skipped rather than failing
+the job. Use `--force-version` to remove and re-inject it anyway.
+
+The worker's dependency check installs each package as `name=version`, so a
+downgrade is checked as the version being imported rather than the newer one
+already in the repository.
 
 The source repository is verified against every keyring installed on the repo
 worker, collected from both `/etc/apt/trusted.gpg.d` and `/usr/share/keyrings`
