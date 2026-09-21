@@ -618,8 +618,13 @@ func (a *aptSandbox) fetchBinaries(logPath string, binaries []string) error {
 
 // injectImportedFiles hands the downloaded files to reprepro.
 //
-// reprepro is deliberately run without --nothingiserror: a package version
-// that our repository already carries is reported and skipped, which is a
+// An import replaces whatever version our repository carries, older or newer:
+// the maintainer asked for that version. reprepro only ever upgrades on its
+// own - it skips a package whose existing version is higher - so a differing
+// version is removed first (see clearExistingVersions).
+//
+// reprepro is deliberately run without --nothingiserror: the exact version
+// our repository already carries is reported and skipped, which is a
 // successful no-op for an import rather than a failure.
 func injectImportedFiles(logPath, workdir string, submission importSubmission, metadata map[string]sourceMeta) error {
 	downloads := filepath.Join(workdir, "files")
@@ -649,10 +654,8 @@ func injectImportedFiles(logPath, workdir string, submission importSubmission, m
 	systemutil.WriteLog(logPath, fmt.Sprintf("##### Downloaded %d source package(s) and %d binary package(s)",
 		len(dscFiles), len(debFiles)))
 
-	if submission.ForceVersion {
-		if err := removeExistingVersions(logPath, dist, distDir, gnupgDir, dscFiles); err != nil {
-			return err
-		}
+	if err := clearExistingVersions(logPath, dist, distDir, gnupgDir, dscFiles, debFiles, submission.ForceVersion); err != nil {
+		return err
 	}
 
 	if len(dscFiles) > 0 {
@@ -697,20 +700,147 @@ func sourceNameOf(dscPath string) string {
 	return strings.SplitN(filepath.Base(dscPath), "_", 2)[0]
 }
 
-// removeExistingVersions drops the source packages being imported, and their
-// binaries, before injecting the new ones.
-func removeExistingVersions(logPath, dist, distDir, gnupgDir string, dscFiles []string) error {
+// clearExistingVersions removes every package being imported whose version
+// in our repository differs from the imported one, so that reprepro does not
+// skip a downgrade with "as it has already <newer version>". The exact same
+// version is left alone - reprepro skips it as a no-op - unless force is set,
+// in which case it is removed and re-injected too.
+//
+// Sources go first: removesrc also drops every binary built from that source,
+// so the binaries of an imported source are usually gone by the time they are
+// looked at, and only a binary whose existing copy came from elsewhere is
+// removed on its own.
+func clearExistingVersions(logPath, dist, distDir, gnupgDir string, dscFiles, debFiles []string, force bool) error {
+	reprepro := func(args string) string {
+		return fmt.Sprintf("mkdir -p %s && cd %s/ && %s reprepro %s", sq(distDir), sq(distDir), gnupgDir, args)
+	}
+
 	for _, dsc := range dscFiles {
-		source := sourceNameOf(dsc)
-		cmdStr := fmt.Sprintf("mkdir -p %s && cd %s/ && %s reprepro -v -v -v removesrc %s %s",
-			sq(distDir), sq(distDir), gnupgDir, dist, sq(source))
-		if _, err := systemutil.CmdExec(cmdStr,
-			"Force version: removing the existing "+source+" before importing", logPath); err != nil {
-			// The package may simply not be there yet.
-			systemutil.WriteLog(logPath, "##### Nothing to remove for "+source)
+		source, version, err := dscIdentity(dsc)
+		if err != nil {
+			return err
+		}
+		existing := listedVersions(reprepro(fmt.Sprintf("--list-format '${version}\\n' -T dsc list %s %s", dist, sq(source))))
+		if !needsReplacing(existing, version, force) {
+			continue
+		}
+		cmdStr := reprepro(fmt.Sprintf("-v -v -v removesrc %s %s", dist, sq(source)))
+		desc := fmt.Sprintf("Replacing %s %s with the imported %s", source, strings.Join(existing, ", "), version)
+		if _, err := systemutil.CmdExec(cmdStr, desc, logPath); err != nil {
+			return fmt.Errorf("failed to remove the existing %s: %w", source, err)
+		}
+	}
+
+	for _, deb := range debFiles {
+		name, version, arch, err := debIdentity(deb)
+		if err != nil {
+			return err
+		}
+		// An arch: all package is stored under every architecture, so it is
+		// looked up across all of them; an architecture specific one only
+		// replaces its own architecture.
+		archFilter := ""
+		if arch != "" && arch != "all" {
+			archFilter = "-A " + sq(arch)
+		}
+		existing := listedVersions(reprepro(fmt.Sprintf("--list-format '${version}\\n' -T deb %s list %s %s", archFilter, dist, sq(name))))
+		if !needsReplacing(existing, version, force) {
+			continue
+		}
+		cmdStr := reprepro(fmt.Sprintf("-v -v -v -T deb %s remove %s %s", archFilter, dist, sq(name)))
+		desc := fmt.Sprintf("Replacing %s %s with the imported %s", name, strings.Join(existing, ", "), version)
+		if _, err := systemutil.CmdExec(cmdStr, desc, logPath); err != nil {
+			return fmt.Errorf("failed to remove the existing %s: %w", name, err)
 		}
 	}
 	return nil
+}
+
+// needsReplacing reports whether a package listed in our repository at
+// existing versions has to be removed before version can be injected.
+func needsReplacing(existing []string, version string, force bool) bool {
+	for _, v := range existing {
+		if force || v != version {
+			return true
+		}
+	}
+	return false
+}
+
+// listedVersions runs a reprepro list and returns the distinct versions it
+// printed. A repository that has no database yet has nothing to replace, so a
+// failing list is taken as an empty one.
+func listedVersions(cmdStr string) []string {
+	out, err := systemutil.CmdExec(cmdStr+" 2>/dev/null", "", "")
+	if err != nil {
+		return nil
+	}
+	return uniqueLines(out)
+}
+
+func uniqueLines(out string) []string {
+	var lines []string
+	seen := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || seen[line] {
+			continue
+		}
+		seen[line] = true
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// dscIdentity reads the source name and full version (epoch included, which
+// the filename leaves out) from a .dsc file.
+func dscIdentity(dscFile string) (source, version string, err error) {
+	content, err := os.ReadFile(dscFile)
+	if err != nil {
+		return "", "", err
+	}
+	fields := controlFields(string(content))
+	source, version = fields["Source"], fields["Version"]
+	if source == "" || version == "" {
+		return "", "", fmt.Errorf("%s carries no source name or version", filepath.Base(dscFile))
+	}
+	return source, version, nil
+}
+
+// debIdentity reads the package name, version and architecture of a .deb.
+func debIdentity(debFile string) (name, version, arch string, err error) {
+	out, err := systemutil.CmdExec("dpkg-deb --field "+sq(debFile)+" Package Version Architecture", "", "")
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to read the control fields of %s: %w", filepath.Base(debFile), err)
+	}
+	fields := controlFields(out)
+	name, version, arch = fields["Package"], fields["Version"], fields["Architecture"]
+	if name == "" || version == "" {
+		return "", "", "", fmt.Errorf("%s carries no package name or version", filepath.Base(debFile))
+	}
+	return name, version, arch, nil
+}
+
+// controlFields parses the single-line fields of a Debian control paragraph,
+// keeping the first occurrence of each. The PGP armour around a signed .dsc
+// is skipped naturally: none of its lines look like "Field: value" with a
+// field of interest.
+func controlFields(content string) map[string]string {
+	fields := map[string]string{}
+	for _, line := range strings.Split(content, "\n") {
+		if line == "" || line[0] == ' ' || line[0] == '\t' {
+			continue
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if _, dup := fields[key]; !dup {
+			fields[key] = strings.TrimSpace(value)
+		}
+	}
+	return fields
 }
 
 // lastLine returns the last non-empty line of a command output.
@@ -863,13 +993,16 @@ func (t *targetSandbox) indexDownloads(logPath string) error {
 func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
 	var failed []string
 	for _, deb := range debFiles {
-		name, err := packageNameOf(deb)
+		// The exact version is asked for: by name alone apt would pick the
+		// newer copy our repository already carries, and a downgrade would
+		// go unchecked.
+		name, version, _, err := debIdentity(deb)
 		if err != nil {
 			return err
 		}
 		_, err = systemutil.CmdExecContext(
 			t.ctx,
-			fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s", t.aptOpts(), sq(name)),
+			fmt.Sprintf("apt-get %s --simulate --no-install-recommends install %s", t.aptOpts(), sq(name+"="+version)),
 			"Simulating the installation of "+name,
 			logPath,
 		)
@@ -882,19 +1015,6 @@ func (t *targetSandbox) simulate(logPath string, debFiles []string) error {
 		return fmt.Errorf("not installable on top of the repository: %s", strings.Join(failed, ", "))
 	}
 	return nil
-}
-
-// packageNameOf reads the package name out of a .deb file.
-func packageNameOf(debFile string) (string, error) {
-	out, err := systemutil.CmdExec("dpkg-deb --field "+sq(debFile)+" Package", "", "")
-	if err != nil {
-		return "", fmt.Errorf("failed to read the package name of %s: %w", filepath.Base(debFile), err)
-	}
-	name := strings.TrimSpace(lastLine(out))
-	if name == "" {
-		return "", fmt.Errorf("%s carries no package name", filepath.Base(debFile))
-	}
-	return name, nil
 }
 
 // checkDependencies reports whether the imported packages are installable on
