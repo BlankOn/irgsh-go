@@ -14,6 +14,13 @@ irgsh (2.3.1-1) unstable; urgency=medium
     with it (python3-uno on libreoffice-core) resolves against the sibling
     instead of failing on the newer copy the import replaces. The sandbox
     no longer reads the host's /etc/apt/preferences either
+  * Import every binary of a large source package, not just the first line
+    of them. apt-cache showsrc wraps the Binary field over several lines,
+    and only the first was read, so importing libreoffice fetched 41 of its
+    211 binaries - leaving out libreoffice-report-builder-bin, ure, the
+    libuno libraries and fonts-opensymbol, and failing the dependency check
+    on packages the import was meant to bring. Fixed in both the repo
+    worker and the CLI resolver
 
  -- BlankOn Developers <blankon-dev@googlegroups.com>  Mon, 21 Sep 2026 12:00:00 +0700
 

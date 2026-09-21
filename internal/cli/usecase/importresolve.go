@@ -212,6 +212,15 @@ func (s *importSet) hasBinary(name string) bool {
 	return false
 }
 
+// binaryFieldAwk prints the Binary field of the first paragraph apt-cache
+// showsrc prints, continuation lines included. A large source wraps that
+// field over several lines - libreoffice lists some 200 binaries on five -
+// and reading only the "Binary:" line itself silently dropped every binary
+// past the first line (libreoffice-report-builder-bin, ure, the libuno
+// libraries). It reads to the end rather than exiting early, so apt-cache is
+// never cut off with SIGPIPE under pipefail.
+const binaryFieldAwk = `awk '!done && /^Binary:/ {p=1; sub(/^Binary:[ \t]*/, ""); print; next} p && /^[ \t]/ {print; next} p {p=0; done=1}'`
+
 // sourceOf resolves a binary package to the source package it was built from,
 // along with every binary that source produces.
 func (s *importSandbox) sourceOf(binary string) (*sourcePackage, error) {
@@ -231,7 +240,7 @@ func (s *importSandbox) sourceOf(binary string) (*sourcePackage, error) {
 	}
 
 	binaries, err := s.u.shell.Output(fmt.Sprintf(
-		"apt-cache %s showsrc %s | grep -m1 '^Binary:' | cut -d' ' -f2- | tr -d ' ' | tr ',' '\\n'",
+		"apt-cache %s showsrc %s | "+binaryFieldAwk+" | tr -d ' \\t' | tr ',' '\\n'",
 		s.opts(), sq(name)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the binary packages of %s: %w", name, err)

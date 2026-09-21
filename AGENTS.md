@@ -269,6 +269,12 @@ Two things both checks get right, and got wrong before 2.3.0:
   packages`, falling back to `dpkg-scanpackages`) so a package can still resolve
   against its siblings without all of them being installed at once.
 
+A source's binaries are read from the `Binary:` field of `apt-cache showsrc`,
+which wraps over several lines for a large source (libreoffice: ~211 binaries
+on five lines). Both the worker and the CLI read it with `binaryFieldAwk`,
+continuation lines included; reading only the first line, as `grep -m1` did
+before 2.3.1, silently drops most of them.
+
 ### Resolving what an import drags in
 When a package needs something the target repository does not have, the CLI
 works out what else would have to be imported rather than just refusing

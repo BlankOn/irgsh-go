@@ -431,7 +431,7 @@ func (s *scriptedShell) aptCache(cmd string) (string, bool) {
 		switch {
 		case strings.Contains(cmd, "'^Version:'"):
 			return source.version, true
-		case strings.Contains(cmd, "'^Binary:'"):
+		case strings.Contains(cmd, "/^Binary:/"):
 			return strings.Join(source.binaries, "\n"), true
 		default:
 			return source.name, true

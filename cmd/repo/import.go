@@ -572,11 +572,20 @@ func (a *aptSandbox) fetchSource(logPath, source string) error {
 	return err
 }
 
+// binaryFieldAwk prints the Binary field of the first paragraph apt-cache
+// showsrc prints, continuation lines included. A large source wraps that
+// field over several lines - libreoffice lists some 200 binaries on five -
+// and reading only the "Binary:" line itself silently dropped every binary
+// past the first line (libreoffice-report-builder-bin, ure, the libuno
+// libraries). It reads to the end rather than exiting early, so apt-cache is
+// never cut off with SIGPIPE under pipefail.
+const binaryFieldAwk = `awk '!done && /^Binary:/ {p=1; sub(/^Binary:[ \t]*/, ""); print; next} p && /^[ \t]/ {print; next} p {p=0; done=1}'`
+
 // binariesOf lists the binary packages built from a source package.
 func (a *aptSandbox) binariesOf(logPath, source string) ([]string, error) {
 	out, err := systemutil.CmdExecContext(
 		a.ctx,
-		fmt.Sprintf("apt-cache %s showsrc %s | grep -m1 '^Binary:' | cut -d' ' -f2- | tr -d ' ' | tr ',' '\\n'",
+		fmt.Sprintf("apt-cache %s showsrc %s | "+binaryFieldAwk+" | tr -d ' \\t' | tr ',' '\\n'",
 			a.aptOpts(), sq(source)),
 		"Listing the binary packages built from "+source,
 		logPath,
