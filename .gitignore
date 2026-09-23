@@ -2,7 +2,7 @@
 bin
 /chief
 /repo
-builder
+/builder
 latest
 tmp
 target
