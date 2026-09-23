@@ -28,11 +28,13 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 	}
 	type update struct {
 		path      string
+		original  string
 		contents  string
-		mode      os.FileMode
+		info      os.FileInfo
 		temporary string
 	}
-	var updates []update
+	var updates []*update
+	files := map[string]*update{}
 	for _, dist := range []string{repo.DistCodename, repo.DistCodename + "-experimental"} {
 		root := filepath.Join(repo.Workdir, dist)
 		if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -40,35 +42,102 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 		} else if err != nil {
 			return fmt.Errorf("inspect repository %s: %w", root, err)
 		}
+		visited := map[string]bool{}
+		codenames := map[string]bool{}
+		var visit func(string) error
+		visit = func(path string) error {
+			resolved, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				return fmt.Errorf("resolve repository config %s: %w", path, err)
+			}
+			path, err = filepath.Abs(resolved)
+			if err != nil {
+				return err
+			}
+			if visited[path] {
+				return fmt.Errorf("cyclic or duplicate repository include %s", path)
+			}
+			visited[path] = true
+			info, err := os.Stat(path)
+			if err != nil {
+				return fmt.Errorf("inspect repository config %s: %w", path, err)
+			}
+			if info.IsDir() {
+				entries, err := os.ReadDir(path)
+				if err != nil {
+					return fmt.Errorf("read repository config directory %s: %w", path, err)
+				}
+				for _, entry := range entries {
+					if !strings.HasPrefix(entry.Name(), ".") && strings.HasSuffix(entry.Name(), ".conf") {
+						if err := visit(filepath.Join(path, entry.Name())); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("repository config %s is not a regular file or directory", path)
+			}
+			change := files[path]
+			if change == nil {
+				for _, existing := range updates {
+					if os.SameFile(info, existing.info) {
+						return fmt.Errorf("hard-linked repository configs %s and %s cannot be atomically migrated", path, existing.path)
+					}
+				}
+				contents, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("read repository config %s: %w", path, err)
+				}
+				change = &update{path: path, original: string(contents), contents: string(contents), info: info}
+				files[path] = change
+				updates = append(updates, change)
+			}
+			include := func(name string) error {
+				switch {
+				case filepath.IsAbs(name):
+				case strings.HasPrefix(name, "+b/"):
+					name = filepath.Join(root, name[3:])
+				case strings.HasPrefix(name, "+c/"):
+					name = filepath.Join(root, "conf", name[3:])
+				case strings.HasPrefix(name, "~/"):
+					homeDirectory, err := os.UserHomeDir()
+					if err != nil {
+						return fmt.Errorf("resolve repository include %q: %w", name, err)
+					}
+					name = filepath.Join(homeDirectory, name[2:])
+				default:
+					name = filepath.Join(root, "conf", name)
+				}
+				return visit(name)
+			}
+			rewritten, err := rewriteUDebComponents(change.contents, dist, components, codenames, include)
+			if err != nil {
+				return fmt.Errorf("migrate repository config %s: %w", path, err)
+			}
+			change.contents = rewritten
+			return nil
+		}
 		path := filepath.Join(root, "conf", "distributions")
-		info, err := os.Lstat(path)
-		if err != nil {
-			return fmt.Errorf("inspect initialized repository config %s: %w", path, err)
+		if err := visit(path); err != nil {
+			return err
 		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("repository config %s is not a regular file", path)
-		}
-		contents, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read repository config %s: %w", path, err)
-		}
-		rewritten, err := rewriteUDebComponents(string(contents), dist, components)
-		if err != nil {
-			return fmt.Errorf("migrate repository config %s: %w", path, err)
-		}
-		if rewritten != string(contents) {
-			updates = append(updates, update{path: path, contents: rewritten, mode: info.Mode().Perm()})
+		if !codenames[dist] {
+			return fmt.Errorf("repository config %s is missing Codename %q", path, dist)
 		}
 	}
-	for i := range updates {
-		change := &updates[i]
+	for _, change := range updates {
+		if change.contents == change.original {
+			continue
+		}
 		file, err := os.CreateTemp(filepath.Dir(change.path), ".distributions-*")
 		if err != nil {
 			return fmt.Errorf("stage repository config %s: %w", change.path, err)
 		}
 		change.temporary = file.Name()
 		defer os.Remove(file.Name())
-		if err = file.Chmod(change.mode); err == nil {
+		if err = file.Chmod(change.info.Mode().Perm()); err == nil {
 			_, err = file.WriteString(change.contents)
 		}
 		err = errors.Join(err, file.Sync(), file.Close())
@@ -77,6 +146,9 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 		}
 	}
 	for _, change := range updates {
+		if change.temporary == "" {
+			continue
+		}
 		if err := os.Rename(change.temporary, change.path); err != nil {
 			return fmt.Errorf("replace repository config %s: %w", change.path, err)
 		}
@@ -84,12 +156,11 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 	return nil
 }
 
-func rewriteUDebComponents(contents, dist string, components []string) (string, error) {
+func rewriteUDebComponents(contents, dist string, components []string, seen map[string]bool, include func(string) error) (string, error) {
 	var result strings.Builder
 	var stanza []string
-	seen := map[string]bool{}
 	flush := func() error {
-		updated, codename, err := rewriteUDebStanza(stanza, dist, components)
+		updated, codename, err := rewriteUDebStanza(stanza, dist, components, include)
 		if err != nil {
 			return err
 		}
@@ -116,30 +187,28 @@ func rewriteUDebComponents(contents, dist string, components []string) (string, 
 	if err := flush(); err != nil {
 		return "", err
 	}
-	if !seen[dist] {
-		return "", fmt.Errorf("missing Codename %q", dist)
-	}
 	return result.String(), nil
 }
 
-func rewriteUDebStanza(lines []string, dist string, components []string) (string, string, error) {
+func rewriteUDebStanza(lines []string, dist string, components []string, include func(string) error) (string, string, error) {
 	fields := map[string]string{}
 	starts := map[string]int{}
 	keys := make([]string, len(lines))
 	last := ""
 	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+		content, _, _ := strings.Cut(strings.TrimRight(line, "\r\n"), "#")
+		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		if line[0] == ' ' || line[0] == '\t' {
+		if content[0] == ' ' || content[0] == '\t' {
 			if last == "" {
 				return "", "", fmt.Errorf("orphan field continuation")
 			}
-			fields[last] += " " + strings.TrimSpace(line)
+			fields[last] += " " + strings.TrimSpace(content)
 			keys[i] = last
 			continue
 		}
-		name, value, ok := strings.Cut(strings.TrimRight(line, "\r\n"), ":")
+		name, value, ok := strings.Cut(content, ":")
 		name = strings.ToLower(name)
 		if !ok || name == "" || strings.ContainsAny(name, " \t\r\n") {
 			return "", "", fmt.Errorf("malformed distribution field %q", strings.TrimSpace(line))
@@ -151,6 +220,12 @@ func rewriteUDebStanza(lines []string, dist string, components []string) (string
 	}
 	if len(fields) == 0 {
 		return strings.Join(lines, ""), "", nil
+	}
+	if path, directive := fields["!include"]; directive {
+		if len(fields) != 1 || path == "" {
+			return "", "", fmt.Errorf("!include paragraph must contain only a nonempty include path")
+		}
+		return strings.Join(lines, ""), "", include(path)
 	}
 	codename := fields["codename"]
 	if !repoConfigToken.MatchString(codename) || fields["components"] == "" || fields["architectures"] == "" {
@@ -171,16 +246,25 @@ func rewriteUDebStanza(lines []string, dist string, components []string) (string
 	names := map[string]string{"udebcomponents": "UDebComponents", "contentsucomponents": "ContentsUComponents"}
 	var result bytes.Buffer
 	for i, line := range lines {
-		name, target := names[keys[i]]
+		_, target := names[keys[i]]
 		if !target {
 			result.WriteString(line)
 			continue
 		}
 		if starts[keys[i]] != i {
+			if hash := strings.IndexByte(line, '#'); hash >= 0 {
+				result.WriteString(line[hash:])
+			}
 			continue
 		}
 		ending := line[len(strings.TrimRight(line, "\r\n")):]
-		fmt.Fprintf(&result, "%s: %s%s", name, strings.Join(components, " "), ending)
+		content, comment, hasComment := strings.Cut(strings.TrimRight(line, "\r\n"), "#")
+		if hasComment {
+			comment = content[len(strings.TrimRight(content, " \t")):] + "#" + comment
+		}
+		name, value, _ := strings.Cut(content, ":")
+		padding := value[:len(value)-len(strings.TrimLeft(value, " \t"))]
+		fmt.Fprintf(&result, "%s:%s%s%s%s", name, padding, strings.Join(components, " "), comment, ending)
 	}
 	ending := "\n"
 	if strings.Contains(strings.Join(lines, ""), "\r\n") {

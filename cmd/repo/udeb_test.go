@@ -210,3 +210,242 @@ func TestMigrateUDebComponentsRejectsUnsafeConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrateUDebComponentsPreservesInlineComments(t *testing.T) {
+	for _, ending := range []string{"\n", "\r\n"} {
+		t.Run(fmt.Sprintf("%q", ending), func(t *testing.T) {
+			repo := udebRepoFixture(t)
+			old := "Codename: verbeek # production\nComponents: main restricted # binary components\n extras restricted-firmware # extra components\nArchitectures: amd64 source # supported\nUDebComponents:\tmain  # installer # comment\n restricted # keep folded comment\nContentsUComponents: main# contents\nDescription: keep # unrelated\n"
+			old = strings.ReplaceAll(old, "\n", ending)
+			path := writeDistributionFixture(t, repo, "", old)
+			if err := migrateUDebComponents(repo); err != nil {
+				t.Fatal(err)
+			}
+			contents, err := os.ReadFile(path)
+			want := strings.ReplaceAll(old, "UDebComponents:\tmain  #", "UDebComponents:\t"+repo.DistComponents+"  #")
+			want = strings.ReplaceAll(want, "ContentsUComponents: main#", "ContentsUComponents: "+repo.DistComponents+"#")
+			want = strings.ReplaceAll(want, " restricted # keep folded comment", "# keep folded comment")
+			if err != nil || string(contents) != want {
+				t.Fatalf("config = %q, %v; want %q", contents, err, want)
+			}
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := migrateUDebComponents(repo); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.Stat(path)
+			if err != nil || !os.SameFile(before, after) {
+				t.Fatalf("comment-preserving migration is not idempotent: %v", err)
+			}
+		})
+	}
+}
+
+func writeIncludedUDebFixture(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0640); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func ownedUDebFixture(repo config.RepoConfig, codename string) string {
+	return "Codename: " + codename + "\nComponents: " + repo.DistComponents + "\nArchitectures: amd64 source\nUDebComponents: main\nContentsUComponents: main\n"
+}
+
+func TestMigrateUDebComponentsFollowsIncludedFiles(t *testing.T) {
+	for _, form := range []string{"relative", "dot relative", "confdir", "basedir", "absolute", "home", "symlink", "nested", "unrelated"} {
+		t.Run(form, func(t *testing.T) {
+			repo := udebRepoFixture(t)
+			root := filepath.Join(repo.Workdir, repo.DistCodename)
+			included := filepath.Join(root, "conf", "owned.conf")
+			directive := "owned.conf"
+			switch form {
+			case "dot relative":
+				directive = "./owned.conf"
+			case "confdir":
+				directive = "+c/owned.conf"
+			case "basedir":
+				included, directive = filepath.Join(root, "owned.conf"), "+b/owned.conf"
+			case "absolute":
+				included = filepath.Join(t.TempDir(), "owned.conf")
+				directive = included
+			case "home":
+				homeDirectory, err := os.UserHomeDir()
+				if err != nil {
+					t.Fatal(err)
+				}
+				relative, err := filepath.Rel(homeDirectory, included)
+				if err != nil {
+					t.Fatal(err)
+				}
+				directive = "~/" + relative
+			case "nested":
+				directive = "nested/first.conf"
+				writeIncludedUDebFixture(t, filepath.Join(root, "conf", directive), "!include: owned.conf\n")
+			case "symlink":
+				directive = "alias.conf"
+			case "unrelated":
+				directive = "private.conf"
+			}
+			original := ownedUDebFixture(repo, repo.DistCodename)
+			mainContents := "# keep directive\n!include: " + directive + " # local file\n"
+			if form == "unrelated" {
+				mainContents = original + "\n" + mainContents
+				included = filepath.Join(root, "conf", directive)
+				original = "Codename: private\nComponents: special\nArchitectures: all\nUDebComponents: special\n"
+			}
+			main := writeDistributionFixture(t, repo, "", mainContents)
+			writeIncludedUDebFixture(t, included, original)
+			if form == "symlink" {
+				if err := os.Symlink("owned.conf", filepath.Join(root, "conf", directive)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := migrateUDebComponents(repo); err != nil {
+				t.Fatal(err)
+			}
+			for path, old := range map[string]string{main: mainContents, included: original} {
+				want := strings.ReplaceAll(old, "Components: main\n", "Components: "+repo.DistComponents+"\n")
+				contents, err := os.ReadFile(path)
+				if err != nil || string(contents) != want {
+					t.Fatalf("%s = %q, %v; want %q", path, contents, err, want)
+				}
+				before, err := os.Stat(path)
+				if err != nil || before.Mode().Perm() != 0640 {
+					t.Fatalf("included config mode: %v, %v", before, err)
+				}
+				if err := migrateUDebComponents(repo); err != nil {
+					t.Fatal(err)
+				}
+				after, err := os.Stat(path)
+				if err != nil || !os.SameFile(before, after) {
+					t.Fatalf("included config is not idempotent: %v", err)
+				}
+			}
+			if form == "symlink" {
+				if target, err := os.Readlink(filepath.Join(root, "conf", directive)); err != nil || target != "owned.conf" {
+					t.Fatalf("include symlink changed: %q, %v", target, err)
+				}
+			}
+		})
+	}
+}
+
+func TestMigrateUDebComponentsFollowsIncludedDirectories(t *testing.T) {
+	for _, mainDirectory := range []bool{false, true} {
+		t.Run(fmt.Sprint(mainDirectory), func(t *testing.T) {
+			repo := udebRepoFixture(t)
+			directory := filepath.Join(repo.Workdir, repo.DistCodename, "conf", "distributions")
+			if !mainDirectory {
+				writeDistributionFixture(t, repo, "", "!include: suites\n")
+				directory = filepath.Join(filepath.Dir(directory), "suites")
+			}
+			for _, suite := range []string{"", "-security", "-updates"} {
+				writeIncludedUDebFixture(t, filepath.Join(directory, "verbeek"+suite+".conf"), ownedUDebFixture(repo, "verbeek"+suite))
+			}
+			for _, name := range []string{".hidden.conf", "ignored.txt"} {
+				writeIncludedUDebFixture(t, filepath.Join(directory, name), "invalid but ignored\n")
+			}
+			if err := migrateUDebComponents(repo); err != nil {
+				t.Fatal(err)
+			}
+			for _, suite := range []string{"", "-security", "-updates"} {
+				contents, err := os.ReadFile(filepath.Join(directory, "verbeek"+suite+".conf"))
+				want := strings.ReplaceAll(ownedUDebFixture(repo, "verbeek"+suite), "Components: main\n", "Components: "+repo.DistComponents+"\n")
+				if err != nil || string(contents) != want {
+					t.Fatalf("included directory config = %q, %v; want %q", contents, err, want)
+				}
+			}
+		})
+	}
+}
+
+func TestMigrateUDebComponentsUpdatesSharedIncludeAcrossRoots(t *testing.T) {
+	repo := udebRepoFixture(t)
+	shared := filepath.Join(repo.Workdir, "shared.conf")
+	original := ownedUDebFixture(repo, repo.DistCodename) + "\n" + ownedUDebFixture(repo, repo.DistCodename+"-experimental")
+	writeIncludedUDebFixture(t, shared, original)
+	for _, suffix := range []string{"", "-experimental"} {
+		writeDistributionFixture(t, repo, suffix, "!include: "+shared+"\n")
+	}
+	if err := migrateUDebComponents(repo); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(shared)
+	want := strings.ReplaceAll(original, "Components: main\n", "Components: "+repo.DistComponents+"\n")
+	if err != nil || string(contents) != want {
+		t.Fatalf("shared config = %q, %v; want %q", contents, err, want)
+	}
+}
+
+func TestMigrateUDebComponentsValidatesAllIncludesBeforeWriting(t *testing.T) {
+	for _, kind := range []string{"missing", "malformed", "cycle", "duplicate file", "duplicate codename", "mixed directive", "empty directive"} {
+		t.Run(kind, func(t *testing.T) {
+			repo := udebRepoFixture(t)
+			normal := writeDistributionFixture(t, repo, "", ownedUDebFixture(repo, repo.DistCodename))
+			experimental := writeDistributionFixture(t, repo, "-experimental", "!include: first.conf\n")
+			first := filepath.Join(filepath.Dir(experimental), "first.conf")
+			firstContents := ownedUDebFixture(repo, repo.DistCodename+"-experimental") + "\n!include: bad.conf\n"
+			bad := filepath.Join(filepath.Dir(experimental), "bad.conf")
+			badContents := "malformed\n"
+			switch kind {
+			case "cycle":
+				badContents = "!include: first.conf\n"
+			case "duplicate file":
+				firstContents += "\n!include: ./bad.conf\n"
+				badContents = "# included twice\n"
+			case "duplicate codename":
+				badContents = ownedUDebFixture(repo, repo.DistCodename+"-experimental")
+			case "mixed directive":
+				badContents = "!include: private.conf\nDescription: not a directive paragraph\n"
+			case "empty directive":
+				badContents = "!include: # missing path\n"
+			}
+			writeIncludedUDebFixture(t, first, firstContents)
+			if kind != "missing" {
+				writeIncludedUDebFixture(t, bad, badContents)
+			}
+			originals := map[string]string{normal: ownedUDebFixture(repo, repo.DistCodename), experimental: "!include: first.conf\n", first: firstContents}
+			if kind != "missing" {
+				originals[bad] = badContents
+			}
+			err := migrateUDebComponents(repo)
+			if err == nil || !strings.Contains(err.Error(), bad) {
+				t.Fatalf("invalid include error = %v", err)
+			}
+			for path, want := range originals {
+				contents, err := os.ReadFile(path)
+				if err != nil || string(contents) != want {
+					t.Fatalf("invalid include changed %s: %q, %v", path, contents, err)
+				}
+			}
+		})
+	}
+}
+
+func TestMigrateUDebComponentsRejectsHardLinkedConfigsBeforeWriting(t *testing.T) {
+	repo := udebRepoFixture(t)
+	original := ownedUDebFixture(repo, repo.DistCodename) + "\n" + ownedUDebFixture(repo, repo.DistCodename+"-experimental")
+	normal := writeDistributionFixture(t, repo, "", original)
+	experimental := filepath.Join(repo.Workdir, repo.DistCodename+"-experimental", "conf", "distributions")
+	if err := os.MkdirAll(filepath.Dir(experimental), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(normal, experimental); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUDebComponents(repo); err == nil || !strings.Contains(err.Error(), "hard-linked") {
+		t.Fatalf("hard-linked configs error = %v", err)
+	}
+	for _, path := range []string{normal, experimental} {
+		contents, err := os.ReadFile(path)
+		if err != nil || string(contents) != original {
+			t.Fatalf("hard-linked config changed: %q, %v", contents, err)
+		}
+	}
+}
