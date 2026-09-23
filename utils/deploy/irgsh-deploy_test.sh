@@ -142,6 +142,7 @@ declare -A running_version=()
 declare -A url_unit=()
 start_log=
 stop_log=
+event_log=
 
 download_file() {
 	local url=$1
@@ -209,7 +210,7 @@ sleep_for() {
 }
 
 log_event() {
-	return 0
+	event_log+="$*"$'\n'
 }
 
 set_fixture() {
@@ -244,6 +245,7 @@ reset_deployment() {
 	url_unit=([http://127.0.0.1:8082/api/v1/version]=irgsh-repo@verbeek.service [http://127.0.0.1:8083/api/v1/version]=irgsh-repo@rani.service)
 	start_log=
 	stop_log=
+	event_log=
 	attestation_fails=0
 	stop_sticks=0
 	stop_deactivates=0
@@ -312,6 +314,15 @@ test_healthy_deployment_and_noop() {
 	((tests += 1))
 }
 
+test_unhealthy_noop_fails() {
+	reset_deployment
+	set_fixture repo 2.3.1
+	fail_health_version=2.3.1
+	assert_fails deploy_component repo v2.3.1
+	assert_equal "$start_log$stop_log" ''
+	((tests += 1))
+}
+
 test_drain_timeout_keeps_current_release() {
 	reset_deployment
 	set_fixture repo 2.3.2
@@ -350,6 +361,7 @@ test_health_failure_rolls_back() {
 	assert_fails deploy_component repo v2.3.2
 	assert_equal "$(readlink -f "$current_root/repo")" "$release_root/repo/v2.3.1"
 	assert_equal "${running_version[irgsh-repo@verbeek.service]}" 2.3.1
+	[[ "$event_log" == *'rolled back repo to 2.3.1'* ]] || fail "missing rollback success log"
 	((tests += 1))
 }
 
@@ -368,6 +380,7 @@ test_request_input
 test_lock
 test_preflight_failures_do_not_drain
 test_healthy_deployment_and_noop
+test_unhealthy_noop_fails
 test_drain_timeout_keeps_current_release
 test_deactivating_unit_keeps_current_release
 test_switch_failure_restarts_old_release
