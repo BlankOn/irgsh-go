@@ -12,6 +12,7 @@ Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
 ExecStart=/usr/bin/irgsh-iso
 Restart=on-failure
 RestartSec=10s
+TimeoutStopSec=infinity
 StandardOutput=append:/var/log/irgsh/iso.log
 StandardError=append:/var/log/irgsh/iso.log
 
