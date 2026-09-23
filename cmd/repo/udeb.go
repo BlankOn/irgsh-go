@@ -44,8 +44,8 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 		}
 		visited := map[string]bool{}
 		codenames := map[string]bool{}
-		var visit func(string) error
-		visit = func(path string) error {
+		var visit func(string, bool) error
+		visit = func(path string, allowDirectory bool) error {
 			resolved, err := filepath.EvalSymlinks(path)
 			if err != nil {
 				return fmt.Errorf("resolve repository config %s: %w", path, err)
@@ -62,14 +62,17 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 			if err != nil {
 				return fmt.Errorf("inspect repository config %s: %w", path, err)
 			}
-			if info.IsDir() {
+			if info.IsDir() && allowDirectory {
 				entries, err := os.ReadDir(path)
 				if err != nil {
 					return fmt.Errorf("read repository config directory %s: %w", path, err)
 				}
 				for _, entry := range entries {
+					if entry.Type() != 0 && entry.Type() != os.ModeSymlink {
+						continue
+					}
 					if !strings.HasPrefix(entry.Name(), ".") && strings.HasSuffix(entry.Name(), ".conf") {
-						if err := visit(filepath.Join(path, entry.Name())); err != nil {
+						if err := visit(filepath.Join(path, entry.Name()), false); err != nil {
 							return err
 						}
 					}
@@ -77,7 +80,7 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 				return nil
 			}
 			if !info.Mode().IsRegular() {
-				return fmt.Errorf("repository config %s is not a regular file or directory", path)
+				return fmt.Errorf("repository config %s is not a regular file or permitted directory", path)
 			}
 			change := files[path]
 			if change == nil {
@@ -96,21 +99,24 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 			}
 			include := func(name string) error {
 				switch {
-				case filepath.IsAbs(name):
+				case filepath.IsAbs(name), strings.HasPrefix(name, "./"):
 				case strings.HasPrefix(name, "+b/"):
 					name = filepath.Join(root, name[3:])
 				case strings.HasPrefix(name, "+c/"):
 					name = filepath.Join(root, "conf", name[3:])
+				case strings.HasPrefix(name, "+o/"):
+					name = filepath.Join(root, "www", name[3:])
 				case strings.HasPrefix(name, "~/"):
 					homeDirectory, err := os.UserHomeDir()
 					if err != nil {
 						return fmt.Errorf("resolve repository include %q: %w", name, err)
 					}
 					name = filepath.Join(homeDirectory, name[2:])
+				case len(name) >= 3 && name[0] == '+' && name[2] == '/':
 				default:
 					name = filepath.Join(root, "conf", name)
 				}
-				return visit(name)
+				return visit(name, true)
 			}
 			rewritten, err := rewriteUDebComponents(change.contents, dist, components, codenames, include)
 			if err != nil {
@@ -120,7 +126,7 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 			return nil
 		}
 		path := filepath.Join(root, "conf", "distributions")
-		if err := visit(path); err != nil {
+		if err := visit(path, true); err != nil {
 			return err
 		}
 		if !codenames[dist] {
@@ -228,8 +234,13 @@ func rewriteUDebStanza(lines []string, dist string, components []string, include
 		return strings.Join(lines, ""), "", include(path)
 	}
 	codename := fields["codename"]
-	if !repoConfigToken.MatchString(codename) || fields["components"] == "" || fields["architectures"] == "" {
+	if fields["components"] == "" || fields["architectures"] == "" {
 		return "", "", fmt.Errorf("distribution requires a valid Codename, Components and Architectures")
+	}
+	for _, part := range strings.Split(codename, "/") {
+		if !repoConfigToken.MatchString(part) {
+			return "", "", fmt.Errorf("distribution has invalid Codename %q", codename)
+		}
 	}
 	if codename != dist && codename != dist+"-security" && codename != dist+"-updates" {
 		return strings.Join(lines, ""), codename, nil
