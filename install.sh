@@ -148,7 +148,7 @@ if [ $DEV_INSTALL = 1 ]; then
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg --import < /tmp/pubkey" -s /bin/bash irgsh
 
 	# reinit repo
-	su -c "irgsh-repo init > /dev/null" -s /bin/bash irgsh
+	su -c "irgsh-repo -c /etc/irgsh/config.yaml init > /dev/null" -s /bin/bash irgsh
 
 fi
 

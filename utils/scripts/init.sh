@@ -137,7 +137,7 @@ fi
 
 # Repo init
 if [ $OVERWRITE_REPO = 1 ]; then
-	su -c "GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo init" -s /bin/bash irgsh
+	su -c "GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo -c /etc/irgsh/config.yaml init" -s /bin/bash irgsh
 fi
 
 su -s /bin/bash -c 'irgsh-builder init-base' irgsh-builder

@@ -19,5 +19,6 @@ jobs:
           go-version-file: go.mod
       - run: go vet ./...
       - run: go test -race ./...
+      - run: make test-provisioning
       - run: make test-release-policy
       - run: make test-release-components
