@@ -1,100 +1,97 @@
-# Guide for developer
+# Development Guide
+
+Use isolated local state and test-only credentials. Development instructions do
+not authorize production operations.
 
 ## Requirements
 
-Ensure that you have:
 - Go 1.25 or later
 - Docker
-- These packages installed: `build-essential gpg pbuilder debootstrap devscripts curl reprepro`
+- `build-essential gpg pbuilder debootstrap devscripts curl reprepro`
 
-## Cloning
+Clone the repository, then work from its root:
 
-`git clone git@github.com:BlankOn/irgsh-go.git && cd irgsh-go`
-
-## Preparation
-
-### GPG Key
-
-You need to have a pair of GPG key in your GPG store.  If you don't have one, please create it with `gpg --generate-key`. When generating GPG key for irgsh infrastructure, please do not set any passphrase. Check it by running `gpg --list-key`
-
-```
-$ gpg --list-key
-/home/herpiko/.gnupg/pubring.kbx
---------------------------------
-pub   rsa4096 2020-10-17 [SC] [expires: 2021-10-17]
-      41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F
-uid           [ultimate] Herpiko Dwi Aguno <herpiko@gmail.com>
-sub   rsa4096 2020-10-17 [E] [expires: 2021-10-17]
-```
-Copy the key identity (in my case, it's the `41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F` string) to a new `.env` file, put it like this:
-
-```
-GPG_KEY=41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F
+```bash
+git clone git@github.com:BlankOn/irgsh-go.git
+cd irgsh-go
 ```
 
-The Makefile will automatically loaded this later.
+## Routine checks
 
+These commands do not initialize a repository or install a service:
 
-In dev environment, this single key will acts as both repository signing key and package maintainer signing key. On prod, they will be different keys.
-
-### Initialization
-
-#### Client
-
-You need to build then initialize the CLI client to point out to the chief and your signing key (see `GPG Key` section).
-
-- `make client`
-- `./bin/irgsh-cli config --chief http://localhost:8080 --key 41B4FC0A57E7F7F8DD94E0AA2D21BB5FAA32AF3F`
-
-#### Builder
-
-`make builder-init`
-
-This command will:
-- Create pbuilder base.tgz that follow our configuration. This step need root privilege, you'll be asked for root password.
-- Create docker image that will be used to build packages.
-
-This one may take longer as it need to build an entire chroot environment.
-
-#### Repository
-
-You need to set the `repo.dist_signing_key` in `./utils/config.yaml` to your GPG key identity. For local development, it's okay to use the same key. In production, the repo signing key should be something else than maintainer's keys. Then,
-
-`make repo-init`
-
-This command will remove existing repositories if any and reinit the new one. You may be asked for your GPG key passphrase. You can tweak repository configuration in `repo` section of `utils/config.yaml`
-
-### Redis
-
-`make redis`
-
-## Starting up
-
-Open three different terminal and run these command for each:
-- `make chief` occupying port 8080
-- `make builder`, occupying port 8081
-- `make repo`, occupying port 8082
-
-## Testing
-
-Open the fourth terminal and try to submit a dummy package using this command bellow:
-
-- `./bin/irgsh-cli package --experimental --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git --ignore-checks`
-
-You may be asked for your GPG key passphrase. You'll see the package preprared in this terminal, then in the chief terminal (job coordination), then in builder terminal (package building), then in repo terminal (package submission into the repository).
-
-If all is well, you can see the result by opening `http://localhost:8082/experimental/` on your web browser. At this point, you have explored the full cycle of the basic usage. You may want to start to hack.
-
-Check the status of a pipeline
-
-```
-curl http://localhost:8080/api/v1/status?uuid=uuidstring
-```
-
-## Test & Coverage
-
-```
+```bash
 make test
+make build
 ```
 
-It will test the code and open the coverage result on your browser.
+`make test` writes `coverage.txt`. Run `make coverage` only when you want to open
+the HTML coverage report.
+
+## Local credentials and configuration
+
+Use a dedicated test GPG key. Never use a production signing key or copy private
+key material into the repository, logs, screenshots, or pull request evidence.
+
+The local Make targets read `GPG_KEY` from the ignored `.env` file. Targets that
+depend on `load-gpg` update the tracked `utils/config.yaml` with the key identity,
+so review that file before committing changes.
+
+```text
+GPG_KEY=<test-key-fingerprint>
+```
+
+Initialize the CLI against the local chief with:
+
+```bash
+make client
+```
+
+## Local services
+
+`make chief`, `make builder`, and `make repo` build and run one component with
+`DEV=1`. Development work directories are redirected from `/var/lib/irgsh` into
+`./tmp`. Each component still requires Redis and its own valid configuration.
+
+```bash
+make redis
+make chief
+make builder
+make repo
+```
+
+`make redis` starts a Docker container on the host network. Use it only when that
+network exposure and container lifetime are acceptable in the development
+environment.
+
+Submit test packages only to this isolated stack. Use test maintainers, keys,
+repositories, and artifacts. Do not point development commands at a production
+chief, Redis, repository, or worker.
+
+## Privileged and destructive commands
+
+Do not run these as routine setup:
+
+- `make builder-init` installs host packages as root, removes matching
+  `/var/cache/pbuilder/base*` files, writes `/root/.pbuilderrc`, and builds the
+  `pbocker` image.
+- `make repo-init` confirms interactively, then removes and recreates the
+  configured normal and experimental distributions. The standard target uses
+  `DEV=1`, but a directly invoked production binary uses its configured workdir.
+- `make iso` writes the ISO build script under `/usr/share/irgsh` with `sudo` and
+  runs live-build from a persistent work tree.
+- `make build-install` invokes the installer and changes systemd services.
+- `make deb` removes the local Debian build directory with `sudo` before building.
+
+Before running one, resolve and inspect every target path and configuration. Use
+a disposable host or purpose-built isolated environment, test-only credentials,
+and no production mounts. Record unavailable checks as not run, not passed.
+
+## Production operations
+
+Installing or updating services, initializing a production repository, changing
+credentials or permissions, publishing packages, deploying software, and
+resetting data require explicit operator authorization and a separate reviewed
+procedure. Do not infer that authority from development access or a merge.
+
+See [DESIGN.md](DESIGN.md) for privilege boundaries and persistent state.
