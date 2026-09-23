@@ -47,19 +47,3 @@ func (s *Storage) ExtractSubmission(taskUUID string) error {
 	dir := filepath.Join(s.SubmissionsDir(), taskUUID)
 	return exec.Command("tar", "-xvf", tarball, "-C", dir).Run()
 }
-
-func (s *Storage) CopyFileWithSudo(src, dst string) error {
-	return exec.Command("sudo", "cp", src, dst).Run()
-}
-
-func (s *Storage) CopyDirWithSudo(src, dst string) error {
-	return exec.Command("sudo", "cp", "-r", src, dst).Run()
-}
-
-func (s *Storage) ChownWithSudo(path string) error {
-	return exec.Command("sudo", "chown", "irgsh:irgsh", path).Run()
-}
-
-func (s *Storage) ChownRecursiveWithSudo(path string) error {
-	return exec.Command("sudo", "chown", "-R", "irgsh:irgsh", path).Run()
-}

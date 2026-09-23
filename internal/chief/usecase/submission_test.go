@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
+	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
@@ -257,6 +259,122 @@ func TestRetryPipeline_MissingTarball(t *testing.T) {
 	var httpErr httputil.HTTPError
 	require.True(t, errors.As(err, &httpErr))
 	assert.Equal(t, http.StatusNotFound, httpErr.Code)
+}
+
+func TestRetryPipeline_CopiesOnlyTarballBeforeQueue(t *testing.T) {
+	storage := chiefrepository.NewStorage(t.TempDir())
+	require.NoError(t, os.Mkdir(storage.SubmissionsDir(), 0755))
+	oldID := "2024-01-01-120000_uuid_FINGERPRINT_pkg"
+	oldTarball := storage.SubmissionTarballPath(oldID)
+	require.NoError(t, os.WriteFile(oldTarball, []byte("signed submission"), 0600))
+	require.NoError(t, os.Chmod(oldTarball, 0666))
+	require.NoError(t, os.Mkdir(storage.SubmissionDirPath(oldID), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(storage.SubmissionDirPath(oldID), "extracted"), []byte("unused"), 0600))
+	job := monitoring.JobInfo{
+		TaskUUID: oldID, Dist: "verbeek", PackageName: "pkg", PackageVersion: "1.0",
+		PackageURL: "https://example.test/pkg", SourceURL: "https://example.test/source",
+		Maintainer: "Tester", Component: "main", IsExperimental: true,
+		PackageBranch: "packaging", SourceBranch: "source",
+	}
+	var queued bool
+	var recorded monitoring.JobInfo
+	queue := &mockTaskQueue{sendBuildChainFn: func(taskUUID, dist string, payload []byte) error {
+		queued = true
+		assert.Equal(t, "verbeek", dist)
+		copied, err := os.ReadFile(storage.SubmissionTarballPath(taskUUID))
+		require.NoError(t, err)
+		assert.Equal(t, []byte("signed submission"), copied)
+		info, err := os.Stat(storage.SubmissionTarballPath(taskUUID))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0666), info.Mode().Perm())
+		_, err = os.Stat(storage.SubmissionDirPath(taskUUID))
+		assert.True(t, os.IsNotExist(err))
+		var submission domain.Submission
+		require.NoError(t, json.Unmarshal(payload, &submission))
+		assert.Equal(t, taskUUID, submission.TaskUUID)
+		assert.Equal(t, dist, submission.Dist)
+		assert.Equal(t, job.PackageName, submission.PackageName)
+		assert.Equal(t, job.PackageVersion, submission.PackageVersion)
+		assert.Equal(t, job.PackageURL, submission.PackageURL)
+		assert.Equal(t, job.SourceURL, submission.SourceURL)
+		assert.Equal(t, job.Maintainer, submission.Maintainer)
+		assert.Equal(t, "FINGERPRINT", submission.MaintainerFingerprint)
+		assert.Equal(t, job.Component, submission.Component)
+		assert.Equal(t, job.IsExperimental, submission.IsExperimental)
+		assert.Equal(t, job.PackageBranch, submission.PackageBranch)
+		assert.Equal(t, job.SourceBranch, submission.SourceBranch)
+		return nil
+	}}
+	store := &mockJobStore{
+		getJobFn: func(taskUUID string) (*monitoring.JobInfo, error) {
+			assert.Equal(t, oldID, taskUUID)
+			return &job, nil
+		},
+		recordJobFn: func(newJob monitoring.JobInfo) error {
+			recorded = newJob
+			return nil
+		},
+	}
+	svc := newTestSubmissionService(queue, storage, &mockGPGVerifier{}, store, nil)
+	response, err := svc.RetryPipeline(oldID)
+	require.NoError(t, err)
+	assert.True(t, queued)
+	assert.NotEqual(t, oldID, response.PipelineID)
+	assert.Equal(t, response.PipelineID, recorded.TaskUUID)
+	assert.Equal(t, "PENDING", recorded.State)
+	assert.Equal(t, job.Dist, recorded.Dist)
+	assert.Equal(t, job.PackageName, recorded.PackageName)
+}
+
+func TestRetryPipeline_CopyFailureRemovesTarball(t *testing.T) {
+	storage := chiefrepository.NewStorage(t.TempDir())
+	require.NoError(t, os.Mkdir(storage.SubmissionsDir(), 0755))
+	oldID := "2024-01-01-120000_uuid_FINGERPRINT_pkg"
+	require.NoError(t, os.Mkdir(storage.SubmissionTarballPath(oldID), 0755))
+	queued := false
+	queue := &mockTaskQueue{sendBuildChainFn: func(string, string, []byte) error {
+		queued = true
+		return nil
+	}}
+	store := &mockJobStore{getJobFn: func(string) (*monitoring.JobInfo, error) {
+		return &monitoring.JobInfo{PackageName: "pkg", Dist: "verbeek"}, nil
+	}}
+	svc := newTestSubmissionService(queue, storage, &mockGPGVerifier{}, store, nil)
+	_, err := svc.RetryPipeline(oldID)
+	require.Error(t, err)
+	var httpErr httputil.HTTPError
+	require.ErrorAs(t, err, &httpErr)
+	assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+	assert.False(t, queued)
+	entries, err := os.ReadDir(storage.SubmissionsDir())
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, oldID+".tar.gz", entries[0].Name())
+}
+
+func TestRetryPipeline_QueueFailureKeepsTarball(t *testing.T) {
+	storage := chiefrepository.NewStorage(t.TempDir())
+	require.NoError(t, os.Mkdir(storage.SubmissionsDir(), 0755))
+	oldID := "2024-01-01-120000_uuid_FINGERPRINT_pkg"
+	require.NoError(t, os.WriteFile(storage.SubmissionTarballPath(oldID), []byte("signed submission"), 0600))
+	var queuedID string
+	queue := &mockTaskQueue{sendBuildChainFn: func(taskUUID, _ string, _ []byte) error {
+		queuedID = taskUUID
+		return errors.New("queue unavailable")
+	}}
+	store := &mockJobStore{getJobFn: func(string) (*monitoring.JobInfo, error) {
+		return &monitoring.JobInfo{PackageName: "pkg", Dist: "verbeek"}, nil
+	}}
+	svc := newTestSubmissionService(queue, storage, &mockGPGVerifier{}, store, nil)
+	_, err := svc.RetryPipeline(oldID)
+	require.Error(t, err)
+	var httpErr httputil.HTTPError
+	require.ErrorAs(t, err, &httpErr)
+	assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+	require.NotEmpty(t, queuedID)
+	copied, err := os.ReadFile(storage.SubmissionTarballPath(queuedID))
+	require.NoError(t, err)
+	assert.Equal(t, []byte("signed submission"), copied)
 }
 
 func TestBuildISO_ValidationErrors(t *testing.T) {

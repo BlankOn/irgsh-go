@@ -49,10 +49,6 @@ type FileStorage interface {
 	SubmissionDirPath(taskUUID string) string
 	SubmissionSignaturePath(taskUUID string) string
 	ExtractSubmission(taskUUID string) error
-	CopyFileWithSudo(src, dst string) error
-	CopyDirWithSudo(src, dst string) error
-	ChownWithSudo(path string) error
-	ChownRecursiveWithSudo(path string) error
 }
 
 // JobStore tracks package build job state for the dashboard and status queries.

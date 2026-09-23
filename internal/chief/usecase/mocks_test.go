@@ -89,10 +89,6 @@ type mockFileStorage struct {
 	submissionDirPathFn       func(taskUUID string) string
 	submissionSignaturePathFn func(taskUUID string) string
 	extractSubmissionFn       func(taskUUID string) error
-	copyFileWithSudoFn        func(src, dst string) error
-	copyDirWithSudoFn         func(src, dst string) error
-	chownWithSudoFn           func(path string) error
-	chownRecursiveWithSudoFn  func(path string) error
 }
 
 func (m *mockFileStorage) ArtifactsDir() string   { return m.artifactsDir }
@@ -130,34 +126,6 @@ func (m *mockFileStorage) SubmissionSignaturePath(taskUUID string) string {
 func (m *mockFileStorage) ExtractSubmission(taskUUID string) error {
 	if m.extractSubmissionFn != nil {
 		return m.extractSubmissionFn(taskUUID)
-	}
-	return nil
-}
-
-func (m *mockFileStorage) CopyFileWithSudo(src, dst string) error {
-	if m.copyFileWithSudoFn != nil {
-		return m.copyFileWithSudoFn(src, dst)
-	}
-	return nil
-}
-
-func (m *mockFileStorage) CopyDirWithSudo(src, dst string) error {
-	if m.copyDirWithSudoFn != nil {
-		return m.copyDirWithSudoFn(src, dst)
-	}
-	return nil
-}
-
-func (m *mockFileStorage) ChownWithSudo(path string) error {
-	if m.chownWithSudoFn != nil {
-		return m.chownWithSudoFn(path)
-	}
-	return nil
-}
-
-func (m *mockFileStorage) ChownRecursiveWithSudo(path string) error {
-	if m.chownRecursiveWithSudoFn != nil {
-		return m.chownRecursiveWithSudoFn(path)
 	}
 	return nil
 }
