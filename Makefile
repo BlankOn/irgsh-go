@@ -35,6 +35,12 @@ release:
 	mkdir -p target
 	mv release.tar.gz target/
 
+release-components:
+	./utils/scripts/release-components.sh
+
+test-release-components:
+	./utils/scripts/release-components_test.sh
+
 release-in-docker: release
 	# It's possible this release command will be used inside a container
 	# Let it rewriteable for host environment
@@ -117,4 +123,3 @@ submit:
 deb:
 	sudo rm -rf obj-x86_64-linux-gnu
 	debuild -us -uc -b
-
