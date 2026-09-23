@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Require sudo or root privilege
 if [ $EUID != 0 ]; then
@@ -10,8 +11,6 @@ fi
 
 OVERWRITE_WORKDIR=0
 OVERWRITE_GPG=0
-OVERWRITE_BASE_TGZ=0
-OVERWRITE_PBUILDER=0
 OVERWRITE_REPO=0
 
 if [ ! -f "/etc/irgsh/config.yaml" ]; then
@@ -49,10 +48,6 @@ if [ -d "/var/lib/irgsh" ]; then
 			read -p "Do you want to regenerate it? (y/N) " -n 1 -r
 			echo
 			if [[ $REPLY =~ ^[Yy]$ ]]; then
-				if [ ! -f "/var/lib/irgsh/builder/pbocker/base.tgz" ]; then
-					OVERWRITE_BASE_TGZ=1
-					OVERWRITE_PBUILDER=1
-				fi
 				OVERWRITE_REPO=1
 				OVERWRITE_GPG=1
 				echo
@@ -61,17 +56,6 @@ if [ -d "/var/lib/irgsh" ]; then
 				read -p 'Email : ' GPG_KEY_EMAIL
 			fi
 		fi
-	fi
-fi
-
-if [ ! -f "/var/lib/irgsh/builder/pbocker/base.tgz" ]; then
-	OVERWRITE_BASE_TGZ=1
-	OVERWRITE_PBUILDER=1
-else
-	if [ "$(docker images | grep pbocker | cut -d ' ' -f 1)" = "pbocker" ]; then
-		echo
-	else
-		OVERWRITE_PBUILDER=1
 	fi
 fi
 
@@ -92,8 +76,7 @@ echo
 echo "Please review your current init configuration:"
 echo "---------------------------"
 echo "OVERWRITE_WORKDIR=$OVERWRITE_WORKDIR"
-echo "OVERWRITE_BASE_TGZ=$OVERWRITE_BASE_TGZ"
-echo "OVERWRITE_PBUILDER=$OVERWRITE_PBUILDER"
+echo "Rebuild native builder base as irgsh-builder"
 echo "OVERWRITE_REPO=$OVERWRITE_REPO"
 echo "OVERWRITE_GPG=$OVERWRITE_WORKDIR"
 echo "GPG_KEY_NAME=$GPG_KEY_NAME"
@@ -119,8 +102,14 @@ if [ $OVERWRITE_WORKDIR = 1 ]; then
 	mkdir -p /var/lib/irgsh/repo
 fi
 
-chown -R irgsh:irgsh /var/lib/irgsh
-chmod -R u+rw /var/lib/irgsh
+chown irgsh:irgsh /var/lib/irgsh
+for state in chief repo iso gnupg; do
+	if [ -d "/var/lib/irgsh/$state" ]; then
+		chown -R irgsh:irgsh "/var/lib/irgsh/$state"
+		chmod -R u+rw "/var/lib/irgsh/$state"
+	fi
+done
+install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
 
 # GPG key
 if [ $OVERWRITE_GPG = 1 ]; then
@@ -151,16 +140,7 @@ if [ $OVERWRITE_REPO = 1 ]; then
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo init" -s /bin/bash irgsh
 fi
 
-# Base.tgz init
-if [ $OVERWRITE_BASE_TGZ = 1 ]; then
-	irgsh-builder init-base
-fi
-
-# Pbuilder init
-if [ $OVERWRITE_PBUILDER = 1 ]; then
-	echo
-	su -c "irgsh-builder init-builder" -s /bin/bash irgsh
-fi
+su -s /bin/bash -c 'irgsh-builder init-base' irgsh-builder
 
 if [ $OVERWRITE_GPG = 1 ]; then
 	echo

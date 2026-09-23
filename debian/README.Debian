@@ -17,18 +17,34 @@ After installation, you need to perform the following steps:
 
 2. Configure IRGSH by editing /etc/irgsh/config.yaml according to your needs.
 
-3. Initialize IRGSH:
+3. Provision the dedicated builder account's subordinate UID and GID ranges.
+   The package creates irgsh-builder, but does not allocate these ranges.
+   Inspect /etc/subuid and /etc/subgid, choose non-overlapping ranges of at
+   least 65536 IDs, then replace START-END below:
 
-   sudo -u irgsh /usr/share/irgsh/init.sh
+   sudo usermod --add-subuids START-END --add-subgids START-END irgsh-builder
 
-4. For the builder component, you need to initialize pbuilder base:
+4. Initialize the native builder base under its dedicated account:
 
-   sudo -u irgsh irgsh-builder init-base
-   sudo -u irgsh irgsh-builder init-builder
+   sudo -u irgsh-builder irgsh-builder -c /etc/irgsh/config.yaml init-base
+
+   Update it later with the same account and config using update-base.
+   sbuild, mmdebstrap, and the uidmap helpers require unprivileged user
+   namespaces. Do not run builder commands as root or add this account to
+   privileged groups. The builder does not need signing keys or GNUPGHOME.
 
 5. For the repository component, initialize it:
 
-   sudo -u irgsh irgsh-repo init
+   sudo -u irgsh irgsh-repo -c /etc/irgsh/config.yaml init
+
+The interactive /usr/share/irgsh/init.sh also offers destructive shared-state,
+GPG, and repository initialization. Use it only during an approved initial
+setup on an isolated host. Its builder base operation uses irgsh-builder.
+
+For host requirements, existing-service migration, additional instances,
+rollback, and target-host evidence, follow docs/rootless-builder.md in the
+matching source revision:
+https://github.com/BlankOn/irgsh-go/blob/main/docs/rootless-builder.md
 
 Starting Services
 -----------------
