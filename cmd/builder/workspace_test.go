@@ -239,6 +239,16 @@ func TestExtractSubmissionRejectsDuplicateMember(t *testing.T) {
 	}
 }
 
+func TestExtractSubmissionRejectsDuplicateRootDirectory(t *testing.T) {
+	archive := writeTestArchive(t,
+		tar.Header{Name: "./", Typeflag: tar.TypeDir},
+		tar.Header{Name: ".", Typeflag: tar.TypeDir},
+	)
+	if err := extractSubmission(archive, filepath.Join(t.TempDir(), "extract")); err == nil {
+		t.Fatal("duplicate root directory accepted")
+	}
+}
+
 func assertRejectedArchive(t *testing.T, member tar.Header, outsideName string) {
 	t.Helper()
 	root := t.TempDir()

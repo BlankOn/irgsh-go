@@ -213,10 +213,7 @@ func extractSubmission(archivePath string, destination string) error {
 			}
 		}
 		name := path.Clean(header.Name)
-		if name == "." && header.Typeflag == tar.TypeDir {
-			continue
-		}
-		if name == "." {
+		if name == "." && header.Typeflag != tar.TypeDir {
 			return fmt.Errorf("unsafe archive member %q", header.Name)
 		}
 		target := filepath.Join(root, filepath.FromSlash(name))
@@ -228,6 +225,9 @@ func extractSubmission(archivePath string, destination string) error {
 			return fmt.Errorf("duplicate archive member %q", header.Name)
 		}
 		seen[target] = true
+		if name == "." {
+			continue
+		}
 		if header.Typeflag == tar.TypeDir {
 			if err := os.MkdirAll(target, 0755); err != nil {
 				return fmt.Errorf("create archive directory %q: %w", header.Name, err)
