@@ -44,6 +44,7 @@ jobs:
       - name: Check native supervisor
         run: |
           bash e2e/scripts/native-builder_test.sh
+          bash e2e/scripts/helper-access_test.sh
           bash e2e/scripts/sbuild-config_test.sh
 
       - name: Run e2e tests

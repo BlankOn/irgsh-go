@@ -28,8 +28,11 @@ if [ "$(id -u)" -eq 0 ]; then
     exit 1
 fi
 
+install -d -m 0755 "$E2E_DIR"
+install -m 0444 "$SCRIPT_DIR/scripts/native-builder.sh" "$E2E_DIR/native-builder.sh"
+
 native_builder() {
-    sudo -n -H -u "$BUILDER_USER" -- bash "$SCRIPT_DIR/scripts/native-builder.sh" "$1" "$E2E_DIR"
+    sudo -n -H -u "$BUILDER_USER" -- bash "$E2E_DIR/native-builder.sh" "$1" "$E2E_DIR"
 }
 
 stop_builder() {
