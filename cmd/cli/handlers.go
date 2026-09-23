@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -40,13 +41,25 @@ func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.
 		if c.GlobalString("target") != target {
 			return fmt.Errorf("invalid target selection")
 		}
-		if c.Args().First() == "config" {
+		args := c.Args()
+		if args.First() == "" || args.First() == "help" || args.First() == "h" {
 			return nil
 		}
-		if c.Args().First() == "update" {
-			if target == "prod" {
-				return fmt.Errorf("prod target permits only local config until server authorization is available")
-			}
+		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
+			return nil
+		}
+		if len(args) == 3 && (args[2] == "--help" || args[2] == "-h") &&
+			(args[0] == "package" || args[0] == "build-iso" || args[0] == "import") &&
+			(args[1] == "status" || args[1] == "log") {
+			return nil
+		}
+		if args.First() == "config" {
+			return nil
+		}
+		if target == "prod" {
+			return fmt.Errorf("prod target permits only local config until server authorization is available")
+		}
+		if args.First() == "update" {
 			return nil
 		}
 		cfg, err := svc.LoadConfig()
@@ -55,15 +68,12 @@ func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.
 		}
 		chiefURL, err := url.Parse(cfg.ChiefAddress)
 		if err != nil {
-			return err
+			return errors.New("invalid chief URL configuration")
 		}
 		chiefURL.User = nil
 		chiefURL.RawQuery = ""
 		chiefURL.Fragment = ""
 		fmt.Printf("Target: %s\nChief: %s\n", target, chiefURL.String())
-		if target == "prod" {
-			return fmt.Errorf("prod target permits only local config until server authorization is available")
-		}
 		return nil
 	}
 

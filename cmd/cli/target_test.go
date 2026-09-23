@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,16 +94,7 @@ func TestTargetPipelineIDsStaySeparate(t *testing.T) {
 }
 
 func TestProdBlocksEveryNetworkCommand(t *testing.T) {
-	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests++
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-	home := t.TempDir()
-	if err := runCLI(context.Background(), []string{"irgsh-cli", "--target", "prod", "config", "--chief", server.URL, "--key", "test-key"}, home, "test"); err != nil {
-		t.Fatal(err)
-	}
+	service := &rejectingService{}
 	for _, command := range [][]string{
 		{"package", "--dist", "test", "--package", "https://example.com/pkg"},
 		{"package", "status", "pkg-id"}, {"package", "log", "pkg-id"},
@@ -116,14 +105,106 @@ func TestProdBlocksEveryNetworkCommand(t *testing.T) {
 		{"retry", "pkg-id"}, {"cancel", "pkg-id"}, {"update"},
 	} {
 		args := append([]string{"irgsh-cli", "--target", "prod"}, command...)
-		err := runCLI(context.Background(), args, home, "test")
-		if err == nil || !strings.Contains(err.Error(), "prod") {
+		err := buildApp(context.Background(), service, "test", "prod").Run(args)
+		if err == nil || !strings.Contains(err.Error(), "server authorization") {
 			t.Fatalf("%v error = %v", command, err)
 		}
-		if requests != 0 {
-			t.Fatalf("%v made %d requests", command, requests)
+		if len(service.calls) != 0 {
+			t.Fatalf("%v called service methods: %v", command, service.calls)
 		}
 	}
+}
+
+func TestProdRejectsWithoutUsableConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		chief string
+	}{
+		{"missing", ""},
+		{"malformed", "https://name:secret@chief.example/%zz?token=test#fragment"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			if tc.chief != "" {
+				path := filepath.Join(profilePath(home, "prod"), "IRGSH_CHIEF_ADDRESS")
+				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(tc.chief), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := runCLI(context.Background(), []string{"irgsh-cli", "--target", "prod", "package", "status", "pkg-id"}, home, "test")
+			if err == nil || !strings.Contains(err.Error(), "server authorization") {
+				t.Fatalf("prod status error = %v", err)
+			}
+		})
+	}
+}
+
+type rejectingService struct {
+	calls []string
+}
+
+func (s *rejectingService) call(method string) error {
+	s.calls = append(s.calls, method)
+	return fmt.Errorf("unexpected service call: %s", method)
+}
+
+func (s *rejectingService) LoadConfig() (domain.Config, error) {
+	return domain.Config{}, s.call("LoadConfig")
+}
+
+func (s *rejectingService) SaveConfig(domain.Config) error {
+	return s.call("SaveConfig")
+}
+
+func (s *rejectingService) SubmitPackage(context.Context, domain.SubmitParams) (domain.SubmitResponse, error) {
+	return domain.SubmitResponse{}, s.call("SubmitPackage")
+}
+
+func (s *rejectingService) PackageStatus(context.Context, string) (domain.PackageStatus, error) {
+	return domain.PackageStatus{}, s.call("PackageStatus")
+}
+
+func (s *rejectingService) PackageLog(context.Context, string) (string, string, error) {
+	return "", "", s.call("PackageLog")
+}
+
+func (s *rejectingService) SubmitISO(context.Context, string, string, bool) (domain.SubmitResponse, error) {
+	return domain.SubmitResponse{}, s.call("SubmitISO")
+}
+
+func (s *rejectingService) ISOStatus(context.Context, string) (domain.ISOStatus, error) {
+	return domain.ISOStatus{}, s.call("ISOStatus")
+}
+
+func (s *rejectingService) ISOLog(context.Context, string) (string, error) {
+	return "", s.call("ISOLog")
+}
+
+func (s *rejectingService) SubmitImport(context.Context, domain.ImportParams) (domain.SubmitResponse, error) {
+	return domain.SubmitResponse{}, s.call("SubmitImport")
+}
+
+func (s *rejectingService) ImportStatus(context.Context, string) (domain.ImportStatus, error) {
+	return domain.ImportStatus{}, s.call("ImportStatus")
+}
+
+func (s *rejectingService) ImportLog(context.Context, string) (string, error) {
+	return "", s.call("ImportLog")
+}
+
+func (s *rejectingService) RetryPipeline(context.Context, string) (domain.RetryResponse, error) {
+	return domain.RetryResponse{}, s.call("RetryPipeline")
+}
+
+func (s *rejectingService) CancelPipeline(context.Context, string) (domain.CancelResponse, error) {
+	return domain.CancelResponse{}, s.call("CancelPipeline")
+}
+
+func (s *rejectingService) UpdateCLI(context.Context) error {
+	return s.call("UpdateCLI")
 }
 
 type displayingService struct {
@@ -184,5 +265,36 @@ func TestChiefDisplayOmitsURLCredentials(t *testing.T) {
 	app := buildApp(context.Background(), service, "test", "dev")
 	if err := app.Run([]string{"irgsh-cli", "package", "status", "pkg-id"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMalformedChiefURLDoesNotLeakCredentials(t *testing.T) {
+	service := &displayingService{chief: "https://name:secret@dev.example/%zz?token=test#fragment"}
+	err := buildApp(context.Background(), service, "test", "dev").Run([]string{"irgsh-cli", "package", "status", "pkg-id"})
+	if err == nil || !strings.Contains(err.Error(), "invalid chief URL") {
+		t.Fatalf("malformed chief URL error = %v", err)
+	}
+	for _, secret := range []string{"name", "secret", "token", "fragment", "%zz"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Fatalf("malformed chief URL error exposed %q", secret)
+		}
+	}
+}
+
+func TestHelpNeedsNoProfile(t *testing.T) {
+	for _, args := range [][]string{
+		{"irgsh-cli"},
+		{"irgsh-cli", "help"},
+		{"irgsh-cli", "h"},
+		{"irgsh-cli", "package", "--help"},
+		{"irgsh-cli", "package", "status", "--help"},
+		{"irgsh-cli", "--target", "prod"},
+		{"irgsh-cli", "--target", "prod", "help"},
+		{"irgsh-cli", "--target", "prod", "package", "--help"},
+		{"irgsh-cli", "--target", "prod", "import", "log", "--help"},
+	} {
+		if err := runCLI(context.Background(), args, t.TempDir(), "test"); err != nil {
+			t.Fatalf("%v help error = %v", args, err)
+		}
 	}
 }
