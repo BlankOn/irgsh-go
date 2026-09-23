@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
@@ -11,6 +12,7 @@ import (
 
 // CLIService defines the operations available to CLI command handlers.
 type CLIService interface {
+	LoadConfig() (domain.Config, error)
 	SaveConfig(cfg domain.Config) error
 	SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error)
 	PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
@@ -26,13 +28,44 @@ type CLIService interface {
 	UpdateCLI(ctx context.Context) error
 }
 
-func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
+func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.App {
 	app := cli.NewApp()
 	app.Name = "irgsh-go"
 	app.Usage = "irgsh-go distributed packager"
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = version
+	app.Flags = []cli.Flag{cli.StringFlag{Name: "target", Value: "dev", Usage: "Target profile: dev or prod"}}
+	app.Before = func(c *cli.Context) error {
+		if c.GlobalString("target") != target {
+			return fmt.Errorf("invalid target selection")
+		}
+		if c.Args().First() == "config" {
+			return nil
+		}
+		if c.Args().First() == "update" {
+			if target == "prod" {
+				return fmt.Errorf("prod target permits only local config until server authorization is available")
+			}
+			return nil
+		}
+		cfg, err := svc.LoadConfig()
+		if err != nil {
+			return err
+		}
+		chiefURL, err := url.Parse(cfg.ChiefAddress)
+		if err != nil {
+			return err
+		}
+		chiefURL.User = nil
+		chiefURL.RawQuery = ""
+		chiefURL.Fragment = ""
+		fmt.Printf("Target: %s\nChief: %s\n", target, chiefURL.String())
+		if target == "prod" {
+			return fmt.Errorf("prod target permits only local config until server authorization is available")
+		}
+		return nil
+	}
 
 	app.Commands = []cli.Command{
 		{

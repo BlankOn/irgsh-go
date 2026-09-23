@@ -62,6 +62,19 @@ Configure the CLI tool to point to your IRGSH chief instance:
 
    irgsh-cli config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
 
+The default target is dev. Select a target before the command:
+
+   irgsh-cli --target dev config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
+   irgsh-cli --target prod config --chief https://chief.example.org --key YOUR_GPG_KEY_ID
+
+Configuration and last pipeline IDs live under ~/.irgsh/targets/dev/ or
+~/.irgsh/targets/prod/. The CLI shows the target and chief URL before target
+operations. Prod permits only local config until BlankOn/irgsh-go#12 adds server
+authorization. All prod submissions, status, logs, retry, cancel, and update are
+blocked. Legacy files directly under ~/.irgsh/ are never read or copied. Check
+which chief issued old pipeline IDs, then manually classify them and reconfigure
+each target.
+
 Submit a package build job:
 
    irgsh-cli package submit --source SOURCE_URL --package PACKAGE_URL
