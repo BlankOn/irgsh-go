@@ -29,6 +29,21 @@ jobs:
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d text="${MSG}" || echo "Telegram notification failed"
 
+      - name: Provision disposable native builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates debian-archive-keyring
+          for table in /etc/subuid /etc/subgid; do
+            awk -F: '$2 < 589824 && $2 + $3 > 524288 { conflict=1 } END { exit conflict }' "$table"
+          done
+          sudo useradd --create-home --user-group --shell /bin/bash -K SUB_UID_COUNT=0 -K SUB_GID_COUNT=0 irgsh-builder-e2e
+          sudo usermod --add-subuids 524288-589823 --add-subgids 524288-589823 irgsh-builder-e2e
+          sudo install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" /tmp/irgsh-e2e
+          sudo install -d -m 0755 -o irgsh-builder-e2e -g irgsh-builder-e2e /tmp/irgsh-e2e/builder
+
+      - name: Check native supervisor
+        run: bash e2e/scripts/native-builder_test.sh
+
       - name: Run e2e tests
         run: ./e2e/run.sh
 
