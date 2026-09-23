@@ -1,0 +1,385 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repository=BlankOn/irgsh-go
+release_root=/opt/irgsh/releases
+current_root=/opt/irgsh/current
+target_root=/etc/irgsh/deploy-targets
+lock_path=/run/lock/irgsh-deploy.lock
+drain_timeout=3600
+health_timeout=60
+poll_interval=2
+
+component=
+version=
+declare -a target_units=()
+declare -a target_urls=()
+declare -a active_units=()
+declare -a active_urls=()
+
+validate_component() {
+	[[ "$1" =~ ^(chief|builder|repo|iso)$ ]]
+}
+
+validate_version() {
+	[[ "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+read_request() {
+	local extra
+	IFS= read -r component || return 1
+	IFS= read -r version || return 1
+	if IFS= read -r extra; then
+		return 1
+	fi
+	validate_component "$component" || return 1
+	validate_version "$version" || return 1
+}
+
+target_file_for() {
+	case "$1" in
+	chief) printf '%s/chief\n' "$target_root" ;;
+	builder) printf '%s/builder\n' "$target_root" ;;
+	repo) printf '%s/repo\n' "$target_root" ;;
+	iso) printf '%s/iso\n' "$target_root" ;;
+	*) return 1 ;;
+	esac
+}
+
+file_uid() {
+	stat -c %u -- "$1"
+}
+
+file_mode() {
+	stat -c %a -- "$1"
+}
+
+load_targets() {
+	local selected=$1
+	local target_file=${2:-}
+	local line unit url extra mode port
+	local unit_pattern="^irgsh-${selected}(@[A-Za-z0-9_.-]+)?\\.service$"
+	local -a loaded_units=()
+	local -a loaded_urls=()
+	if [[ -z "$target_file" ]]; then
+		target_file=$(target_file_for "$selected") || return 1
+	fi
+	[[ -f "$target_file" && ! -L "$target_file" ]] || return 1
+	[[ "$(file_uid "$target_file")" == 0 ]] || return 1
+	mode=$(file_mode "$target_file") || return 1
+	[[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+	(( (8#$mode & 0022) == 0 )) || return 1
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		[[ -z "$line" ]] && continue
+		unit=
+		url=
+		extra=
+		read -r unit url extra <<< "$line"
+		[[ -n "$unit" && -n "$url" && -z "$extra" ]] || return 1
+		[[ "$unit" =~ $unit_pattern ]] || return 1
+		if [[ "$url" =~ ^http://127\.0\.0\.1:([0-9]+)/api/v1/version$ ]] || [[ "$url" =~ ^http://\[::1\]:([0-9]+)/api/v1/version$ ]]; then
+			port=${BASH_REMATCH[1]}
+		else
+			return 1
+		fi
+		(( port >= 1 && port <= 65535 )) || return 1
+		loaded_units+=("$unit")
+		loaded_urls+=("$url")
+	done < "$target_file"
+	(( ${#loaded_units[@]} > 0 )) || return 1
+	target_units=("${loaded_units[@]}")
+	target_urls=("${loaded_urls[@]}")
+}
+
+expected_archive_members() {
+	case "$1" in
+	iso) printf 'bin/\nbin/irgsh-iso\nshare/\nshare/iso-build.sh\n' ;;
+	chief|builder|repo) printf 'bin/\nbin/irgsh-%s\n' "$1" ;;
+	*) return 1 ;;
+	esac
+}
+
+validate_archive() {
+	local expected actual
+	expected=$(expected_archive_members "$1") || return 1
+	actual=$(tar -tzf "$2" | sort) || return 1
+	[[ "$actual" == "$expected" ]] || return 1
+}
+
+binary_release_version() {
+	"$1" --version | awk 'END { print $NF }'
+}
+
+download_file() {
+	curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --retry 2 --output "$2" "$1"
+}
+
+verify_attestation() {
+	gh attestation verify "$1" \
+		--repo "$repository" \
+		--signer-workflow "$repository/.github/workflows/release.yaml" \
+		--source-ref "refs/tags/$2" \
+		--deny-self-hosted-runners >/dev/null
+}
+
+set_release_permissions() {
+	chown -R root:root "$1" || return 1
+	find "$1" -type d -exec chmod 0755 {} + || return 1
+	chmod 0755 "$1/bin/irgsh-$2" || return 1
+	if [[ "$2" == iso ]]; then
+		chmod 0755 "$1/share/iso-build.sh" || return 1
+	fi
+}
+
+release_uid() {
+	stat -c %u -- "$1"
+}
+
+release_mode() {
+	stat -c %a -- "$1"
+}
+
+release_matches() {
+	local selected=$1
+	local staged=$2
+	local destination=$3
+	local staged_tree destination_tree path
+	local -a paths=("$destination" "$destination/bin" "$destination/bin/irgsh-$selected")
+	[[ -d "$destination" && ! -L "$destination" ]] || return 1
+	staged_tree=$(find "$staged" -mindepth 1 -printf '%P %y\n' | sort) || return 1
+	destination_tree=$(find "$destination" -mindepth 1 -printf '%P %y\n' | sort) || return 1
+	[[ "$destination_tree" == "$staged_tree" ]] || return 1
+	cmp -- "$staged/bin/irgsh-$selected" "$destination/bin/irgsh-$selected" || return 1
+	if [[ "$selected" == iso ]]; then
+		paths+=("$destination/share" "$destination/share/iso-build.sh")
+		cmp -- "$staged/share/iso-build.sh" "$destination/share/iso-build.sh" || return 1
+	fi
+	for path in "${paths[@]}"; do
+		[[ "$(release_uid "$path")" == 0 ]] || return 1
+		[[ "$(release_mode "$path")" == 755 ]] || return 1
+	done
+}
+
+prepare_release() (
+	set -euo pipefail
+	local selected=$1
+	local tag=$2
+	local number=${tag#v}
+	local filename="irgsh-${selected}_${number}_linux_amd64.tar.gz"
+	local base_url="https://github.com/$repository/releases/download/$tag"
+	local workspace checksum archive expected actual destination staged
+	local -a digests=()
+	workspace=$(mktemp -d) || return 1
+	trap 'rm -rf -- "$workspace"; if [[ -n "${staged:-}" && -d "$staged" ]]; then rm -rf -- "$staged"; fi' EXIT
+	checksum="$workspace/SHA256SUMS"
+	archive="$workspace/$filename"
+	download_file "$base_url/SHA256SUMS" "$checksum" || return 1
+	download_file "$base_url/$filename" "$archive" || return 1
+	verify_attestation "$checksum" "$tag" || return 1
+	verify_attestation "$archive" "$tag" || return 1
+	mapfile -t digests < <(awk -v name="$filename" '$2 == name { print $1 }' "$checksum")
+	[[ ${#digests[@]} -eq 1 && "${digests[0]}" =~ ^[0-9a-f]{64}$ ]] || return 1
+	expected=${digests[0]}
+	actual=$(sha256sum "$archive" | awk '{print $1}') || return 1
+	[[ "$actual" == "$expected" ]] || return 1
+	validate_archive "$selected" "$archive" || return 1
+	mkdir -p "$release_root/$selected" || return 1
+	destination="$release_root/$selected/$tag"
+	staged=$(mktemp -d "$release_root/$selected/.${tag}.XXXXXX") || return 1
+	tar --extract --gzip --file "$archive" --directory "$staged" --no-same-owner --no-same-permissions || return 1
+	[[ -d "$staged/bin" && ! -L "$staged/bin" ]] || return 1
+	[[ -f "$staged/bin/irgsh-$selected" && ! -L "$staged/bin/irgsh-$selected" ]] || return 1
+	if [[ "$selected" == iso ]]; then
+		[[ -d "$staged/share" && ! -L "$staged/share" ]] || return 1
+		[[ -f "$staged/share/iso-build.sh" && ! -L "$staged/share/iso-build.sh" ]] || return 1
+	fi
+	set_release_permissions "$staged" "$selected" || return 1
+	[[ "$(binary_release_version "$staged/bin/irgsh-$selected")" == "$number" ]] || return 1
+	if [[ -e "$destination" || -L "$destination" ]]; then
+		release_matches "$selected" "$staged" "$destination" || return 1
+		printf '%s\n' "$destination"
+		return 0
+	fi
+	mv "$staged" "$destination" || return 1
+	printf '%s\n' "$destination"
+)
+
+unit_is_active() {
+	systemctl is-active --quiet "$1"
+}
+
+stop_unit() {
+	systemctl stop --no-block "$1"
+}
+
+start_unit() {
+	systemctl start "$1"
+}
+
+health_version() {
+	local body
+	body=$(curl --fail --silent --show-error --max-time 5 "$1") || return 1
+	printf '%s\n' "$body" | sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p'
+}
+
+sleep_for() {
+	sleep "$1"
+}
+
+log_event() {
+	printf '%s\n' "$*"
+	logger -t irgsh-deploy -- "$*" || true
+}
+
+capture_active_units() {
+	local index
+	active_units=()
+	active_urls=()
+	for index in "${!target_units[@]}"; do
+		if unit_is_active "${target_units[$index]}"; then
+			active_units+=("${target_units[$index]}")
+			active_urls+=("${target_urls[$index]}")
+		fi
+	done
+}
+
+wait_inactive() {
+	local attempts=$((drain_timeout / poll_interval))
+	local attempt unit active
+	(( attempts > 0 )) || attempts=1
+	for ((attempt = 0; attempt < attempts; attempt++)); do
+		active=0
+		for unit in "${active_units[@]}"; do
+			if unit_is_active "$unit"; then
+				active=1
+			fi
+		done
+		(( active == 0 )) && return 0
+		sleep_for "$poll_interval"
+	done
+	return 1
+}
+
+drain_active_units() {
+	local unit
+	for unit in "${active_units[@]}"; do
+		stop_unit "$unit" || return 1
+	done
+	wait_inactive
+}
+
+start_active_units() {
+	local unit
+	for unit in "${active_units[@]}"; do
+		start_unit "$unit" || return 1
+	done
+}
+
+wait_healthy() {
+	local expected=$1
+	local attempts=$((health_timeout / poll_interval))
+	local attempt index healthy
+	(( attempts > 0 )) || attempts=1
+	for ((attempt = 0; attempt < attempts; attempt++)); do
+		healthy=1
+		for index in "${!active_units[@]}"; do
+			if ! unit_is_active "${active_units[$index]}" || [[ "$(health_version "${active_urls[$index]}" 2>/dev/null || true)" != "$expected" ]]; then
+				healthy=0
+			fi
+		done
+		(( healthy == 1 )) && return 0
+		sleep_for "$poll_interval"
+	done
+	return 1
+}
+
+current_release() {
+	local selected=$1
+	local link="$current_root/$selected"
+	local resolved
+	[[ -L "$link" ]] || return 1
+	resolved=$(readlink -f "$link") || return 1
+	[[ "$resolved" == "$release_root/$selected/"* && -d "$resolved" ]] || return 1
+	printf '%s\n' "$resolved"
+}
+
+switch_current() {
+	local selected=$1
+	local destination=$2
+	local temporary="$current_root/.${selected}.$$"
+	mkdir -p "$current_root" || return 1
+	ln -s "$destination" "$temporary" || return 1
+	mv -Tf "$temporary" "$current_root/$selected" || {
+		rm -f -- "$temporary"
+		return 1
+	}
+}
+
+rollback_release() {
+	local selected=$1
+	local previous=$2
+	local previous_version=$3
+	if ! drain_active_units; then
+		log_event "rollback failed: unable to drain $selected"
+		return 1
+	fi
+	switch_current "$selected" "$previous" || return 1
+	start_active_units || return 1
+	wait_healthy "$previous_version"
+}
+
+deploy_component() {
+	local selected=$1
+	local tag=$2
+	local next previous previous_version
+	validate_component "$selected" || return 1
+	validate_version "$tag" || return 1
+	load_targets "$selected" || return 1
+	next=$(prepare_release "$selected" "$tag") || return 1
+	previous=$(current_release "$selected") || return 1
+	previous_version=$(binary_release_version "$previous/bin/irgsh-$selected") || return 1
+	capture_active_units || return 1
+	if [[ "$next" == "$previous" ]]; then
+		wait_healthy "${tag#v}"
+		log_event "$selected $tag already active"
+		return 0
+	fi
+	if ! drain_active_units; then
+		log_event "deployment failed: drain timeout for $selected"
+		return 1
+	fi
+	if ! switch_current "$selected" "$next"; then
+		if start_active_units && wait_healthy "$previous_version"; then
+			log_event "deployment failed: kept $selected at $previous_version"
+		else
+			log_event "deployment failed: unable to restart $selected $previous_version"
+		fi
+		return 1
+	fi
+	if start_active_units && wait_healthy "${tag#v}"; then
+		log_event "deployed $selected $tag"
+		return 0
+	fi
+	log_event "deployment failed: rolling back $selected $tag"
+	rollback_release "$selected" "$previous" "$previous_version" || log_event "rollback failed for $selected $tag"
+	return 1
+}
+
+acquire_lock() {
+	mkdir -p "$(dirname "$lock_path")" || return 1
+	exec 9> "$lock_path" || return 1
+	flock -n 9
+}
+
+main() {
+	(( EUID == 0 )) || return 1
+	[[ $# -eq 0 ]] || return 1
+	read_request || return 1
+	acquire_lock || return 1
+	deploy_component "$component" "$version"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi

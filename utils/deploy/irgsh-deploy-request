@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+parse_request() {
+	local request=${1-}
+	local pattern='^deploy (chief|builder|repo|iso) (v[0-9]+\.[0-9]+\.[0-9]+)$'
+	[[ "$request" =~ $pattern ]] || return 1
+	printf '%s\n%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+}
+
+sudo_deploy() {
+	/usr/bin/sudo -n /usr/local/sbin/irgsh-deploy
+}
+
+run_request() {
+	local parsed
+	parsed=$(parse_request "$1") || return 1
+	sudo_deploy <<< "$parsed"
+}
+
+main() {
+	[[ $# -eq 0 ]] || return 1
+	run_request "${SSH_ORIGINAL_COMMAND-}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi
