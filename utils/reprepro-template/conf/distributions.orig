@@ -6,7 +6,7 @@ Label: DIST_LABEL
 Codename: DIST_CODENAME
 Suite: DIST_CODENAME
 Components: DIST_COMPONENTS
-UDebComponents: main
+UDebComponents: DIST_COMPONENTS
 Architectures: DIST_SUPPORTED_ARCHITECTURES
 Version: DIST_VERSION
 Description: DIST_VERSION_DESC
@@ -19,7 +19,7 @@ DscIndices: Sources Release . .gz .bz2 /usr/bin/rredtool
 Contents: udebs nodebs . .gz
 ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
 ContentsComponents: DIST_COMPONENTS
-ContentsUComponents: main
+ContentsUComponents: DIST_COMPONENTS
 Log: DIST_CODENAME.log
  --type=dsc changelogs.sh
 
@@ -28,7 +28,7 @@ Label: DIST_LABEL
 Codename: DIST_CODENAME-security
 Suite: DIST_CODENAME-security
 Components: DIST_COMPONENTS
-UDebComponents: main 
+UDebComponents: DIST_COMPONENTS
 Architectures: DIST_SUPPORTED_ARCHITECTURES
 Version: DIST_VERSION
 Description: DIST_VERSION_DESC Security
@@ -40,7 +40,7 @@ DscIndices: Sources Release . .gz .bz2 /usr/bin/rredtool
 Contents: udebs nodebs . .gz 
 ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
 ContentsComponents: DIST_COMPONENTS
-ContentsUComponents: main 
+ContentsUComponents: DIST_COMPONENTS
 Log: DIST_CODENAME-security.log
  --type=dsc changelogs.sh
 
@@ -49,7 +49,7 @@ Label: DIST_LABEL
 Codename: DIST_CODENAME-updates
 Suite: DIST_CODENAME-updates
 Components: DIST_COMPONENTS
-UDebComponents: main 
+UDebComponents: DIST_COMPONENTS
 Architectures: DIST_SUPPORTED_ARCHITECTURES
 Version: DIST_VERSION
 Description: DIST_VERSION_DESC Updates
@@ -61,7 +61,7 @@ DscIndices: Sources Release . .gz .bz2 /usr/bin/rredtool
 Contents: udebs nodebs . .gz
 ContentsArchitectures: DIST_SUPPORTED_ARCHITECTURES
 ContentsComponents: DIST_COMPONENTS
-ContentsUComponents: main
+ContentsUComponents: DIST_COMPONENTS
 Log: DIST_CODENAME-updates.log 
  --type=dsc changelogs.sh 
 

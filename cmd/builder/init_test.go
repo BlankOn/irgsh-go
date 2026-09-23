@@ -1,18 +1,116 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blankon/irgsh-go/internal/config"
 )
+
+func TestRebuildBaseRejectsConcurrentProcess(t *testing.T) {
+	if workdir := os.Getenv("IRGSH_TEST_REBUILD_DIR"); workdir != "" {
+		builder := config.BuilderConfig{Workdir: workdir, DistCodename: "verbeek", UpstreamDistCodename: "sid", UpstreamDistUrl: "http://deb.debian.org/debian"}
+		_, err := rebuildBase(context.Background(), builder, func(ctx context.Context, name string, args, env []string, desc, log string) (string, error) {
+			if name == "dpkg" {
+				return "amd64", nil
+			}
+			staged := args[len(args)-2]
+			if err := os.WriteFile(staged, []byte("first partial"), 0600); err != nil {
+				return "", err
+			}
+			fmt.Println("ready")
+			var signal [1]byte
+			if _, err := os.Stdin.Read(signal[:]); err != nil {
+				return "", err
+			}
+			return "", os.WriteFile(staged, []byte("first complete"), 0600)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	for _, completion := range []string{"complete", "exit"} {
+		t.Run(completion, func(t *testing.T) {
+			builder := baseFixture(t)
+			paths := oldBaseFixture(t, builder)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRebuildBaseRejectsConcurrentProcess$")
+			child.Env = append(os.Environ(), "IRGSH_TEST_REBUILD_DIR="+builder.Workdir)
+			var stderr bytes.Buffer
+			child.Stderr = &stderr
+			output, err := child.StdoutPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			input, err := child.StdinPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer input.Close()
+			if err := child.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = child.Process.Kill(); _ = child.Wait() })
+			ready, err := bufio.NewReader(output).ReadString('\n')
+			if err != nil || ready != "ready\n" {
+				t.Fatalf("child readiness = %q, %v: %s", ready, err, stderr.String())
+			}
+			secondStarted := false
+			_, rebuildErr := rebuildBase(ctx, builder, func(ctx context.Context, name string, args, env []string, desc, log string) (string, error) {
+				if name == "dpkg" {
+					return "amd64", nil
+				}
+				secondStarted = true
+				return "", os.WriteFile(paths.Tar+".new", []byte("second output"), 0600)
+			})
+			if rebuildErr == nil || !strings.Contains(rebuildErr.Error(), "already in progress") || secondStarted {
+				t.Fatalf("overlapping rebuild: runner started = %v, error = %v", secondStarted, rebuildErr)
+			}
+			for path, want := range map[string]string{paths.Tar: "old base", paths.Tar + ".new": "first partial", paths.Config: "old config"} {
+				contents, err := os.ReadFile(path)
+				if err != nil || string(contents) != want {
+					t.Fatalf("overlapping rebuild changed %s: %q, %v", path, contents, err)
+				}
+			}
+			if completion == "exit" {
+				if err := child.Process.Kill(); err != nil {
+					t.Fatal(err)
+				}
+				if err := child.Wait(); err == nil {
+					t.Fatal("killed child succeeded")
+				}
+			} else {
+				if _, err := input.Write([]byte("x")); err != nil {
+					t.Fatal(err)
+				}
+				if err := child.Wait(); err != nil {
+					t.Fatalf("first rebuild: %v: %s", err, stderr.String())
+				}
+				contents, err := os.ReadFile(paths.Tar)
+				if err != nil || string(contents) != "first complete" {
+					t.Fatalf("published base = %q, %v", contents, err)
+				}
+			}
+			_, err = rebuildFixture(t, builder, func(paths basePaths) error { return os.WriteFile(paths.Tar+".new", []byte("later complete"), 0600) })
+			if err != nil {
+				t.Fatalf("lock not released after %s: %v", completion, err)
+			}
+		})
+	}
+}
 
 func baseFixture(t *testing.T) config.BuilderConfig {
 	t.Helper()

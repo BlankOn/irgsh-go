@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
@@ -69,8 +70,22 @@ func rebuildBase(ctx context.Context, builder config.BuilderConfig, run commandR
 	if err != nil {
 		return paths, err
 	}
-	if err = os.MkdirAll(paths.Temp, 0755); err != nil {
+	if err = os.MkdirAll(paths.Root, 0755); err != nil {
 		return paths, fmt.Errorf("create base directories: %w", err)
+	}
+	lock, err := os.OpenFile(filepath.Join(paths.Root, "rebuild.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return paths, fmt.Errorf("open base rebuild lock: %w", err)
+	}
+	defer func() { err = errors.Join(err, lock.Close()) }()
+	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return paths, fmt.Errorf("base rebuild already in progress for %s: %w", identity, err)
+		}
+		return paths, fmt.Errorf("lock base rebuild: %w", err)
+	}
+	if err = os.MkdirAll(paths.Temp, 0755); err != nil {
+		return paths, fmt.Errorf("create base temporary directory: %w", err)
 	}
 	staged := paths.Tar + ".new"
 	if err = os.Remove(staged); err != nil && !os.IsNotExist(err) {
