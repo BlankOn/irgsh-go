@@ -41,39 +41,6 @@ func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.
 		if c.GlobalString("target") != target {
 			return fmt.Errorf("invalid target selection")
 		}
-		args := c.Args()
-		if args.First() == "" || args.First() == "help" || args.First() == "h" {
-			return nil
-		}
-		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
-			return nil
-		}
-		if len(args) == 3 && (args[2] == "--help" || args[2] == "-h") &&
-			(args[0] == "package" || args[0] == "build-iso" || args[0] == "import") &&
-			(args[1] == "status" || args[1] == "log") {
-			return nil
-		}
-		if args.First() == "config" {
-			return nil
-		}
-		if target == "prod" {
-			return fmt.Errorf("prod target permits only local config until server authorization is available")
-		}
-		if args.First() == "update" {
-			return nil
-		}
-		cfg, err := svc.LoadConfig()
-		if err != nil {
-			return err
-		}
-		chiefURL, err := url.Parse(cfg.ChiefAddress)
-		if err != nil {
-			return errors.New("invalid chief URL configuration")
-		}
-		chiefURL.User = nil
-		chiefURL.RawQuery = ""
-		chiefURL.Fragment = ""
-		fmt.Printf("Target: %s\nChief: %s\n", target, chiefURL.String())
 		return nil
 	}
 
@@ -138,31 +105,31 @@ func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.
 					Usage: "Do not verify the package with a local binary build before submitting",
 				},
 			},
-			Action: packageSubmitAction(ctx, svc),
+			Action: targetAction(svc, target, packageSubmitAction(ctx, svc)),
 			Subcommands: []cli.Command{
 				{
 					Name:   "status",
 					Usage:  "Check status of a package build pipeline",
-					Action: packageStatusAction(ctx, svc),
+					Action: targetAction(svc, target, packageStatusAction(ctx, svc)),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of a package build pipeline",
-					Action: packageLogAction(ctx, svc),
+					Action: targetAction(svc, target, packageLogAction(ctx, svc)),
 				},
 			},
 		},
 		{
 			Name:   "retry",
 			Usage:  "Retry a failed pipeline",
-			Action: retryAction(ctx, svc),
+			Action: targetAction(svc, target, retryAction(ctx, svc)),
 		},
 		{
 			Name: "cancel",
 			Usage: "Cancel a queued or running job, e.g. irgsh-cli cancel <pipeline-id>. " +
 				"A package pipeline that has reached its repo stage cannot be cancelled: " +
 				"interrupting reprepro can corrupt the repository database",
-			Action: cancelAction(ctx, svc),
+			Action: targetAction(svc, target, cancelAction(ctx, svc)),
 		},
 		{
 			Name:  "build-iso",
@@ -181,17 +148,17 @@ func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.
 					Usage: "Clear the reusable live-build directories (cache, chroot, auto, local) before building",
 				},
 			},
-			Action: isoSubmitAction(ctx, svc),
+			Action: targetAction(svc, target, isoSubmitAction(ctx, svc)),
 			Subcommands: []cli.Command{
 				{
 					Name:   "status",
 					Usage:  "Check status of an ISO build pipeline",
-					Action: isoStatusAction(ctx, svc),
+					Action: targetAction(svc, target, isoStatusAction(ctx, svc)),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of an ISO build pipeline",
-					Action: isoLogAction(ctx, svc),
+					Action: targetAction(svc, target, isoLogAction(ctx, svc)),
 				},
 			},
 		},
@@ -256,28 +223,49 @@ func buildApp(ctx context.Context, svc CLIService, version, target string) *cli.
 					Usage: "Accept the extra packages a dependency resolution pulls in, without prompting",
 				},
 			},
-			Action: importSubmitAction(ctx, svc),
+			Action: targetAction(svc, target, importSubmitAction(ctx, svc)),
 			Subcommands: []cli.Command{
 				{
 					Name:   "status",
 					Usage:  "Check status of an import pipeline",
-					Action: importStatusAction(ctx, svc),
+					Action: targetAction(svc, target, importStatusAction(ctx, svc)),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of an import pipeline",
-					Action: importLogAction(ctx, svc),
+					Action: targetAction(svc, target, importLogAction(ctx, svc)),
 				},
 			},
 		},
 		{
 			Name:   "update",
 			Usage:  "Update the irgsh-cli tool",
-			Action: updateAction(ctx, svc),
+			Action: updateAction(ctx, svc, target),
 		},
 	}
 
 	return app
+}
+
+func targetAction(svc CLIService, target string, action cli.ActionFunc) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		if target == "prod" {
+			return errors.New("prod target permits only local config until server authorization is available")
+		}
+		cfg, err := svc.LoadConfig()
+		if err != nil {
+			return err
+		}
+		chiefURL, err := url.Parse(cfg.ChiefAddress)
+		if err != nil {
+			return errors.New("invalid chief URL configuration")
+		}
+		chiefURL.User = nil
+		chiefURL.RawQuery = ""
+		chiefURL.Fragment = ""
+		fmt.Printf("Target: %s\nChief: %s\n", target, chiefURL.String())
+		return action(c)
+	}
 }
 
 func configAction(svc CLIService) cli.ActionFunc {
@@ -436,8 +424,11 @@ func cancelAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	}
 }
 
-func updateAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func updateAction(ctx context.Context, svc CLIService, target string) cli.ActionFunc {
 	return func(c *cli.Context) error {
+		if target == "prod" {
+			return errors.New("prod target permits only local config until server authorization is available")
+		}
 		return svc.UpdateCLI(ctx)
 	}
 }

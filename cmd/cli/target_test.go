@@ -288,13 +288,30 @@ func TestHelpNeedsNoProfile(t *testing.T) {
 		{"irgsh-cli", "h"},
 		{"irgsh-cli", "package", "--help"},
 		{"irgsh-cli", "package", "status", "--help"},
+		{"irgsh-cli", "package", "help", "status"},
+		{"irgsh-cli", "package", "--dist", "test", "--help"},
+		{"irgsh-cli", "package", "status", "pkg-id", "--help"},
 		{"irgsh-cli", "--target", "prod"},
 		{"irgsh-cli", "--target", "prod", "help"},
 		{"irgsh-cli", "--target", "prod", "package", "--help"},
 		{"irgsh-cli", "--target", "prod", "import", "log", "--help"},
+		{"irgsh-cli", "--target", "prod", "package", "help", "status"},
+		{"irgsh-cli", "--target", "prod", "package", "--dist", "test", "--help"},
+		{"irgsh-cli", "--target", "prod", "package", "status", "pkg-id", "--help"},
 	} {
 		if err := runCLI(context.Background(), args, t.TempDir(), "test"); err != nil {
 			t.Fatalf("%v help error = %v", args, err)
 		}
+	}
+}
+
+func TestProdPositionalHelpIsStillBlocked(t *testing.T) {
+	service := &rejectingService{}
+	err := buildApp(context.Background(), service, "test", "prod").Run([]string{"irgsh-cli", "--target", "prod", "package", "status", "help"})
+	if err == nil || !strings.Contains(err.Error(), "server authorization") {
+		t.Fatalf("prod status help ID error = %v", err)
+	}
+	if len(service.calls) != 0 {
+		t.Fatalf("prod status help ID called service methods: %v", service.calls)
 	}
 }
