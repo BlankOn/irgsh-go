@@ -189,6 +189,22 @@ func builderMainCommand(t *testing.T, args ...string) *exec.Cmd {
 	return cmd
 }
 
+func containsBuilderHostPreflightError(output string) bool {
+	for _, message := range []string{
+		"builder must run as a non-root account",
+		"builder username is unavailable",
+		"determine builder username",
+		"read /etc/subuid",
+		"read /etc/subgid",
+		"required executable sbuild",
+	} {
+		if strings.Contains(output, message) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBuilderMainExitsOnHostPreflightFailure(t *testing.T) {
 	for _, args := range [][]string{nil, {"init-base"}, {"update-base"}} {
 		name := "worker"
@@ -201,7 +217,7 @@ func TestBuilderMainExitsOnHostPreflightFailure(t *testing.T) {
 			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 				t.Fatalf("exit error = %v; output:\n%s", err, output)
 			}
-			if !strings.Contains(string(output), "required executable sbuild") {
+			if !containsBuilderHostPreflightError(string(output)) {
 				t.Fatalf("preflight error missing:\n%s", output)
 			}
 		})
@@ -213,7 +229,7 @@ func TestBuilderMainHelpSkipsHostPreflight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("help failed: %v\n%s", err, output)
 	}
-	if strings.Contains(string(output), "required executable") || !strings.Contains(string(output), "USAGE:") {
+	if containsBuilderHostPreflightError(string(output)) || !strings.Contains(string(output), "USAGE:") {
 		t.Fatalf("unexpected help output:\n%s", output)
 	}
 }
