@@ -41,6 +41,9 @@ release-components:
 test-release-components:
 	./utils/scripts/release-components_test.sh
 
+test-release-policy:
+	./utils/scripts/validate-release_test.sh
+
 release-in-docker: release
 	# It's possible this release command will be used inside a container
 	# Let it rewriteable for host environment
