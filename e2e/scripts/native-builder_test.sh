@@ -22,6 +22,35 @@ source "$SCRIPT_DIR/native-builder.sh"
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
+check_mapping() {
+    local expected="$1" rows="$2" status=0 output
+    printf '%s\n' "$rows" > "$TEST_DIR/subids"
+    output=$(check_subordinate_range "$TEST_DIR/subids") || status=$?
+    if [ "$expected" = valid ]; then
+        [ "$status" -eq 0 ] && [ -n "$output" ] || { echo "FAIL: valid mapping rejected: $rows" >&2; exit 1; }
+    else
+        [ "$status" -ne 0 ] && [ -z "$output" ] || { echo "FAIL: invalid mapping accepted: $rows" >&2; exit 1; }
+    fi
+}
+
+check_mapping valid 'irgsh-builder-e2e:4294901759:65536'
+check_mapping valid $'irgsh-builder-e2e:100000:65536\nirgsh-builder-e2e:bad:1'
+check_mapping valid $'irgsh-builder-e2e-other:100000:1\nirgsh-builder-e2e:200000:65536'
+for first in \
+    'irgsh-builder-e2e:4294901760:65536' \
+    'irgsh-builder-e2e:4294967296:65536' \
+    'irgsh-builder-e2e:1:18446744073709551615' \
+    'irgsh-builder-e2e:100000:65535' \
+    'irgsh-builder-e2e:bad:65536' \
+    'irgsh-builder-e2e: 100000:65536' \
+    'irgsh-builder-e2e:100000:65536 ' \
+    'irgsh-builder-e2e:100000:65536:extra' \
+    'irgsh-builder-e2e'; do
+    check_mapping invalid "$first"
+    check_mapping invalid "$first"$'\nirgsh-builder-e2e:200000:65536'
+done
+check_mapping invalid 'irgsh-builder-e2e-other:100000:65536'
+
 (
     sbuild() {
         [ "${SBUILD_CONFIG:-}" = "$TEST_DIR/test.conf" ] || return 64

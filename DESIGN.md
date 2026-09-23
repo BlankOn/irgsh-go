@@ -48,10 +48,10 @@ cancellation. SQLite is the authoritative durable job store; Redis is
 coordination state, not a replacement for job persistence.
 
 `irgsh-builder` consumes `build` tasks. It downloads a signed submission,
-prepares a job workspace, builds the source with pbuilder inside the `pbocker`
-container, verifies expected package output, and uploads artifacts and logs to
-chief. Initialization creates the pbuilder base and container image separately
-from normal job handling.
+preserves its source in an isolated job workspace, builds with native
+`sbuild --chroot-mode=unshare`, verifies package output, and uploads artifacts
+and logs to chief. A dedicated unprivileged account owns builder state.
+Initialization creates a distribution-specific base with `mmdebstrap --mode=unshare`.
 
 `irgsh-repo` consumes `repo` and `import` tasks. A repo task downloads builder
 artifacts and injects them into the normal or experimental reprepro suite. An
@@ -140,14 +140,17 @@ source using installed or explicitly selected keyrings. `--insecure` is an
 explicit trust reduction, not a successful verification.
 
 The process boundary includes Bash-based helpers and standard tools such as apt,
-pbuilder, Docker, reprepro, GPG, tar, and live-build. Dynamic values must be
+sbuild, mmdebstrap, reprepro, GPG, tar, and live-build. Dynamic values must be
 validated and passed as process arguments where possible. Shell pipelines that
 remain must quote every dynamic value and must not expose credentials in the
 logged command.
 
-Builder base initialization and ISO builds cross a root boundary. Builder
-initialization installs host packages and changes root-owned pbuilder state. ISO
-builds require passwordless sudo and can create root-owned process trees. Repo
+Builder host provisioning installs packages and allocates subordinate UID/GID
+ranges administratively; base creation and builds remain unprivileged, using
+only the narrow set-ID mapping helpers. The dedicated account receives no
+signing keys, deployment credentials, or runtime socket access. See the
+[rootless builder guide](docs/rootless-builder.md) for prerequisites and evidence.
+ISO builds require passwordless sudo and can create root-owned process trees. Repo
 initialization destroys and recreates configured suites. These operations belong
 on explicitly authorized, isolated hosts; normal development and tests must not
 silently invoke them.
@@ -166,8 +169,10 @@ availability reporting, not durable job ownership.
 Repo owns reprepro databases and exported archives. A running reprepro mutation
 is an integrity boundary: interruption during injection or export can corrupt the
 archive. ISO owns a persistent build tree and versioned output directories.
-Builder owns per-job workspaces and container IDs needed to clean up a canceled
-container build.
+Builder owns distribution-specific base tarballs and isolated per-job workspaces.
+Base replacement is atomic; each job hard-links its selected base so updates
+cannot change an active build. Signed source inputs remain immutable across
+retries, while every attempt gets fresh output and temporary directories.
 
 Wire formats are coupled across independently declared types. Package and ISO
 submission fields must stay aligned between CLI and chief, while builder and repo
@@ -186,8 +191,9 @@ partial or stale artifact to repo.
 Cancellation is a Redis mark plus a live publication. A worker checks the mark
 before starting; a running interruptible job receives context cancellation. The
 command helper places the process in its own group, sends SIGTERM, and escalates
-to SIGKILL after the grace period. Builder also removes the container recorded in
-its cidfile.
+to SIGKILL after the grace period. Builder commands use direct argument arrays
+and process-group signals without sudo, wait for termination before cleanup, and
+never collect artifacts after cancellation.
 
 A repo task becomes uninterruptible before it touches reprepro. Chief rejects
 cancellation after a repo task starts. Import remains interruptible during
@@ -200,14 +206,16 @@ later worker failure cannot replace it.
 
 Unit and component tests live beside the Go packages. The routine gate is
 `go vet ./...`, `go test -race ./...`, followed by a build. Pull request CI runs
-those vet and race checks and builds a development release. The E2E workflow is
-manual or nightly and currently uses privileged container assumptions, so it is
-not evidence of rootless deployment.
+those vet and race checks and builds a development release. The manual/nightly
+E2E workflow provisions a dedicated `irgsh-builder-e2e` account with subordinate
+IDs and runs the native builder there. A separate runner orchestrates the
+chief/repo/Redis containers. Workflow configuration alone is not passing evidence;
+native E2E and target-host results must be recorded separately.
 
-Legacy builder and repo integration files are build-tagged and contain skipped
-or host-sensitive initialization tests. They are cleanup candidates, not passing
-coverage and not permission to run initialization on a developer or production
-host.
+Builder tests cover host prerequisites, immutable inputs and base pinning,
+retries, cancellation, and artifact handoff. Legacy repo integration files remain
+build-tagged with skipped or host-sensitive initialization tests. Those are not
+passing coverage or permission to initialize a developer or production host.
 
 The following work is proposed, not implemented by this document:
 

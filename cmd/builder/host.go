@@ -55,10 +55,10 @@ func validateBuilderHost(probe hostProbe) error {
 		return fmt.Errorf("sbuild >= 0.87.0 is required for unshare_mmdebstrap_auto_create; install a supported version: %w", err)
 	}
 	if !hasSubordinateRange(probe.SubUID, probe.Username) {
-		return fmt.Errorf("/etc/subuid needs an exact %s:<start>:<count> row with at least 65536 IDs ending at or below 4294967295; provision the builder subordinate UID range", probe.Username)
+		return fmt.Errorf("/etc/subuid needs its first %s row in exact <account>:<start>:<count> form with at least 65536 IDs ending at or below 4294967294; provision the builder subordinate UID range", probe.Username)
 	}
 	if !hasSubordinateRange(probe.SubGID, probe.Username) {
-		return fmt.Errorf("/etc/subgid needs an exact %s:<start>:<count> row with at least 65536 IDs ending at or below 4294967295; provision the builder subordinate GID range", probe.Username)
+		return fmt.Errorf("/etc/subgid needs its first %s row in exact <account>:<start>:<count> form with at least 65536 IDs ending at or below 4294967294; provision the builder subordinate GID range", probe.Username)
 	}
 	for _, name := range []string{"newuidmap", "newgidmap"} {
 		info, err := probe.Stat(paths[name])
@@ -79,21 +79,19 @@ func validateBuilderHost(probe hostProbe) error {
 func hasSubordinateRange(contents []byte, username string) bool {
 	for _, line := range strings.Split(string(contents), "\n") {
 		fields := strings.Split(line, ":")
-		if len(fields) != 3 || fields[0] != username {
+		if fields[0] != username {
 			continue
 		}
-		if fields[1] == "" || fields[2] == "" {
-			continue
+		if len(fields) != 3 {
+			return false
 		}
 		start, err := strconv.ParseUint(fields[1], 10, 64)
 		if err != nil {
-			continue
+			return false
 		}
 		count, err := strconv.ParseUint(fields[2], 10, 64)
-		const maxID = uint64(1<<32 - 1)
-		if err == nil && count >= 65536 && start <= maxID && count-1 <= maxID-start {
-			return true
-		}
+		const maxID = uint64(1<<32 - 2)
+		return err == nil && count >= 65536 && start <= maxID && count-1 <= maxID-start
 	}
 	return false
 }

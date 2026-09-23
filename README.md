@@ -11,10 +11,12 @@ Patches, suggestions and comments are welcome!
 ## Complete installation
 
 
-You need Docker, Redis and these packages,
+You need Redis and these packages. The native builder requires `sbuild >= 0.87.0`
+and unprivileged user namespaces; see the [rootless builder guide](docs/rootless-builder.md)
+for supported hosts, provisioning, and required evidence.
 
 ```
-gpg pbuilder debootstrap devscripts curl reprepro dh-make
+gpg sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates curl reprepro dh-make
 ```
 
 Install all deps + released IRGSH with this command bellow,
@@ -23,7 +25,9 @@ Install all deps + released IRGSH with this command bellow,
 curl -L -o- https://raw.githubusercontent.com/BlankOn/irgsh-go/master/install.sh | bash
 ```
 
-The command will install the irgsh binaries, default configuration and daemons. A spesial user named `irgsh` will also be added to your system.
+The command installs binaries, configuration, and services. It creates the shared
+`irgsh` account and a separate `irgsh-builder` account. Subordinate UID/GID ranges
+must be allocated before builder initialization; the installer does not allocate them.
 
 ## Package maintainer installation
 
@@ -48,7 +52,7 @@ Package maintainer can update their irgsh-cli by reinstalling the package or usi
 A minimal IRGSH ecosystem contains three services and a CLI tool.
 
 - `irgsh-chief` acts as the master. The others (also applied to`irgsh-cli`) will talk to the chief. The chief also provides a web user interface for workers and pipelines monitoring.
-- `irgsh-builder` is the builder worker of IRGSH.
+- `irgsh-builder` builds packages with native rootless `sbuild`, using `mmdebstrap` bases and a dedicated account.
 - `irgsh-repo` will serves as repository so it may need huge volume of storage.
 - `irgsh-cli` is a client-side tool to maintain packages.
 
@@ -64,7 +68,16 @@ GPG signature is used as authentication bearer on any submission attempt. Hence,
 
 #### IRGSH
 
-Please refer to `/etc/irgsh/config.yaml` for available preferences. Change it as you need.
+Review `/etc/irgsh/config.yaml`, then complete the rootless guide's
+[account provisioning](docs/rootless-builder.md#default-account-provisioning) and
+[subordinate-ID allocation](docs/rootless-builder.md#subordinate-id-allocation).
+Do not initialize the builder before both `/etc/subuid` and `/etc/subgid` have
+valid mappings for its dedicated account. Follow
+[base initialization](docs/rootless-builder.md#base-initialization-and-update)
+for builder-only setup.
+
+For full initial setup, after those prerequisites, the interactive command also
+offers destructive repository initialization. Use it only on the intended host:
 
 ```
 irgsh-init
@@ -118,7 +131,7 @@ Their logs are available at `/var/log/irgsh/`. After these three services are up
 Submit a package build job,
 
 ```
-irgsh-cli package --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
+irgsh-cli package --dist verbeek --source https://github.com/BlankOn/bromo-theme.git --package https://github.com/BlankOn-packages/bromo-theme.git
 ```
 
 Check the status of a package build pipeline,
@@ -174,7 +187,7 @@ with `current/` pointing at the newest build.
 
 ### Why rewrite it?
 
-IRGSH was written in Python 2.6.x and it depends on some old and deprecated libraries. Even one of them (in a specific version, respectively) is no longer exists on the internet. A real dependency hell. It’s hard to deploy IRGSH in a modern operating system and it keeps alynne.blankonlinux.or.id from an important system upgrade. The IRGSH was also very modular but combining them into a working distributed cluster takes time and quite steep learning curve. We still need to prepare a lot of things manually before doing that. Pbuilder needs to be configured and setup. Which also true for the reprepro repository. No easy way.
+IRGSH was written in Python 2.6.x and it depends on some old and deprecated libraries. Even one of them (in a specific version, respectively) is no longer exists on the internet. A real dependency hell. It’s hard to deploy IRGSH in a modern operating system and it keeps alynne.blankonlinux.or.id from an important system upgrade. The IRGSH was also very modular but combining them into a working distributed cluster takes time and quite steep learning curve. The old system required manual pbuilder and reprepro setup. No easy way.
 
 Although, there is no doubt that the old IRGSH does its work well.
 
@@ -186,9 +199,13 @@ For its portable compiled binary.
 
 You can. Just make sure these workers pointed out to the same Redis server (see `/etc/irgsh/config.yaml`). Also please consider this, https://redis.io/topics/security.
 
-### Why is Docker required?
+### Does the package builder need Docker?
 
-To build a package using `pbuilder`, `sudo` or root privilege is required but it's not okay to rely on root privilege for repetitive tasks. To get rid of this, we containerized the build process.
+No. Base creation uses `mmdebstrap --mode=unshare`; builds use
+`sbuild --chroot-mode=unshare` under a dedicated account with subordinate IDs.
+Each job preserves its submitted source and pinned base across isolated retry
+workspaces. Cancellation signals the build process group directly. See the
+[rootless builder guide](docs/rootless-builder.md) for host requirements and evidence.
 
 ## Troubleshooting notes
 
@@ -226,12 +243,10 @@ It may caused either by:
 ### Builder
 
 - Init:
-  - base.tgz :heavy_check_mark:
-- Clone :heavy_check_mark:
-- Signing :heavy_check_mark:
+  - mmdebstrap base.tar :heavy_check_mark:
 - Build :heavy_check_mark:
 - Upload :heavy_check_mark:
-- Dockerized pbuilder :heavy_check_mark:
+- Native rootless sbuild :heavy_check_mark:
 - Multiarch support
 - RPM support
 

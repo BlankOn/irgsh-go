@@ -33,6 +33,14 @@ check_builder_directory() {
     fi
 }
 
+check_subordinate_range() {
+    awk -F: '$1 == "irgsh-builder-e2e" {
+        valid = NF == 3 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $3 >= 65536 && $2 <= 4294967294 && $3 - 1 <= 4294967294 - $2
+        if (valid) print
+        exit
+    } END { exit !valid }' "$1"
+}
+
 check_builder_host() {
     local directory="$1" tool helper socket
     if [ "$(id -u)" -eq 0 ] || [ "$(id -un)" != irgsh-builder-e2e ]; then
@@ -57,8 +65,8 @@ check_builder_host() {
         stat -Lc '%n owner=%U mode=%a' "$helper"
     done
     for tool in /etc/subuid /etc/subgid; do
-        awk -F: '$1 == "irgsh-builder-e2e" && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $3 >= 65536 && $2 + $3 <= 4294967296 { print; found=1 } END { exit !found }' "$tool" || {
-            echo "Missing valid builder subordinate range: $tool" >&2
+        check_subordinate_range "$tool" || {
+            echo "The first irgsh-builder-e2e row in $tool must have exactly three fields and at least 65536 IDs ending at or below 4294967294" >&2
             return 1
         }
     done

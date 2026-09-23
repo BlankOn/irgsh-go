@@ -189,7 +189,8 @@ func TestValidateBuilderHostChecksSubordinateNamespaceBoundary(t *testing.T) {
 		row   string
 		valid bool
 	}{
-		{name: "highest valid range", row: "irgsh-builder:4294901760:65536", valid: true},
+		{name: "highest valid range", row: "irgsh-builder:4294901759:65536", valid: true},
+		{name: "reserved end", row: "irgsh-builder:4294901760:65536"},
 		{name: "start exceeds uint32", row: "irgsh-builder:4294967296:65536"},
 		{name: "inclusive end exceeds uint32", row: "irgsh-builder:4294901761:65536"},
 		{name: "count overflows end", row: "irgsh-builder:1:18446744073709551615"},
@@ -213,8 +214,42 @@ func TestValidateBuilderHostReportsSubordinateNamespaceBoundary(t *testing.T) {
 	probe := validHostProbe()
 	probe.SubUID = []byte("irgsh-builder:4294901761:65536\n")
 	err := validateBuilderHost(probe)
-	if err == nil || !strings.Contains(err.Error(), "4294967295") {
+	if err == nil || !strings.Contains(err.Error(), "4294967294") {
 		t.Fatalf("boundary remediation missing: %v", err)
+	}
+}
+
+func TestValidateBuilderHostUsesFirstAccountRange(t *testing.T) {
+	cases := []struct {
+		name  string
+		rows  string
+		valid bool
+	}{
+		{name: "undersized first", rows: "irgsh-builder:100000:1\nirgsh-builder:200000:65536\n"},
+		{name: "malformed first", rows: "irgsh-builder:bad:65536\nirgsh-builder:200000:65536\n"},
+		{name: "extra field first", rows: "irgsh-builder:100000:65536:extra\nirgsh-builder:200000:65536\n"},
+		{name: "missing fields first", rows: "irgsh-builder\nirgsh-builder:200000:65536\n"},
+		{name: "reserved end first", rows: "irgsh-builder:4294901760:65536\nirgsh-builder:200000:65536\n"},
+		{name: "overflow first", rows: "irgsh-builder:1:18446744073709551615\nirgsh-builder:200000:65536\n"},
+		{name: "valid first", rows: "irgsh-builder:100000:65536\nirgsh-builder:bad:1\n", valid: true},
+		{name: "exact account", rows: "irgsh-builder-extra:100000:1\nirgsh-builder:200000:65536\n", valid: true},
+		{name: "other account only", rows: "irgsh-builder-extra:100000:65536\n"},
+	}
+	for _, tc := range cases {
+		for _, table := range []string{"/etc/subuid", "/etc/subgid"} {
+			t.Run(tc.name+table, func(t *testing.T) {
+				probe := validHostProbe()
+				if table == "/etc/subuid" {
+					probe.SubUID = []byte(tc.rows)
+				} else {
+					probe.SubGID = []byte(tc.rows)
+				}
+				err := validateBuilderHost(probe)
+				if tc.valid && err != nil || !tc.valid && (err == nil || !strings.Contains(err.Error(), table)) {
+					t.Fatalf("valid = %v; error = %v", tc.valid, err)
+				}
+			})
+		}
 	}
 }
 

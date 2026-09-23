@@ -78,8 +78,11 @@ sudo cat /etc/subuid /etc/subgid
 Replace `START-END` below with an administrator-selected decimal range.
 `END - START + 1` must be at least 65536. Neither range may overlap an existing
 entry in its respective `/etc/subuid` or `/etc/subgid` file, host account IDs,
-or another builder's allocation. Each file needs an exact account-name row;
-numeric UID aliases alone do not satisfy the builder's preflight.
+or another builder's allocation. The inclusive end must not exceed `4294967294`;
+`4294967295` is reserved. Only the first exact account-name row in each file is
+used, and it must contain exactly three fields with a usable range. A later
+valid row cannot repair an invalid first row. Numeric UID aliases alone do not
+satisfy the builder's preflight.
 
 ```sh
 sudo usermod --add-subuids START-END --add-subgids START-END irgsh-builder
