@@ -12,7 +12,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    devscripts dpkg-dev \
+    devscripts dpkg-dev debhelper \
     reprepro \
     gnupg gpg-agent dirmngr \
     curl wget git ca-certificates \

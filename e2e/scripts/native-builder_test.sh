@@ -4,6 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 grep -q 'runs-on: ubuntu-24.04' "$SCRIPT_DIR/../../.github/workflows/e2e.yaml"
 grep -q 'apt-get install -y -t noble-backports sbuild' "$SCRIPT_DIR/../../.github/workflows/e2e.yaml"
+grep -Eq '(^|[[:space:]])debhelper([[:space:]]|$)' "$SCRIPT_DIR/../Dockerfile"
+if grep -En '(^|[[:space:]])(pbuilder|debootstrap|equivs|docker-ce-cli|docker[.]io)([[:space:]]|$)' "$SCRIPT_DIR/../Dockerfile"; then
+    echo 'Legacy builder dependencies must remain absent from the E2E image' >&2
+    exit 1
+fi
 source "$SCRIPT_DIR/native-builder.sh"
 (
     sbuild() { printf 'sbuild (Debian sbuild) %s (test fixture)\n' "$TEST_VERSION"; }
