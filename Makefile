@@ -100,11 +100,7 @@ chief: load-gpg
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-chief ./cmd/chief && DEV=1 ./bin/irgsh-chief
 
 builder-init:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && sudo DEV=1 ./bin/irgsh-builder init-base
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder init-builder
-
-builder-init-builder:
-	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder init-builder
+	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder init-base
 
 builder:
 	go build -ldflags $(LDFLAGS) -o ./bin/irgsh-builder ./cmd/builder && DEV=1 ./bin/irgsh-builder

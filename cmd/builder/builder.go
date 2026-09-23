@@ -9,8 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/blankon/irgsh-go/internal/logstream"
@@ -175,38 +173,17 @@ func Build(payload string) (next string, err error) {
 }
 
 func buildPackage(ctx context.Context, job buildJob, attempt attemptPaths, source sourceSet) (attemptPaths, error) {
-	for _, name := range source.Files {
-		if err := os.Link(filepath.Join(attempt.Input, name), filepath.Join(attempt.Result, name)); err != nil {
-			return attempt, fmt.Errorf("link build source %q: %w", name, err)
-		}
+	architecture, err := nativeArchitecture(ctx, systemutil.CmdExecArgsContext)
+	if err != nil {
+		return attempt, err
 	}
-	cidPath := filepath.Join(attempt.Temp, "container.cid")
-	defer removeBuildContainer(cidPath)
-	args := []string{
-		"run", "--privileged=true", "--user", "0:0",
-		"-e", "BUILD_ATTEMPTS=" + strconv.Itoa(irgshConfig.Builder.Attempts()),
-		"--cidfile", cidPath,
-		"-v", attempt.Result + ":/tmp/build",
-		"-i", "pbocker", "bash", "-c", "/build.sh",
+	identity, err := baseIdentity(irgshConfig.Builder, architecture)
+	if err != nil {
+		return attempt, err
 	}
-	_, err := systemutil.CmdExecArgsContext(ctx, "docker", args, nil, "Building the package", job.Log)
-	return attempt, err
-}
-
-func removeBuildContainer(cidPath string) {
-	cid, err := os.ReadFile(cidPath)
-	if err == nil {
-		if id := strings.TrimSpace(string(cid)); id != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-			if _, err := systemutil.CmdExecArgsContext(ctx, "docker", []string{"rm", "-f", id}, nil, "", ""); err != nil {
-				log.Printf("unable to remove build container: %v", err)
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		log.Printf("unable to read build container ID: %v", err)
+	base, err := builderBasePaths(irgshConfig.Builder.Workdir, identity)
+	if err != nil {
+		return attempt, err
 	}
-	if err := os.Remove(cidPath); err != nil && !os.IsNotExist(err) {
-		log.Printf("unable to remove build container ID: %v", err)
-	}
+	return runSbuild(ctx, job, attempt, source, base, architecture, irgshConfig.Builder.Attempts(), systemutil.CmdExecArgsContext)
 }

@@ -30,14 +30,7 @@ builder:
   dist_codename: 'verbeek'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
-  # Fallback resolvers appended to the build chroot's resolv.conf, after the
-  # resolvers the container already inherited. Defaults to 1.1.1.1, 8.8.8.8.
-  # Applied when the pbocker image is built (irgsh-builder init).
-  # dns:
-  #   - '1.1.1.1'
-  #   - '8.8.8.8'
-  # How many times a build whose log shows a transient network/DNS failure is
-  # retried inside the container. Defaults to 3.
+  # Maximum sbuild attempts for transient network failures. Defaults to 3.
   # build_attempts: 3
 
 repo:
