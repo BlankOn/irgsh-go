@@ -51,6 +51,10 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
+	if os.Getenv("IRGSH_TEST_BUILDER_MAIN") == "1" {
+		main()
+		return
+	}
 	os.Exit(m.Run())
 }
 

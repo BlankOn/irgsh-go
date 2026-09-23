@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/blankon/irgsh-go/internal/config"
 )
 
 type hostFileInfo struct {
@@ -121,5 +125,95 @@ func TestValidateBuilderHostRequiresExactSubordinateRows(t *testing.T) {
 				t.Fatalf("row %q accepted: %v", row, err)
 			}
 		})
+	}
+}
+
+func TestValidateBuilderHostChecksSubordinateNamespaceBoundary(t *testing.T) {
+	cases := []struct {
+		name  string
+		row   string
+		valid bool
+	}{
+		{name: "highest valid range", row: "irgsh-builder:4294901760:65536", valid: true},
+		{name: "start exceeds uint32", row: "irgsh-builder:4294967296:65536"},
+		{name: "inclusive end exceeds uint32", row: "irgsh-builder:4294901761:65536"},
+		{name: "count overflows end", row: "irgsh-builder:1:18446744073709551615"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := validHostProbe()
+			probe.SubUID = []byte(tc.row + "\n")
+			err := validateBuilderHost(probe)
+			if tc.valid && err != nil {
+				t.Fatalf("valid boundary rejected: %v", err)
+			}
+			if !tc.valid && (err == nil || !strings.Contains(err.Error(), "/etc/subuid")) {
+				t.Fatalf("invalid boundary accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateBuilderHostReportsSubordinateNamespaceBoundary(t *testing.T) {
+	probe := validHostProbe()
+	probe.SubUID = []byte("irgsh-builder:4294901761:65536\n")
+	err := validateBuilderHost(probe)
+	if err == nil || !strings.Contains(err.Error(), "4294967295") {
+		t.Fatalf("boundary remediation missing: %v", err)
+	}
+}
+
+func builderMainCommand(t *testing.T, args ...string) *exec.Cmd {
+	t.Helper()
+	cfg := config.IrgshConfig{
+		Redis: "redis://127.0.0.1:1",
+		Chief: config.ChiefConfig{Address: "http://127.0.0.1:1"},
+		Builder: config.BuilderConfig{
+			Workdir:              filepath.Join(t.TempDir(), "builder"),
+			DistCodename:         "verbeek",
+			UpstreamDistCodename: "sid",
+			UpstreamDistUrl:      "http://deb.debian.org/debian",
+		},
+	}
+	contents, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	commandArgs := append([]string{"-c", configPath}, args...)
+	cmd := exec.Command(os.Args[0], commandArgs...)
+	cmd.Env = append(os.Environ(), "IRGSH_TEST_BUILDER_MAIN=1", "PATH="+t.TempDir())
+	return cmd
+}
+
+func TestBuilderMainExitsOnHostPreflightFailure(t *testing.T) {
+	for _, args := range [][]string{nil, {"init-base"}, {"update-base"}} {
+		name := "worker"
+		if len(args) != 0 {
+			name = args[0]
+		}
+		t.Run(name, func(t *testing.T) {
+			output, err := builderMainCommand(t, args...).CombinedOutput()
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+				t.Fatalf("exit error = %v; output:\n%s", err, output)
+			}
+			if !strings.Contains(string(output), "required executable sbuild") {
+				t.Fatalf("preflight error missing:\n%s", output)
+			}
+		})
+	}
+}
+
+func TestBuilderMainHelpSkipsHostPreflight(t *testing.T) {
+	output, err := builderMainCommand(t, "--help").CombinedOutput()
+	if err != nil {
+		t.Fatalf("help failed: %v\n%s", err, output)
+	}
+	if strings.Contains(string(output), "required executable") || !strings.Contains(string(output), "USAGE:") {
+		t.Fatalf("unexpected help output:\n%s", output)
 	}
 }

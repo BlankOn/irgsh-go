@@ -35,10 +35,10 @@ func validateBuilderHost(probe hostProbe) error {
 		paths[name] = path
 	}
 	if !hasSubordinateRange(probe.SubUID, probe.Username) {
-		return fmt.Errorf("/etc/subuid needs an exact %s:<start>:<count> row with at least 65536 IDs; provision the builder subordinate UID range", probe.Username)
+		return fmt.Errorf("/etc/subuid needs an exact %s:<start>:<count> row with at least 65536 IDs ending at or below 4294967295; provision the builder subordinate UID range", probe.Username)
 	}
 	if !hasSubordinateRange(probe.SubGID, probe.Username) {
-		return fmt.Errorf("/etc/subgid needs an exact %s:<start>:<count> row with at least 65536 IDs; provision the builder subordinate GID range", probe.Username)
+		return fmt.Errorf("/etc/subgid needs an exact %s:<start>:<count> row with at least 65536 IDs ending at or below 4294967295; provision the builder subordinate GID range", probe.Username)
 	}
 	for _, name := range []string{"newuidmap", "newgidmap"} {
 		info, err := probe.Stat(paths[name])
@@ -65,11 +65,13 @@ func hasSubordinateRange(contents []byte, username string) bool {
 		if fields[1] == "" || fields[2] == "" {
 			continue
 		}
-		if _, err := strconv.ParseUint(fields[1], 10, 64); err != nil {
+		start, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
 			continue
 		}
 		count, err := strconv.ParseUint(fields[2], 10, 64)
-		if err == nil && count >= 65536 {
+		const maxID = uint64(1<<32 - 1)
+		if err == nil && count >= 65536 && start <= maxID && count-1 <= maxID-start {
 			return true
 		}
 	}
