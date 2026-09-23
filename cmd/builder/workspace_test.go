@@ -7,12 +7,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -203,12 +207,47 @@ func TestExtractSubmissionAcceptsRegularFilesAndDirectories(t *testing.T) {
 		tar.Header{Name: "signed/source.dsc", Typeflag: tar.TypeReg, Size: 3},
 	)
 	destination := filepath.Join(t.TempDir(), "extract")
-	if err := extractSubmission(archive, destination); err != nil {
+	if err := extractSubmission(context.Background(), archive, destination); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(destination, "signed", "source.dsc"))
 	if err != nil || string(data) != "xxx" {
 		t.Fatalf("extracted file = %q, %v", data, err)
+	}
+}
+
+func TestExtractSubmissionAcceptsQueuedCLIArchiveWithUnpackedLinks(t *testing.T) {
+	root, input, _ := sourceFixture(t, "hello_1.0.orig.tar.gz", []byte("source bytes"), ".")
+	unpacked := filepath.Join(root, "hello-1.0-1")
+	if err := os.Mkdir(unpacked, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(unpacked, "file"), []byte("source file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("file", filepath.Join(unpacked, "symlink")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../outside", filepath.Join(unpacked, "outside-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(filepath.Join(unpacked, "file"), filepath.Join(unpacked, "hardlink")); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "submission.tar.gz")
+	if out, err := exec.Command("tar", "-zcf", archive, "-C", root, ".").CombinedOutput(); err != nil {
+		t.Fatalf("create CLI-shaped archive: %s: %v", out, err)
+	}
+	destination := filepath.Join(t.TempDir(), "extracted")
+	if err := extractSubmission(context.Background(), archive, destination); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(destination, "hello-1.0-1")); !os.IsNotExist(err) {
+		t.Fatalf("irrelevant unpacked tree was materialized: %v", err)
+	}
+	source, err := prepareSource(context.Background(), destination, input)
+	if err != nil || !reflect.DeepEqual(source.Files, []string{"hello_1.0.dsc", "hello_1.0.orig.tar.gz"}) {
+		t.Fatalf("queued archive source = %+v, %v", source, err)
 	}
 }
 
@@ -234,7 +273,7 @@ func TestExtractSubmissionRejectsDuplicateMember(t *testing.T) {
 		tar.Header{Name: "same", Typeflag: tar.TypeReg, Size: 1},
 		tar.Header{Name: "./same", Typeflag: tar.TypeReg, Size: 1},
 	)
-	if err := extractSubmission(archive, filepath.Join(t.TempDir(), "extract")); err == nil {
+	if err := extractSubmission(context.Background(), archive, filepath.Join(t.TempDir(), "extract")); err == nil {
 		t.Fatal("duplicate destination accepted")
 	}
 }
@@ -244,7 +283,7 @@ func TestExtractSubmissionRejectsDuplicateRootDirectory(t *testing.T) {
 		tar.Header{Name: "./", Typeflag: tar.TypeDir},
 		tar.Header{Name: ".", Typeflag: tar.TypeDir},
 	)
-	if err := extractSubmission(archive, filepath.Join(t.TempDir(), "extract")); err == nil {
+	if err := extractSubmission(context.Background(), archive, filepath.Join(t.TempDir(), "extract")); err == nil {
 		t.Fatal("duplicate root directory accepted")
 	}
 }
@@ -254,7 +293,7 @@ func assertRejectedArchive(t *testing.T, member tar.Header, outsideName string) 
 	root := t.TempDir()
 	archive := writeTestArchive(t, member)
 	destination := filepath.Join(root, "extract")
-	if err := extractSubmission(archive, destination); err == nil {
+	if err := extractSubmission(context.Background(), archive, destination); err == nil {
 		t.Fatalf("member %q accepted", member.Name)
 	}
 	out := outsideName
@@ -301,7 +340,7 @@ func TestPrepareSourceAcceptsMemberAtArchiveRoot(t *testing.T) {
 func assertPreparedSource(t *testing.T, location string) {
 	t.Helper()
 	root, input, dsc := sourceFixture(t, "hello_1.0.orig.tar.xz", []byte("source bytes"), location)
-	source, err := prepareSource(root, input)
+	source, err := prepareSource(context.Background(), root, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +370,7 @@ func assertPreparedSource(t *testing.T, location string) {
 	if err != nil || string(stagedMember) != "source bytes" {
 		t.Fatalf("staged member = %q, %v", stagedMember, err)
 	}
-	if err := validateSource(input, source); err != nil {
+	if err := validateSource(context.Background(), input, source); err != nil {
 		t.Fatalf("validate staged source: %v", err)
 	}
 }
@@ -404,7 +443,7 @@ func TestPrepareSourceRejectsWrongSHA256(t *testing.T) {
 
 func TestValidateSourceRejectsChangedStagedMember(t *testing.T) {
 	root, input, _ := sourceFixture(t, "source.tar.xz", []byte("x"), "signed")
-	source, err := prepareSource(root, input)
+	source, err := prepareSource(context.Background(), root, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,19 +454,158 @@ func TestValidateSourceRejectsChangedStagedMember(t *testing.T) {
 	if err := os.WriteFile(member, []byte("y"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateSource(input, source); err == nil {
+	if err := validateSource(context.Background(), input, source); err == nil {
 		t.Fatal("modified staged source accepted")
+	}
+}
+
+func TestValidateSourceRejectsChangedDSC(t *testing.T) {
+	for _, changeMember := range []bool{false, true} {
+		t.Run(fmt.Sprint(changeMember), func(t *testing.T) {
+			root, input, _ := sourceFixture(t, "source.tar.xz", []byte("x"), "signed")
+			source, err := prepareSource(context.Background(), root, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(source.DSC)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed := strings.Replace(string(data), "test-only-signature", "different-signature", 1)
+			if changeMember {
+				member := filepath.Join(input, "source.tar.xz")
+				if err := os.Chmod(member, 0644); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(member, []byte("y"), 0644); err != nil {
+					t.Fatal(err)
+				}
+				changed = testDSC("source.tar.xz", 1, fmt.Sprintf("%x", sha256.Sum256([]byte("y"))))
+			}
+			if err := os.Chmod(source.DSC, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(source.DSC, []byte(changed), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := validateSource(context.Background(), input, source); err == nil {
+				t.Fatal("changed DSC accepted as checksum authority")
+			}
+		})
 	}
 }
 
 func assertPrepareRejected(t *testing.T, root string, input string) {
 	t.Helper()
-	if _, err := prepareSource(root, input); err == nil {
+	if _, err := prepareSource(context.Background(), root, input); err == nil {
 		t.Fatal("unverified source accepted")
 	}
 	if entries, err := os.ReadDir(input); err == nil && len(entries) != 0 {
 		t.Fatalf("rejected source staged %d files", len(entries))
 	} else if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
+	}
+}
+
+type progressCancelContext struct {
+	context.Context
+	cancel context.CancelFunc
+	ready  func() bool
+}
+
+func (ctx progressCancelContext) Err() error {
+	if ctx.ready() {
+		ctx.cancel()
+	}
+	return ctx.Context.Err()
+}
+
+func cancelOnWrite(t *testing.T, filename string) (context.Context, *int64) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	var observed int64
+	return progressCancelContext{ctx, cancel, func() bool {
+		info, err := os.Stat(filename)
+		if err == nil && info.Size() > 0 {
+			if observed == 0 {
+				observed = info.Size()
+			}
+			return true
+		}
+		return false
+	}}, &observed
+}
+
+func cancelOnRead(t *testing.T, filename string) context.Context {
+	t.Helper()
+	fd, err := syscall.InotifyInit1(syscall.IN_NONBLOCK | syscall.IN_CLOEXEC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Close(fd) })
+	if _, err := syscall.InotifyAddWatch(fd, filename, syscall.IN_ACCESS); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return progressCancelContext{ctx, cancel, func() bool {
+		var events [4096]byte
+		n, err := syscall.Read(fd, events[:])
+		if err != nil && !errors.Is(err, syscall.EAGAIN) {
+			t.Fatal(err)
+		}
+		return n > 0
+	}}
+}
+
+func TestExtractSubmissionCancelsDuringCopy(t *testing.T) {
+	archive := writeTestArchive(t, tar.Header{Name: "source.tar.xz", Typeflag: tar.TypeReg, Size: 256 * 1024})
+	destination := t.TempDir()
+	filename := filepath.Join(destination, "source.tar.xz")
+	ctx, _ := cancelOnWrite(t, filename)
+	if err := extractSubmission(ctx, archive, destination); !errors.Is(err, context.Canceled) {
+		t.Fatalf("extraction error = %v, want context.Canceled", err)
+	}
+	info, err := os.Stat(filename)
+	if err != nil || info.Size() >= 256*1024 {
+		t.Fatalf("extraction did not stop during copy: %v, %v", info, err)
+	}
+}
+
+func TestSourceDigestCancelsDuringHash(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "source.tar.xz")
+	if err := os.WriteFile(filename, bytes.Repeat([]byte("x"), 256*1024), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx := cancelOnRead(t, filename)
+	if _, err := sourceDigest(ctx, filename); !errors.Is(err, context.Canceled) {
+		t.Fatalf("hash error = %v, want context.Canceled", err)
+	}
+}
+
+func TestPrepareSourceCancelsDuringCopy(t *testing.T) {
+	root, input, _ := sourceFixture(t, "source.tar.xz", bytes.Repeat([]byte("x"), 256*1024), "signed")
+	ctx, written := cancelOnWrite(t, filepath.Join(input, "source.tar.xz"))
+	if _, err := prepareSource(ctx, root, input); !errors.Is(err, context.Canceled) {
+		t.Fatalf("source preparation error = %v, want context.Canceled", err)
+	}
+	if *written <= 0 || *written >= 256*1024 {
+		t.Fatalf("source copy canceled after %d bytes, want a partial copy", *written)
+	}
+	if entries, err := os.ReadDir(input); err != nil || len(entries) != 0 {
+		t.Fatalf("partial input remains: %v, %v", entries, err)
+	}
+}
+
+func TestValidateSourceCancelsDuringHash(t *testing.T) {
+	root, input, _ := sourceFixture(t, "source.tar.xz", bytes.Repeat([]byte("x"), 256*1024), "signed")
+	source, err := prepareSource(context.Background(), root, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := cancelOnRead(t, filepath.Join(input, "source.tar.xz"))
+	if err := validateSource(ctx, input, source); !errors.Is(err, context.Canceled) {
+		t.Fatalf("source validation error = %v, want context.Canceled", err)
 	}
 }

@@ -125,14 +125,12 @@ func runCommand(ctx context.Context, cmd *exec.Cmd, display string, desc string,
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	exited := make(chan struct{})
 	cmd.Cancel = func() error {
-		terminateGroup(cmd.Process.Pid, exited, privilegedCancel)
+		terminateGroup(cmd.Process.Pid, privilegedCancel)
 		return nil
 	}
 	cmd.WaitDelay = killGrace + 10*time.Second
 	err := cmd.Run()
-	close(exited)
 	out := output.String()
 	if err != nil {
 		cmdErr := &CommandError{
@@ -157,18 +155,23 @@ func runCommand(ctx context.Context, cmd *exec.Cmd, display string, desc string,
 // room; a build that ignores it does not get to keep the worker.
 const killGrace = 15 * time.Second
 
-// terminateGroup asks a command's whole process group to stop, and kills what
-// is still there after killGrace. A group that exits in time closes exited and
-// is never killed.
-func terminateGroup(pid int, exited <-chan struct{}, privileged bool) {
+func terminateGroup(pid int, privileged bool) {
 	signalGroup(pid, "TERM", privileged)
-	go func() {
-		select {
-		case <-exited:
-		case <-time.After(killGrace):
-			signalGroup(pid, "KILL", privileged)
+	deadline := time.NewTimer(killGrace)
+	defer deadline.Stop()
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		if errors.Is(syscall.Kill(-pid, 0), syscall.ESRCH) {
+			return
 		}
-	}()
+		select {
+		case <-poll.C:
+		case <-deadline.C:
+			signalGroup(pid, "KILL", privileged)
+			return
+		}
+	}
 }
 
 func signalGroup(pid int, sig string, privileged bool) {

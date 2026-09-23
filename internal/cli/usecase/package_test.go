@@ -1,16 +1,94 @@
 package usecase_test
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
+	"github.com/blankon/irgsh-go/internal/cli/repository"
 	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type submissionArchiveRepo struct{}
+
+func (submissionArchiveRepo) Sync(_, _, destination string) error {
+	if err := os.MkdirAll(filepath.Join(destination, "debian"), 0755); err != nil {
+		return err
+	}
+	return os.Symlink("debian", filepath.Join(destination, "link"))
+}
+
+type submissionArchiveDebian struct{ mockDebianPackager }
+
+func (submissionArchiveDebian) BuildSource(directory string) error {
+	for _, name := range []string{"hello_1.0-1.dsc", "hello_1.0.orig.tar.xz", "hello_1.0.debian.tar.gz"} {
+		if err := os.WriteFile(filepath.Join(filepath.Dir(directory), name), []byte("test source"), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type submissionArchiveChief struct {
+	mockChiefAPI
+	names []string
+}
+
+func (chief *submissionArchiveChief) UploadSubmission(_ context.Context, archive, _ string, _ func(int64, int64)) (domain.UploadResponse, error) {
+	file, err := os.Open(archive)
+	if err != nil {
+		return domain.UploadResponse{}, err
+	}
+	defer file.Close()
+	compressed, err := gzip.NewReader(file)
+	if err != nil {
+		return domain.UploadResponse{}, err
+	}
+	defer compressed.Close()
+	reader := tar.NewReader(compressed)
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			return domain.UploadResponse{ID: "test-upload"}, nil
+		}
+		if err != nil {
+			return domain.UploadResponse{}, err
+		}
+		chief.names = append(chief.names, header.Name)
+	}
+}
+
+func TestSubmitPackageArchiveOmitsRenamedUnpackedTree(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	binDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "dpkg-genchanges"), []byte("#!/bin/sh\nprintf 'source changes\\n'\n"), 0755))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	chief := &submissionArchiveChief{}
+	svc := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{MaintainerSigningKey: "TEST-KEY"}},
+		&mockPipelineStore{}, chief, repository.ShellRunner{}, submissionArchiveRepo{},
+		&submissionArchiveDebian{mockDebianPackager{packageName: "hello", version: "1.0", extendedVersion: "1"}},
+		&mockGPGSigner{identity: "Test Maintainer"}, nil, nil, nil, "",
+	)
+	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist: "verbeek", PackageURL: "https://example.test/package", IsExperimental: true, IgnoreChecks: true, SkipLocalBuild: true,
+	})
+	require.NoError(t, err)
+	sort.Strings(chief.names)
+	assert.Equal(t, []string{
+		"./", "./hello_1.0.debian.tar.gz", "./signed/", "./signed/hello_1.0-1.dsc", "./signed/hello_1.0-1_source.changes", "./signed/hello_1.0.orig.tar.xz",
+	}, chief.names)
+}
 
 func TestSubmitPackage_ConfigMissing(t *testing.T) {
 	svc := usecase.NewCLIUsecase(

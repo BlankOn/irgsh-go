@@ -32,7 +32,7 @@ func artifactFixture(t *testing.T) (buildJob, attemptPaths, sourceSet) {
 		t.Fatal(err)
 	}
 	root, _, _ := sourceFixture(t, "hello_1.0.orig.tar.xz", []byte("source bytes"), "signed")
-	source, err := prepareSource(root, attempt.Input)
+	source, err := prepareSource(context.Background(), root, attempt.Input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestCollectArtifactsAcceptsDebUdebDdebBuildinfoAndChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeArtifactFixture(t, filepath.Join(attempt.Result, "nested", "ignored.deb"), "nested binary")
-	names, err := collectArtifacts(job, attempt, source)
+	names, err := collectArtifacts(context.Background(), job, attempt, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestCollectArtifactsRequiresBinary(t *testing.T) {
 	if err := os.Remove(filepath.Join(attempt.Result, "hello_1.0_amd64.deb")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := collectArtifacts(job, attempt, source); err == nil {
+	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
 		t.Fatal("accepted output without a binary")
 	}
 }
@@ -96,7 +96,7 @@ func TestCollectArtifactsRequiresBuildinfo(t *testing.T) {
 	if err := os.Remove(filepath.Join(attempt.Result, "hello_1.0_amd64.buildinfo")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := collectArtifacts(job, attempt, source); err == nil {
+	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
 		t.Fatal("accepted output without buildinfo")
 	}
 }
@@ -106,7 +106,7 @@ func TestCollectArtifactsRejectsSymlink(t *testing.T) {
 	if err := os.Symlink(job.Log, filepath.Join(attempt.Result, "linked.deb")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := collectArtifacts(job, attempt, source); err == nil {
+	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
 		t.Fatal("accepted a symlink artifact")
 	}
 }
@@ -118,7 +118,7 @@ func TestCollectArtifactsRejectsSourceChecksumChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeArtifactFixture(t, filename, "source Bytes")
-	if _, err := collectArtifacts(job, attempt, source); err == nil {
+	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
 		t.Fatal("accepted changed source bytes")
 	}
 }
@@ -126,12 +126,12 @@ func TestCollectArtifactsRejectsSourceChecksumChange(t *testing.T) {
 func TestCollectArtifactsRejectsNameCollision(t *testing.T) {
 	job, attempt, _ := artifactFixture(t)
 	root, input, _ := sourceFixture(t, "hello_1.0_amd64.deb", []byte("source bytes"), "signed")
-	source, err := prepareSource(root, input)
+	source, err := prepareSource(context.Background(), root, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	attempt.Input = input
-	if _, err := collectArtifacts(job, attempt, source); err == nil {
+	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
 		t.Fatal("accepted colliding source and binary names")
 	}
 }
@@ -143,7 +143,7 @@ func TestCollectArtifactsRemovesStaleRootArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeArtifactFixture(t, filepath.Join(job.Artifacts, "stale", "old.deb"), "stale")
-	if _, err := collectArtifacts(job, attempt, source); err != nil {
+	if _, err := collectArtifacts(context.Background(), job, attempt, source); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"stale.deb", "stale"} {
@@ -195,11 +195,11 @@ func readArtifactArchive(t *testing.T, filename string) map[string]string {
 
 func TestWriteArtifactArchiveHasOneJobDirectory(t *testing.T) {
 	job, attempt, source := artifactFixture(t)
-	names, err := collectArtifacts(job, attempt, source)
+	names, err := collectArtifacts(context.Background(), job, attempt, source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeArtifactArchive(job, names); err != nil {
+	if err := writeArtifactArchive(context.Background(), job, names); err != nil {
 		t.Fatal(err)
 	}
 	members := readArtifactArchive(t, job.Archive)
@@ -225,7 +225,7 @@ func TestWriteArtifactArchiveHasOneJobDirectory(t *testing.T) {
 
 func TestWriteArtifactArchiveExcludesBuildLogAndScratch(t *testing.T) {
 	job, attempt, source := artifactFixture(t)
-	names, err := collectArtifacts(job, attempt, source)
+	names, err := collectArtifacts(context.Background(), job, attempt, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestWriteArtifactArchiveExcludesBuildLogAndScratch(t *testing.T) {
 		}
 		writeArtifactFixture(t, filepath.Join(job.Artifacts, name, "ignored.deb"), "scratch")
 	}
-	if err := writeArtifactArchive(job, names); err != nil {
+	if err := writeArtifactArchive(context.Background(), job, names); err != nil {
 		t.Fatal(err)
 	}
 	members := readArtifactArchive(t, job.Archive)
@@ -252,11 +252,38 @@ func TestWriteArtifactArchiveExcludesBuildLogAndScratch(t *testing.T) {
 func TestWriteArtifactArchiveRemovesPartialOutput(t *testing.T) {
 	job, _, _ := artifactFixture(t)
 	writeArtifactFixture(t, job.Archive, "old archive")
-	if err := writeArtifactArchive(job, []string{"missing.deb"}); err == nil {
+	if err := writeArtifactArchive(context.Background(), job, []string{"missing.deb"}); err == nil {
 		t.Fatal("archived a missing file")
 	}
 	if _, err := os.Stat(job.Archive); !os.IsNotExist(err) {
 		t.Fatalf("partial archive remains: %v", err)
+	}
+}
+
+func TestCollectArtifactsCancelsDuringCopy(t *testing.T) {
+	job, attempt, source := artifactFixture(t)
+	writeArtifactFixture(t, filepath.Join(attempt.Result, "hello_1.0_amd64.deb"), strings.Repeat("x", 256*1024))
+	ctx, written := cancelOnWrite(t, filepath.Join(job.Artifacts, "hello_1.0_amd64.deb"))
+	if _, err := collectArtifacts(ctx, job, attempt, source); !errors.Is(err, context.Canceled) {
+		t.Fatalf("artifact collection error = %v, want context.Canceled", err)
+	}
+	if *written <= 0 || *written >= 256*1024 {
+		t.Fatalf("artifact copy canceled after %d bytes, want a partial copy", *written)
+	}
+}
+
+func TestWriteArtifactArchiveCancelsDuringCompression(t *testing.T) {
+	job, attempt, source := artifactFixture(t)
+	names, err := collectArtifacts(context.Background(), job, attempt, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := cancelOnWrite(t, job.Archive)
+	if err := writeArtifactArchive(ctx, job, names); !errors.Is(err, context.Canceled) {
+		t.Fatalf("archive error = %v, want context.Canceled", err)
+	}
+	if _, err := os.Stat(job.Archive); !os.IsNotExist(err) {
+		t.Fatalf("canceled artifact archive remains: %v", err)
 	}
 }
 
@@ -403,7 +430,7 @@ func buildFlowFixture(t *testing.T) (buildJob, buildSteps) {
 			if got != job || attempt.Number != 1 || ctx.Err() != nil {
 				t.Fatalf("unexpected preparation input: %+v, %+v, %v", got, attempt, ctx.Err())
 			}
-			return prepareSource(root, attempt.Input)
+			return prepareSource(ctx, root, attempt.Input)
 		},
 		Build: func(ctx context.Context, got buildJob, attempt attemptPaths, source sourceSet) (attemptPaths, error) {
 			if got != job || source.DSC != filepath.Join(attempt.Input, "hello_1.0.dsc") || ctx.Err() != nil {

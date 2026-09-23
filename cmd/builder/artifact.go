@@ -14,11 +14,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
-func collectArtifacts(job buildJob, attempt attemptPaths, source sourceSet) ([]string, error) {
+func collectArtifacts(ctx context.Context, job buildJob, attempt attemptPaths, source sourceSet) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(job.Artifacts, 0755); err != nil {
 		return nil, fmt.Errorf("create artifact directory: %w", err)
 	}
@@ -27,13 +28,16 @@ func collectArtifacts(job buildJob, attempt attemptPaths, source sourceSet) ([]s
 		return nil, fmt.Errorf("read artifact directory: %w", err)
 	}
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if entry.Name() != "build.log" {
 			if err := os.RemoveAll(filepath.Join(job.Artifacts, entry.Name())); err != nil {
 				return nil, fmt.Errorf("remove stale artifact %q: %w", entry.Name(), err)
 			}
 		}
 	}
-	if err := validateSource(attempt.Input, source); err != nil {
+	if err := validateSource(ctx, attempt.Input, source); err != nil {
 		return nil, fmt.Errorf("validate artifact source: %w", err)
 	}
 	paths := make(map[string]string)
@@ -80,7 +84,7 @@ func collectArtifacts(job buildJob, attempt attemptPaths, source sourceSet) ([]s
 	names := make([]string, 0, len(paths))
 	for name, original := range paths {
 		target := filepath.Join(job.Artifacts, name)
-		if err := systemutil.CopyFile(original, target, 0644); err != nil {
+		if err := copyBuildFile(ctx, original, target, 0644); err != nil {
 			return nil, fmt.Errorf("copy artifact %q: %w", name, err)
 		}
 		if err := os.Chmod(target, 0644); err != nil {
@@ -92,7 +96,10 @@ func collectArtifacts(job buildJob, attempt attemptPaths, source sourceSet) ([]s
 	return names, nil
 }
 
-func writeArtifactArchive(job buildJob, names []string) (err error) {
+func writeArtifactArchive(ctx context.Context, job buildJob, names []string) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.Remove(job.Archive); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove previous artifact archive: %w", err)
 	}
@@ -133,7 +140,7 @@ func writeArtifactArchive(job buildJob, names []string) (err error) {
 		if err != nil {
 			return fmt.Errorf("open artifact %q: %w", name, err)
 		}
-		_, copyErr := io.Copy(writer, input)
+		_, copyErr := io.Copy(writer, buildReader{ctx, input})
 		if err := errors.Join(copyErr, input.Close()); err != nil {
 			return fmt.Errorf("archive artifact %q: %w", name, err)
 		}

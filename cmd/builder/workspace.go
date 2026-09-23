@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,8 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
 var safePathID = regexp.MustCompile(`^[a-zA-Z0-9._+-]+$`)
@@ -59,8 +58,54 @@ type attemptPaths struct {
 }
 
 type sourceSet struct {
-	DSC   string
-	Files []string
+	DSC       string
+	DSCSHA256 string
+	Files     []string
+}
+
+type buildReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r buildReader) Read(data []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(data)
+}
+
+func copyBuildFile(ctx context.Context, source, target string, mode os.FileMode) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, input.Close()) }()
+	info, err := input.Stat()
+	if err != nil {
+		return err
+	}
+	output, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, output.Close())
+		if err != nil {
+			err = errors.Join(err, os.Remove(target))
+		}
+	}()
+	written, err := io.Copy(output, buildReader{ctx, input})
+	if err != nil {
+		return err
+	}
+	if written != info.Size() {
+		return fmt.Errorf("copied %d bytes, expected %d", written, info.Size())
+	}
+	return output.Sync()
 }
 
 func validPathID(id string) bool {
@@ -176,7 +221,7 @@ func downloadSubmission(ctx context.Context, client *http.Client, chiefAddress s
 	return nil
 }
 
-func extractSubmission(archivePath string, destination string) error {
+func extractSubmission(ctx context.Context, archivePath string, destination string) error {
 	root, err := filepath.Abs(destination)
 	if err != nil {
 		return fmt.Errorf("resolve extraction root: %w", err)
@@ -186,12 +231,12 @@ func extractSubmission(archivePath string, destination string) error {
 		return fmt.Errorf("open submission archive: %w", err)
 	}
 	defer archive.Close()
-	compressed, err := gzip.NewReader(archive)
+	compressed, err := gzip.NewReader(buildReader{ctx, archive})
 	if err != nil {
 		return fmt.Errorf("read submission gzip: %w", err)
 	}
 	defer compressed.Close()
-	reader := tar.NewReader(compressed)
+	reader := tar.NewReader(buildReader{ctx, compressed})
 	seen := make(map[string]bool)
 	for {
 		header, err := reader.Next()
@@ -200,9 +245,6 @@ func extractSubmission(archivePath string, destination string) error {
 		}
 		if err != nil {
 			return fmt.Errorf("read submission tar: %w", err)
-		}
-		if header.Typeflag != tar.TypeDir && header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
-			return fmt.Errorf("unsupported archive member %q", header.Name)
 		}
 		if path.IsAbs(header.Name) || strings.Contains(header.Name, `\`) {
 			return fmt.Errorf("unsafe archive member %q", header.Name)
@@ -228,6 +270,15 @@ func extractSubmission(archivePath string, destination string) error {
 		if name == "." {
 			continue
 		}
+		if parent, _, nested := strings.Cut(name, "/"); nested && parent != "signed" {
+			continue
+		}
+		if header.Typeflag == tar.TypeDir && name != "signed" {
+			continue
+		}
+		if header.Typeflag != tar.TypeDir && header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return fmt.Errorf("unsupported archive member %q", header.Name)
+		}
 		if header.Typeflag == tar.TypeDir {
 			if err := os.MkdirAll(target, 0755); err != nil {
 				return fmt.Errorf("create archive directory %q: %w", header.Name, err)
@@ -241,7 +292,7 @@ func extractSubmission(archivePath string, destination string) error {
 		if err != nil {
 			return fmt.Errorf("create archive member %q: %w", header.Name, err)
 		}
-		_, copyErr := io.Copy(file, reader)
+		_, copyErr := io.Copy(file, buildReader{ctx, reader})
 		closeErr := file.Close()
 		if copyErr != nil {
 			return fmt.Errorf("extract archive member %q: %w", header.Name, copyErr)
@@ -258,15 +309,18 @@ type dscMember struct {
 	SHA256 string
 }
 
-func parseDSCMembers(dscPath string) ([]dscMember, error) {
+func parseDSCMembers(ctx context.Context, dscPath string) ([]dscMember, error) {
 	file, err := os.Open(dscPath)
 	if err != nil {
 		return nil, fmt.Errorf("open DSC: %w", err)
 	}
 	defer file.Close()
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(buildReader{ctx, file})
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	if !scanner.Scan() || scanner.Text() != "-----BEGIN PGP SIGNED MESSAGE-----" {
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("read DSC: %w", err)
+		}
 		return nil, fmt.Errorf("DSC is not clear-signed")
 	}
 	var members []dscMember
@@ -334,7 +388,10 @@ func parseDSCMembers(dscPath string) ([]dscMember, error) {
 	return members, nil
 }
 
-func prepareSource(extractedRoot string, inputDir string) (source sourceSet, err error) {
+func prepareSource(ctx context.Context, extractedRoot string, inputDir string) (source sourceSet, err error) {
+	if err := ctx.Err(); err != nil {
+		return sourceSet{}, err
+	}
 	dscPaths, err := filepath.Glob(filepath.Join(extractedRoot, "signed", "*.dsc"))
 	if err != nil {
 		return sourceSet{}, fmt.Errorf("find signed DSC: %w", err)
@@ -346,7 +403,11 @@ func prepareSource(extractedRoot string, inputDir string) (source sourceSet, err
 	if info, err := os.Lstat(dsc); err != nil || !info.Mode().IsRegular() {
 		return sourceSet{}, fmt.Errorf("signed DSC is not a regular file: %v", err)
 	}
-	members, err := parseDSCMembers(dsc)
+	source.DSCSHA256, err = sourceDigest(ctx, dsc)
+	if err != nil {
+		return sourceSet{}, err
+	}
+	members, err := parseDSCMembers(ctx, dsc)
 	if err != nil {
 		return sourceSet{}, err
 	}
@@ -372,7 +433,7 @@ func prepareSource(extractedRoot string, inputDir string) (source sourceSet, err
 		if found == "" {
 			return sourceSet{}, fmt.Errorf("missing source member %q", member.Name)
 		}
-		if err := checkSourceMember(found, member); err != nil {
+		if err := checkSourceMember(ctx, found, member); err != nil {
 			return sourceSet{}, err
 		}
 		paths[member.Name] = found
@@ -394,7 +455,7 @@ func prepareSource(extractedRoot string, inputDir string) (source sourceSet, err
 	source.DSC = filepath.Join(inputDir, filepath.Base(dsc))
 	for name, original := range paths {
 		target := filepath.Join(inputDir, name)
-		if err = systemutil.CopyFile(original, target, 0444); err != nil {
+		if err = copyBuildFile(ctx, original, target, 0444); err != nil {
 			return sourceSet{}, fmt.Errorf("stage source member %q: %w", name, err)
 		}
 		if err = os.Chmod(target, 0444); err != nil {
@@ -403,13 +464,13 @@ func prepareSource(extractedRoot string, inputDir string) (source sourceSet, err
 		source.Files = append(source.Files, name)
 	}
 	sort.Strings(source.Files)
-	if err = validateSource(inputDir, source); err != nil {
+	if err = validateSource(ctx, inputDir, source); err != nil {
 		return sourceSet{}, err
 	}
 	return source, nil
 }
 
-func validateSource(inputDir string, source sourceSet) error {
+func validateSource(ctx context.Context, inputDir string, source sourceSet) error {
 	if filepath.Dir(source.DSC) != filepath.Clean(inputDir) {
 		return fmt.Errorf("DSC outside source input")
 	}
@@ -417,7 +478,14 @@ func validateSource(inputDir string, source sourceSet) error {
 	if err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("staged DSC is not a regular file: %v", err)
 	}
-	members, err := parseDSCMembers(source.DSC)
+	digest, err := sourceDigest(ctx, source.DSC)
+	if err != nil {
+		return err
+	}
+	if digest != source.DSCSHA256 {
+		return fmt.Errorf("staged DSC differs from original")
+	}
+	members, err := parseDSCMembers(ctx, source.DSC)
 	if err != nil {
 		return err
 	}
@@ -425,7 +493,7 @@ func validateSource(inputDir string, source sourceSet) error {
 	want = append(want, filepath.Base(source.DSC))
 	for _, member := range members {
 		want = append(want, member.Name)
-		if err := checkSourceMember(filepath.Join(inputDir, member.Name), member); err != nil {
+		if err := checkSourceMember(ctx, filepath.Join(inputDir, member.Name), member); err != nil {
 			return err
 		}
 	}
@@ -445,7 +513,7 @@ func validateSource(inputDir string, source sourceSet) error {
 	return nil
 }
 
-func checkSourceMember(filename string, member dscMember) error {
+func checkSourceMember(ctx context.Context, filename string, member dscMember) error {
 	info, err := os.Lstat(filename)
 	if err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("source member %q is not a regular file: %v", filename, err)
@@ -453,17 +521,25 @@ func checkSourceMember(filename string, member dscMember) error {
 	if info.Size() != member.Size {
 		return fmt.Errorf("source member %q has size %d, want %d", filename, info.Size(), member.Size)
 	}
-	file, err := os.Open(filename)
+	digest, err := sourceDigest(ctx, filename)
 	if err != nil {
-		return fmt.Errorf("open source member %q: %w", filename, err)
+		return err
 	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return fmt.Errorf("hash source member %q: %w", filename, err)
-	}
-	if fmt.Sprintf("%x", hash.Sum(nil)) != strings.ToLower(member.SHA256) {
+	if digest != strings.ToLower(member.SHA256) {
 		return fmt.Errorf("source member %q has wrong SHA-256", filename)
 	}
 	return nil
+}
+
+func sourceDigest(ctx context.Context, filename string) (string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", fmt.Errorf("open source member %q: %w", filename, err)
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, buildReader{ctx, file}); err != nil {
+		return "", fmt.Errorf("hash source member %q: %w", filename, err)
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }

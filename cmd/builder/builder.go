@@ -41,7 +41,7 @@ func executeBuild(ctx context.Context, payload string, job buildJob, steps build
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if err := validateSource(attempt.Input, source); err != nil {
+	if err := validateSource(ctx, attempt.Input, source); err != nil {
 		return "", fmt.Errorf("validate build source: %w", err)
 	}
 	attempt, err = steps.Build(ctx, job, attempt, source)
@@ -52,14 +52,14 @@ func executeBuild(ctx context.Context, payload string, job buildJob, steps build
 		return "", err
 	}
 	source.DSC = filepath.Join(attempt.Input, filepath.Base(source.DSC))
-	names, err := collectArtifacts(job, attempt, source)
+	names, err := collectArtifacts(ctx, job, attempt, source)
 	if err != nil {
 		return "", fmt.Errorf("collect artifacts: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if err := writeArtifactArchive(job, names); err != nil {
+	if err := writeArtifactArchive(ctx, job, names); err != nil {
 		return "", fmt.Errorf("write artifact archive: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -142,13 +142,13 @@ func Build(payload string) (next string, err error) {
 				return sourceSet{}, err
 			}
 			extracted := filepath.Join(attempt.Temp, "extracted")
-			if err := extractSubmission(archive, extracted); err != nil {
+			if err := extractSubmission(ctx, archive, extracted); err != nil {
 				return sourceSet{}, err
 			}
 			if err := ctx.Err(); err != nil {
 				return sourceSet{}, err
 			}
-			return prepareSource(extracted, attempt.Input)
+			return prepareSource(ctx, extracted, attempt.Input)
 		},
 		Build: buildPackage,
 		UploadArtifact: func(ctx context.Context, job buildJob) error {
