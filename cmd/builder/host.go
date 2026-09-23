@@ -17,6 +17,7 @@ type hostProbe struct {
 	SubGID     []byte
 	LookupPath func(string) (string, error)
 	Stat       func(string) (os.FileInfo, error)
+	Output     func(string, ...string) ([]byte, error)
 }
 
 func validateBuilderHost(probe hostProbe) error {
@@ -33,6 +34,25 @@ func validateBuilderHost(probe hostProbe) error {
 			return fmt.Errorf("required executable %s is not on PATH; install it before starting irgsh-builder", name)
 		}
 		paths[name] = path
+	}
+	output, err := probe.Output(paths["sbuild"], "--version")
+	if err != nil {
+		return fmt.Errorf("read sbuild version; install sbuild >= 0.87.0 with a valid configuration: %w", err)
+	}
+	version := ""
+	for _, line := range strings.Split(string(output), "\n") {
+		if value, ok := strings.CutPrefix(line, "sbuild (Debian sbuild) "); ok {
+			if fields := strings.Fields(value); len(fields) > 0 {
+				version = fields[0]
+			}
+			break
+		}
+	}
+	if version == "" {
+		return fmt.Errorf("read sbuild version; expected the sbuild version banner, requiring sbuild >= 0.87.0")
+	}
+	if _, err := probe.Output(paths["dpkg"], "--compare-versions", version, "ge", "0.87.0"); err != nil {
+		return fmt.Errorf("sbuild >= 0.87.0 is required for unshare_mmdebstrap_auto_create; install a supported version: %w", err)
 	}
 	if !hasSubordinateRange(probe.SubUID, probe.Username) {
 		return fmt.Errorf("/etc/subuid needs an exact %s:<start>:<count> row with at least 65536 IDs ending at or below 4294967295; provision the builder subordinate UID range", probe.Username)
@@ -102,5 +122,8 @@ func validateCurrentBuilderHost() error {
 		SubGID:     subGID,
 		LookupPath: exec.LookPath,
 		Stat:       os.Stat,
+		Output: func(path string, args ...string) ([]byte, error) {
+			return exec.Command(path, args...).Output()
+		},
 	})
 }

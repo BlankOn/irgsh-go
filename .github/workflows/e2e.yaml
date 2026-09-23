@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -32,7 +32,7 @@ jobs:
       - name: Provision disposable native builder
         run: |
           sudo apt-get update
-          sudo apt-get install -y sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates debian-archive-keyring
+          sudo apt-get install -y -t noble-backports sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates debian-archive-keyring
           for table in /etc/subuid /etc/subgid; do
             awk -F: '$2 < 589824 && $2 + $3 > 524288 { conflict=1 } END { exit conflict }' "$table"
           done
@@ -42,7 +42,9 @@ jobs:
           sudo install -d -m 0755 -o irgsh-builder-e2e -g irgsh-builder-e2e /tmp/irgsh-e2e/builder
 
       - name: Check native supervisor
-        run: bash e2e/scripts/native-builder_test.sh
+        run: |
+          bash e2e/scripts/native-builder_test.sh
+          bash e2e/scripts/sbuild-config_test.sh
 
       - name: Run e2e tests
         run: ./e2e/run.sh

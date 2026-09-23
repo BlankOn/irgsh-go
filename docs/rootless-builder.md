@@ -2,10 +2,18 @@
 
 ## Supported host
 
-Use a native Linux host with unprivileged user namespaces, `sbuild` supporting
-`--chroot-mode=unshare`, and `mmdebstrap` supporting `--mode=unshare`. Builds use
+Use a native Linux host with unprivileged user namespaces and `sbuild >= 0.87.0`
+supporting `--chroot-mode=unshare`, plus `mmdebstrap` supporting `--mode=unshare`. Builds use
 the host's native architecture; cross builds and foreign-architecture emulation
 are not supported. Native results do not establish rootless-container support.
+
+The generated configuration disables automatic base creation with
+`$unshare_mmdebstrap_auto_create`, introduced in
+[sbuild 0.87.0](https://lists.debian.org/debian-backports-changes/2024/12/msg00093.html).
+On Ubuntu 24.04, follow the
+[official backports setup](https://ubuntu.com/project/docs/contributors/setup/set-up-for-ubuntu-development/)
+to install a supported version. The builder preflight and manual installer
+reject unsupported versions.
 
 Package installation, account creation, subordinate-ID allocation, and resource
 limits are administrator operations. Base creation and recurring builds run as
@@ -25,6 +33,12 @@ Install the host dependencies:
 
 ```sh
 sudo apt-get install sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates
+```
+
+On Ubuntu 24.04, use the enabled backports pocket:
+
+```sh
+sudo apt-get install -t noble-backports sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates
 ```
 
 The Debian package and installer create `irgsh-builder` with primary group

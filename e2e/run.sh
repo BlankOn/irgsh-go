@@ -101,6 +101,7 @@ if [ "$SKIP_INIT" = false ]; then
         --entrypoint bash repo /scripts/init-repo.sh
 fi
 
+native_builder check-config
 "${COMPOSE[@]}" up -d
 for ((attempt=1; attempt<=30; attempt++)); do
     if curl -sf http://127.0.0.1:8080/api/v1/version >/dev/null; then

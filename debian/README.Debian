@@ -29,7 +29,7 @@ After installation, you need to perform the following steps:
    sudo -u irgsh-builder irgsh-builder -c /etc/irgsh/config.yaml init-base
 
    Update it later with the same account and config using update-base.
-   sbuild, mmdebstrap, and the uidmap helpers require unprivileged user
+   sbuild >= 0.87.0, mmdebstrap, and the uidmap helpers require unprivileged user
    namespaces. Do not run builder commands as root or add this account to
    privileged groups. The builder does not need signing keys or GNUPGHOME.
 

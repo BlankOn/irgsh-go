@@ -39,6 +39,61 @@ func validHostProbe() hostProbe {
 		Stat: func(path string) (os.FileInfo, error) {
 			return hostFileInfo{name: filepath.Base(path), mode: 0755 | os.ModeSetuid}, nil
 		},
+		Output: func(path string, args ...string) ([]byte, error) {
+			if filepath.Base(path) == "sbuild" {
+				return []byte("sbuild (Debian sbuild) 0.88.3ubuntu2~bpo24.04.1 (08 July 2025)\n"), nil
+			}
+			return nil, nil
+		},
+	}
+}
+
+func TestValidateBuilderHostSbuildVersion(t *testing.T) {
+	cases := []struct {
+		name    string
+		output  string
+		runErr  error
+		version string
+		compare error
+		want    string
+	}{
+		{name: "minimum", output: "sbuild (Debian sbuild) 0.87.0 (01 September 2024)\n", version: "0.87.0"},
+		{name: "backports", output: "sbuild (Debian sbuild) 0.88.3ubuntu2~bpo24.04.1 (08 July 2025)\n", version: "0.88.3ubuntu2~bpo24.04.1"},
+		{name: "old", output: "sbuild (Debian sbuild) 0.85.10ubuntu0.3 (01 May 2024)\n", version: "0.85.10ubuntu0.3", compare: errors.New("older"), want: "sbuild >= 0.87.0"},
+		{name: "unreadable version", runErr: errors.New("bad configuration"), want: "read sbuild version"},
+		{name: "empty output", want: "read sbuild version"},
+		{name: "unexpected output", output: "different command 999\n", want: "read sbuild version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := validHostProbe()
+			compared := false
+			probe.Output = func(path string, args ...string) ([]byte, error) {
+				switch filepath.Base(path) {
+				case "sbuild":
+					if strings.Join(args, " ") != "--version" {
+						t.Fatalf("unexpected sbuild arguments: %q", args)
+					}
+					return []byte(tc.output), tc.runErr
+				case "dpkg":
+					compared = true
+					if strings.Join(args, " ") != "--compare-versions "+tc.version+" ge 0.87.0" {
+						t.Fatalf("unexpected version comparison: %q", args)
+					}
+					return nil, tc.compare
+				default:
+					t.Fatalf("unexpected executable: %s", path)
+					return nil, nil
+				}
+			}
+			err := validateBuilderHost(probe)
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("error = %v; want %q", err, tc.want)
+			}
+			if compared != (tc.version != "") {
+				t.Fatalf("version compared = %v; version %q", compared, tc.version)
+			}
+		})
 	}
 }
 

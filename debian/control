@@ -14,7 +14,7 @@ Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          adduser,
-         sbuild,
+         sbuild (>= 0.87.0),
          mmdebstrap,
          uidmap,
          dpkg-dev,

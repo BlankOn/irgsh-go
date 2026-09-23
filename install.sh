@@ -18,6 +18,12 @@ apt update
 
 apt install -y gnupg sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates debhelper python3-apt reprepro jq
 
+SBUILD_VERSION=$(sbuild --version | sed -n 's/^sbuild (Debian sbuild) \([^ ]*\).*/\1/p')
+if [ -z "$SBUILD_VERSION" ] || ! dpkg --compare-versions "$SBUILD_VERSION" ge 0.87.0; then
+	echo 'sbuild >= 0.87.0 is required; configure a supported package source before installing IRGSH' >&2
+	exit 1
+fi
+
 if [ -f ./target/release.tar.gz ]; then
 	# For development/testing purpose
 	TEMP_PATH=$(pwd)/target

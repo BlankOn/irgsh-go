@@ -7,6 +7,7 @@ sandbox=$(mktemp -d)
 trap 'command rm -rf "$sandbox"' EXIT
 export PROVISION_TEST_ROOT="$sandbox"
 export PROVISION_EXISTING=0 PROVISION_GROUP_EXIT=0 PROVISION_REPO_EXIT=0 PROVISION_BUILDER_EXIT=0
+export PROVISION_SBUILD_VERSION=0.88.3 PROVISION_VERSION_EXIT=0
 
 for file in debian/irgsh.postinst utils/scripts/init.sh install.sh; do
 	sed -e "s|/var/lib/irgsh|$sandbox/var/lib/irgsh|g" \
@@ -54,6 +55,12 @@ chmod() { record chmod "$@"; }
 chgrp() { record chgrp "$@"; }
 install() { record install "$@"; }
 apt() { record apt "$@"; }
+sbuild() { record sbuild "$@"; printf 'sbuild (Debian sbuild) %s (test fixture)\n' "$PROVISION_SBUILD_VERSION"; }
+dpkg() {
+	record dpkg "$@"
+	[[ "$*" == "--compare-versions $PROVISION_SBUILD_VERSION ge 0.87.0" ]] || return 64
+	return "$PROVISION_VERSION_EXIT"
+}
 cp() { record cp "$@"; }
 rm() { record rm "$@"; }
 tar() { record tar "$@"; }
@@ -94,7 +101,7 @@ su() {
 	*gpg\ -K*) printf 'TEST-KEY\n' ;;
 	esac
 }
-export -f record '[' getent addgroup adduser chown chmod chgrp install apt cp rm tar systemctl killall gpg curl docker sudo useradd groupadd usermod userdel groupdel deluser delgroup gpasswd su
+export -f record '[' getent addgroup adduser chown chmod chgrp install apt sbuild dpkg cp rm tar systemctl killall gpg curl docker sudo useradd groupadd usermod userdel groupdel deluser delgroup gpasswd su
 
 fail() {
 	printf 'FAIL: %s\n' "$*" >&2
@@ -177,9 +184,15 @@ check_account
 expect_call su -c 'irgsh-repo -c /etc/irgsh/config.yaml init > /dev/null' -s /bin/bash irgsh
 expect_call systemctl enable irgsh-builder
 
+export PROVISION_SBUILD_VERSION=0.85.10ubuntu0.3 PROVISION_VERSION_EXIT=1
+run_case installer-old-sbuild 1 install.sh ''
+reject_calls '^(cp|tar|chown|install|adduser|systemctl)[[:space:]]'
+grep -q 'sbuild >= 0.87.0 is required' "$sandbox/installer-old-sbuild.output" || fail 'sbuild remediation missing'
+export PROVISION_SBUILD_VERSION=0.88.3 PROVISION_VERSION_EXIT=0
+
 export PROVISION_REPO_EXIT=44
 run_case installer-repo-failure 44 install.sh ''
 reject_calls '^systemctl[[:space:]]enable'
 if grep -q 'Happy hacking!' "$sandbox/installer-repo-failure.output"; then fail 'failed installer reported success'; fi
 
-printf 'PASS: 8 provisioning scenarios\n'
+printf 'PASS: 9 provisioning scenarios\n'

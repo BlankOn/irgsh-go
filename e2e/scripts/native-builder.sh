@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+check_sbuild_version() {
+    local output version
+    output=$(sbuild --version) || return 1
+    version=$(sed -n 's/^sbuild (Debian sbuild) \([^ ]*\).*/\1/p' <<< "$output")
+    if [ -z "$version" ] || ! dpkg --compare-versions "$version" ge 0.87.0; then
+        echo 'sbuild >= 0.87.0 is required for unshare_mmdebstrap_auto_create' >&2
+        return 1
+    fi
+    printf '%s\n' "$output"
+}
+
+check_sbuild_config() {
+    if [ ! -f "$1" ] || [ ! -r "$1" ]; then
+        echo "Missing or unreadable generated sbuild configuration: $1" >&2
+        return 1
+    fi
+    SBUILD_CONFIG="$1" sbuild --version >/dev/null
+}
+
 check_builder_directory() {
     local directory="$1" foreign
     if [ -L "$directory" ] || [ ! -d "$directory" ] || [ "$(stat -c %u "$directory")" != "$(id -u)" ]; then
@@ -28,6 +47,7 @@ check_builder_host() {
     for tool in sbuild mmdebstrap dpkg newuidmap newgidmap; do
         command -v "$tool" >/dev/null || { echo "Missing native builder prerequisite: $tool" >&2; return 1; }
     done
+    check_sbuild_version
     for helper in newuidmap newgidmap; do
         helper="$(command -v "$helper")"
         if [ "$(stat -Lc %u "$helper")" != 0 ] || [ ! -u "$helper" ]; then
@@ -55,7 +75,6 @@ check_builder_host() {
     cat /etc/os-release
     uname -sr
     id
-    sbuild --version
     mmdebstrap --version
 }
 
@@ -63,11 +82,14 @@ supervise_builder() (
     worker_pid=
     # shellcheck disable=SC2329
     stop_builder() {
-        local status=$?
+        local status=$? worker_status=0
         trap - EXIT
         if [ -n "$worker_pid" ]; then
             kill -TERM "$worker_pid" 2>/dev/null || true
-            wait "$worker_pid" || true
+            wait "$worker_pid" || worker_status=$?
+            if [ "$status" -eq 0 ] && [ "$worker_status" -ne 143 ]; then
+                status=$worker_status
+            fi
         fi
         exit "$status"
     }
@@ -97,13 +119,18 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     check_builder_directory "$directory/builder"
     case "$operation" in
         cleanup) find "$directory/builder" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + ;;
-        check|init-base|worker)
+        check|init-base|check-config|worker)
             check_builder_host "$directory/builder"
             export IRGSH_CONFIG_PATH="$directory/builder-config.yaml"
             export PORT=18081
             cd "$directory/builder"
             case "$operation" in
                 init-base) exec "$directory/bin/irgsh-builder" init-base ;;
+                check-config)
+                    for config in "$directory"/builder/bases/*/sbuild.conf; do
+                        check_sbuild_config "$config"
+                    done
+                    ;;
                 worker) supervise_builder "$directory/bin/irgsh-builder" ;;
             esac
             ;;
