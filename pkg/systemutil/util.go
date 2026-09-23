@@ -91,11 +91,16 @@ func CmdExecContext(ctx context.Context, cmdStr string, cmdDesc string, logPath 
 }
 
 func CmdExecArgsContext(ctx context.Context, name string, args []string, env []string, desc string, logPath string) (string, error) {
+	return CmdExecArgsContextInDir(ctx, name, args, env, "", desc, logPath)
+}
+
+func CmdExecArgsContextInDir(ctx context.Context, name string, args []string, env []string, directory string, desc string, logPath string) (string, error) {
 	if name == "" {
 		return "", errors.New("no command provided")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Dir = directory
+	cmd.Env = append(cmd.Environ(), env...)
 	return runCommand(ctx, cmd, strings.Join(append([]string{name}, args...), " "), desc, logPath, false)
 }
 

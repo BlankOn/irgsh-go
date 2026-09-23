@@ -301,7 +301,7 @@ func TestMigrateUDebComponentsFollowsIncludedFiles(t *testing.T) {
 			case "dot relative":
 				workingDirectory := t.TempDir()
 				t.Chdir(workingDirectory)
-				included = filepath.Join(workingDirectory, "owned.conf")
+				included = filepath.Join(root, "owned.conf")
 				directive = "./owned.conf"
 			case "confdir":
 				directive = "+c/owned.conf"
@@ -312,7 +312,7 @@ func TestMigrateUDebComponentsFollowsIncludedFiles(t *testing.T) {
 			case "other prefix":
 				workingDirectory := t.TempDir()
 				t.Chdir(workingDirectory)
-				included, directive = filepath.Join(workingDirectory, "+x", "owned.conf"), "+x/owned.conf"
+				included, directive = filepath.Join(root, "+x", "owned.conf"), "+x/owned.conf"
 			case "absolute":
 				included = filepath.Join(t.TempDir(), "owned.conf")
 				directive = included

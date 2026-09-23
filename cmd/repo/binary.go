@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func includeBinaries(repository, artifacts, dist, component string, env []string, logPath string, run func(context.Context, string, []string, []string, string, string) (string, error)) error {
+func includeBinaries(repository, artifacts, dist, component string, env []string, logPath string, run func(context.Context, string, []string, []string, string, string, string) (string, error)) error {
 	repository, err := filepath.Abs(repository)
 	if err != nil {
 		return fmt.Errorf("resolve repository: %w", err)
@@ -55,7 +55,7 @@ func includeBinaries(repository, artifacts, dist, component string, env []string
 		}
 		args = append(args, command, dist)
 		args = append(args, files[extension]...)
-		if _, err := run(context.Background(), "reprepro", args, env, "Injecting "+extension+" files from artifact to the repository", logPath); err != nil {
+		if _, err := run(context.Background(), "reprepro", args, env, repository, "Injecting "+extension+" files from artifact to the repository", logPath); err != nil {
 			return fmt.Errorf("include %s artifacts: %w", extension, err)
 		}
 	}

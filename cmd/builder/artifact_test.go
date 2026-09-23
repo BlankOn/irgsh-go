@@ -103,12 +103,16 @@ func TestCollectArtifactsRequiresBuildinfo(t *testing.T) {
 }
 
 func TestCollectArtifactsRejectsSymlink(t *testing.T) {
-	job, attempt, source := artifactFixture(t)
-	if err := os.Symlink(job.Log, filepath.Join(attempt.Result, "linked.deb")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
-		t.Fatal("accepted a symlink artifact")
+	for _, name := range []string{"linked.deb", "hello_1.0_amd64.build"} {
+		t.Run(name, func(t *testing.T) {
+			job, attempt, source := artifactFixture(t)
+			if err := os.Symlink(job.Log, filepath.Join(attempt.Result, name)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
+				t.Fatal("accepted a symlink artifact")
+			}
+		})
 	}
 }
 
@@ -730,7 +734,7 @@ func TestBuildUploadsArtifactsThenFinalLogAndCleansOnlyJob(t *testing.T) {
 				}
 			}
 			args, err := os.ReadFile(argsPath)
-			wantArgs, marshalErr := json.Marshal([]any{[]string{"--chroot-mode=unshare", "--chroot=" + filepath.Join(job.Root, "1", "base.tar"), "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--build-dir=" + filepath.Join(job.Root, "1", "result"), filepath.Join(job.Root, "1", "input", "hello_1.0.dsc")}, base.Config, filepath.Join(job.Root, "1", "tmp")})
+			wantArgs, marshalErr := json.Marshal([]any{[]string{"--chroot-mode=unshare", "--chroot=" + filepath.Join(job.Root, "1", "base.tar"), "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--nolog", "--build-dir=" + filepath.Join(job.Root, "1", "result"), filepath.Join(job.Root, "1", "input", "hello_1.0.dsc")}, base.Config, filepath.Join(job.Root, "1", "tmp")})
 			if err != nil || marshalErr != nil || string(args) != string(wantArgs) {
 				t.Fatalf("sbuild arguments = %q, %v, %v", args, err, marshalErr)
 			}

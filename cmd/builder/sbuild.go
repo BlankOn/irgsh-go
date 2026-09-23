@@ -22,6 +22,7 @@ func sbuildArgs(attempt attemptPaths, source sourceSet, base basePaths, dist str
 		"--arch-any",
 		"--no-source",
 		"--enable-network",
+		"--nolog",
 		"--build-dir=" + attempt.Result,
 		source.DSC,
 	}, []string{"SBUILD_CONFIG=" + base.Config, "TMPDIR=" + attempt.Temp}

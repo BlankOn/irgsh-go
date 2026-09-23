@@ -99,7 +99,9 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 			}
 			include := func(name string) error {
 				switch {
-				case filepath.IsAbs(name), strings.HasPrefix(name, "./"):
+				case filepath.IsAbs(name):
+				case strings.HasPrefix(name, "./"):
+					name = filepath.Join(root, name)
 				case strings.HasPrefix(name, "+b/"):
 					name = filepath.Join(root, name[3:])
 				case strings.HasPrefix(name, "+c/"):
@@ -113,6 +115,7 @@ func migrateUDebComponents(repo config.RepoConfig) error {
 					}
 					name = filepath.Join(homeDirectory, name[2:])
 				case len(name) >= 3 && name[0] == '+' && name[2] == '/':
+					name = filepath.Join(root, name)
 				default:
 					name = filepath.Join(root, "conf", name)
 				}

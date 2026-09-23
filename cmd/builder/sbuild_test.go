@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -26,15 +27,18 @@ func TestMain(m *testing.M) {
 			}
 			fmt.Println("amd64")
 		case "sbuild":
-			if len(os.Args) != 11 {
-				os.Exit(2)
-			}
-			result := strings.TrimPrefix(os.Args[9], "--build-dir=")
+			result := strings.TrimPrefix(os.Args[len(os.Args)-2], "--build-dir=")
 			for _, suffix := range []string{".deb", ".udeb", ".ddeb", ".buildinfo"} {
 				if err := os.WriteFile(filepath.Join(result, "hello_1.0_amd64"+suffix), []byte("built artifact"), 0600); err != nil {
 					os.Exit(2)
 				}
 			}
+			if !slices.Contains(os.Args, "--nolog") {
+				if err := os.Symlink("sbuild.log", filepath.Join(result, "hello_1.0_amd64.build")); err != nil {
+					os.Exit(2)
+				}
+			}
+			fmt.Println("native sbuild output")
 			data, err := json.Marshal([]any{os.Args[1:], os.Getenv("SBUILD_CONFIG"), os.Getenv("TMPDIR")})
 			if err != nil {
 				os.Exit(2)
@@ -60,11 +64,18 @@ func TestBuildPackageUsesNativeBackend(t *testing.T) {
 	if err != nil || last != first {
 		t.Fatalf("build result = %+v, %v", last, err)
 	}
+	if _, err := collectArtifacts(context.Background(), job, last, source); err != nil {
+		t.Fatalf("collect native build result: %v", err)
+	}
+	log, err := os.ReadFile(job.Log)
+	if err != nil || !strings.Contains(string(log), "native sbuild output") {
+		t.Fatalf("native build output missing from job log: %q, %v", log, err)
+	}
 	data, err := os.ReadFile(record)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := json.Marshal([]any{[]string{"--chroot-mode=unshare", "--chroot=" + first.Base, "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--build-dir=" + first.Result, source.DSC}, base.Config, first.Temp})
+	want, err := json.Marshal([]any{[]string{"--chroot-mode=unshare", "--chroot=" + first.Base, "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--nolog", "--build-dir=" + first.Result, source.DSC}, base.Config, first.Temp})
 	if err != nil || string(data) != string(want) {
 		t.Fatalf("native command = %s, want %s, error = %v", data, want, err)
 	}
@@ -94,7 +105,7 @@ func TestSbuildArgsUsePinnedBaseAndControlledConfig(t *testing.T) {
 	source := sourceSet{DSC: "/work/jobs/task/1/input/hello_1.0.dsc"}
 	base := basePaths{Config: "/work/bases/verbeek-sid-amd64-hash/sbuild.conf"}
 	args, env := sbuildArgs(attempt, source, base, "verbeek", "amd64")
-	want := []string{"--chroot-mode=unshare", "--chroot=/work/jobs/task/1/base.tar", "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--build-dir=/work/jobs/task/1/result", "/work/jobs/task/1/input/hello_1.0.dsc"}
+	want := []string{"--chroot-mode=unshare", "--chroot=/work/jobs/task/1/base.tar", "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--nolog", "--build-dir=/work/jobs/task/1/result", "/work/jobs/task/1/input/hello_1.0.dsc"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %q; want %q", args, want)
 	}
@@ -210,7 +221,7 @@ func TestRunSbuildCreatesFreshResultAndTempForRetry(t *testing.T) {
 		calls := 0
 		last, err := runSbuild(context.Background(), job, first, source, base, "amd64", 3, func(ctx context.Context, name string, args, env []string, desc, log string) (string, error) {
 			calls++
-			result := strings.TrimPrefix(args[8], "--build-dir=")
+			result := strings.TrimPrefix(args[len(args)-2], "--build-dir=")
 			temporary := strings.TrimPrefix(env[1], "TMPDIR=")
 			for _, dir := range []string{result, temporary} {
 				entries, err := os.ReadDir(dir)
@@ -236,7 +247,7 @@ func TestRunSbuildReusesImmutableInputAndPinnedBase(t *testing.T) {
 		calls := 0
 		last, err := runSbuild(context.Background(), job, first, source, base, "amd64", 3, func(ctx context.Context, name string, args, env []string, desc, log string) (string, error) {
 			calls++
-			input := filepath.Dir(args[9])
+			input := filepath.Dir(args[len(args)-1])
 			pinned := strings.TrimPrefix(args[1], "--chroot=")
 			contents, err := os.ReadFile(pinned)
 			if err != nil || string(contents) != "old base" {

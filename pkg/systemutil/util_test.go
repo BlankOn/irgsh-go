@@ -36,6 +36,34 @@ func TestCmdExecArgsContextTreatsArgumentsLiterally(t *testing.T) {
 	}
 }
 
+func TestCmdExecArgsContextInDirUsesChildWorkingDirectory(t *testing.T) {
+	worker := t.TempDir()
+	t.Chdir(worker)
+	directory := t.TempDir()
+	name := "input file; literal"
+	if err := os.WriteFile(filepath.Join(directory, name), []byte("child directory input"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := CmdExecArgsContextInDir(context.Background(), "cat", []string{name}, nil, directory, "read relative file", "")
+	if err != nil || out != "child directory input" {
+		t.Fatalf("child relative file = %q, %v", out, err)
+	}
+	out, err = CmdExecArgsContextInDir(context.Background(), "printenv", []string{"PWD"}, nil, directory, "child PWD", "")
+	if err != nil || strings.TrimSpace(out) != directory {
+		t.Fatalf("child PWD = %q, %v; want %q", out, err, directory)
+	}
+	if current, err := os.Getwd(); err != nil || current != worker {
+		t.Fatalf("worker directory changed: %q, %v", current, err)
+	}
+}
+
+func TestCmdExecArgsContextInDirRejectsMissingDirectory(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "missing")
+	if _, err := CmdExecArgsContextInDir(context.Background(), "pwd", nil, nil, directory, "missing directory", ""); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing child directory error = %v", err)
+	}
+}
+
 func TestCmdExecArgsContextCancellationDoesNotUseSudo(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "sudo-called")

@@ -306,7 +306,7 @@ func Repo(payload string) (err error) {
 		binaryEnv = []string{"GNUPGHOME=" + irgshConfig.Repo.GnupgDir}
 	}
 	dist := irgshConfig.Repo.DistCodename + experimentalSuffix
-	err = includeBinaries(filepath.Join(irgshConfig.Repo.Workdir, dist), filepath.Join(artifactDir, taskUUID), dist, component, binaryEnv, logPath, systemutil.CmdExecArgsContext)
+	err = includeBinaries(filepath.Join(irgshConfig.Repo.Workdir, dist), filepath.Join(artifactDir, taskUUID), dist, component, binaryEnv, logPath, systemutil.CmdExecArgsContextInDir)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject binary files: "+systemutil.FailureSummary(err))
