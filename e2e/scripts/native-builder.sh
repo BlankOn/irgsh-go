@@ -128,10 +128,10 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     case "$operation" in
         cleanup) find "$directory/builder" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + ;;
         check|init-base|check-config|worker)
+            cd "$directory/builder"
             check_builder_host "$directory/builder"
             export IRGSH_CONFIG_PATH="$directory/builder-config.yaml"
             export PORT=18081
-            cd "$directory/builder"
             case "$operation" in
                 init-base) exec "$directory/bin/irgsh-builder" init-base ;;
                 check-config)

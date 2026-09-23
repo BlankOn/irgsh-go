@@ -56,6 +56,44 @@ cmp "$TEST_CHECKOUT/e2e/scripts/native-builder.sh" "$TEST_SHARED/native-builder.
 test "$(stat -c %a "$TEST_SHARED/native-builder.sh")" = 444
 test "$(stat -c %u "$TEST_SHARED/native-builder.sh")" = "$(id -u)"
 test "$(stat -c %a "$TEST_SHARED")" = 755
+# shellcheck disable=SC2329
+(
+    id() {
+        case "$*" in
+            -un|-Gn) printf 'irgsh-builder-e2e\n' ;;
+            *) command id "$@" ;;
+        esac
+    }
+    sbuild() {
+        if [ "$PWD" != "$TEST_SHARED/builder" ] || [ ! -d "$PWD" ]; then
+            echo "Fixture sbuild rejected BUILD_DIR=$PWD" >&2
+            return 1
+        fi
+        printf '%s\n' "$PWD" > "$TEST_SHARED/tool-cwd"
+        return 1
+    }
+    mmdebstrap() { return 95; }
+    dpkg() { return 95; }
+    newuidmap() { return 95; }
+    newgidmap() { return 95; }
+    export -f id sbuild mmdebstrap dpkg newuidmap newgidmap
+    for operation in check init-base check-config worker; do
+        rm -f "$TEST_SHARED/tool-cwd"
+        mkdir "$TEST_SHARED/deleted-cwd"
+        STATUS=0
+        (
+            cd "$TEST_SHARED/deleted-cwd"
+            rmdir "$TEST_SHARED/deleted-cwd"
+            bash "$TEST_SHARED/native-builder.sh" "$operation" "$TEST_SHARED"
+        ) > "$TEST_DIR/cwd.log" 2>&1 || STATUS=$?
+        if [ "$STATUS" -ne 1 ] || [ ! -f "$TEST_SHARED/tool-cwd" ]; then
+            cat "$TEST_DIR/cwd.log" >&2
+            echo "FAIL: $operation did not enter the owned workdir before sbuild" >&2
+            exit 1
+        fi
+        test "$(< "$TEST_SHARED/tool-cwd")" = "$TEST_SHARED/builder"
+    done
+)
 printf 'stale copy\n' > "$TEST_SHARED/stale"
 mv -f "$TEST_SHARED/stale" "$TEST_SHARED/native-builder.sh"
 bash "$TEST_CHECKOUT/e2e/run.sh" --cleanup > "$TEST_DIR/cleanup.log" 2>&1 || {
