@@ -205,8 +205,16 @@ prepare_release() (
 	printf '%s\n' "$destination"
 )
 
+unit_active_state() {
+	systemctl show --property=ActiveState --value "$1"
+}
+
 unit_is_active() {
-	systemctl is-active --quiet "$1"
+	[[ "$(unit_active_state "$1")" == active ]]
+}
+
+unit_is_inactive() {
+	[[ "$(unit_active_state "$1")" == inactive ]]
 }
 
 stop_unit() {
@@ -240,6 +248,8 @@ capture_active_units() {
 		if unit_is_active "${target_units[$index]}"; then
 			active_units+=("${target_units[$index]}")
 			active_urls+=("${target_urls[$index]}")
+		elif ! unit_is_inactive "${target_units[$index]}"; then
+			return 1
 		fi
 	done
 }
@@ -251,7 +261,7 @@ wait_inactive() {
 	for ((attempt = 0; attempt < attempts; attempt++)); do
 		active=0
 		for unit in "${active_units[@]}"; do
-			if unit_is_active "$unit"; then
+			if ! unit_is_inactive "$unit"; then
 				active=1
 			fi
 		done

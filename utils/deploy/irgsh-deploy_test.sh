@@ -135,6 +135,7 @@ fixture_archive=
 fixture_checksums=
 attestation_fails=0
 stop_sticks=0
+stop_deactivates=0
 fail_health_version=
 declare -A unit_state=()
 declare -A running_version=()
@@ -172,9 +173,15 @@ unit_is_active() {
 	[[ "${unit_state[$1]:-inactive}" == active ]]
 }
 
+unit_is_inactive() {
+	[[ "${unit_state[$1]:-inactive}" == inactive ]]
+}
+
 stop_unit() {
 	stop_log+="$1 "
-	if [[ "$stop_sticks" -eq 0 ]]; then
+	if [[ "$stop_deactivates" -eq 1 ]]; then
+		unit_state[$1]=deactivating
+	elif [[ "$stop_sticks" -eq 0 ]]; then
 		unit_state[$1]=inactive
 	fi
 }
@@ -239,6 +246,7 @@ reset_deployment() {
 	stop_log=
 	attestation_fails=0
 	stop_sticks=0
+	stop_deactivates=0
 	fail_health_version=
 	test_uid=0
 	test_mode=600
@@ -313,6 +321,16 @@ test_drain_timeout_keeps_current_release() {
 	((tests += 1))
 }
 
+test_deactivating_unit_keeps_current_release() {
+	reset_deployment
+	set_fixture repo 2.3.2
+	stop_deactivates=1
+	assert_fails deploy_component repo v2.3.2
+	assert_equal "$(readlink -f "$current_root/repo")" "$release_root/repo/v2.3.1"
+	assert_equal "${unit_state[irgsh-repo@verbeek.service]}" deactivating
+	((tests += 1))
+}
+
 test_switch_failure_restarts_old_release() {
 	reset_deployment
 	set_fixture repo 2.3.2
@@ -351,6 +369,7 @@ test_lock
 test_preflight_failures_do_not_drain
 test_healthy_deployment_and_noop
 test_drain_timeout_keeps_current_release
+test_deactivating_unit_keeps_current_release
 test_switch_failure_restarts_old_release
 test_health_failure_rolls_back
 test_older_release_uses_same_transaction
