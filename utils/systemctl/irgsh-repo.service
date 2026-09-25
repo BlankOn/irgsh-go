@@ -15,6 +15,7 @@ Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
 ExecStart=/usr/bin/irgsh-repo -c /etc/irgsh/config.yaml
 Restart=on-failure
 RestartSec=10s
+TimeoutStopSec=infinity
 StandardOutput=append:/var/log/irgsh/repo.log
 StandardError=append:/var/log/irgsh/repo.log
 

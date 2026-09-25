@@ -14,8 +14,12 @@ import (
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
-// isoScriptPath is the bundled build script, installed by the irgsh package.
-const isoScriptPath = "/usr/share/irgsh/iso-build.sh"
+func isoScriptPath() string {
+	if path := os.Getenv("IRGSH_ISO_SCRIPT"); path != "" {
+		return path
+	}
+	return "/usr/share/irgsh/iso-build.sh"
+}
 
 // ISOSubmission represents the payload for ISO build. The live-build
 // repository URL is not part of it: that belongs to this worker's own config,
@@ -167,8 +171,9 @@ func BuildISO(payload string) (next string, err error) {
 		return fail(err)
 	}
 
-	if _, statErr := os.Stat(isoScriptPath); os.IsNotExist(statErr) {
-		err = fmt.Errorf("iso-build.sh script not found at %s", isoScriptPath)
+	scriptPath := isoScriptPath()
+	if _, statErr := os.Stat(scriptPath); os.IsNotExist(statErr) {
+		err = fmt.Errorf("iso-build.sh script not found at %s", scriptPath)
 		return fail(err)
 	}
 
@@ -200,7 +205,7 @@ func BuildISO(payload string) (next string, err error) {
 	// Execute: sudo iso-build.sh <repo-url> <branch>, in the shared workdir.
 	// pipefail so the script's exit code survives the pipe into tee.
 	cmdStr := fmt.Sprintf("cd %s && set -o pipefail && yes | sudo %s %s %s 2>&1 | tee -a %s",
-		buildDir, isoScriptPath, irgshConfig.ISO.RepoURL, submission.Branch, logPath)
+		buildDir, scriptPath, irgshConfig.ISO.RepoURL, submission.Branch, logPath)
 
 	log.Println("Executing: " + cmdStr)
 	_, err = systemutil.CmdExecContext(

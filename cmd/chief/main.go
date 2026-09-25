@@ -22,6 +22,7 @@ import (
 	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/internal/storage"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 var (
@@ -182,7 +183,7 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	mux.HandleFunc("/api/v1/import", ImportPackagesHandler)
 	mux.HandleFunc("/api/v1/import-status", ImportStatusHandler)
 	mux.HandleFunc("/api/v1/repo-info", RepoInfoHandler)
-	mux.HandleFunc("/api/v1/version", VersionHandler)
+	mux.Handle("/api/v1/version", httputil.VersionHandler(chiefService.GetVersion()))
 
 	mux.HandleFunc("/api/v1/log-stream", logStreamHandler(cfg.Chief.Workdir+"/logs", logSubscriber))
 	mux.HandleFunc("/logs/stream", logViewerHandler())

@@ -12,6 +12,7 @@ Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
 ExecStart=/usr/bin/irgsh-builder
 Restart=on-failure
 RestartSec=10s
+TimeoutStopSec=infinity
 StandardOutput=append:/var/log/irgsh/builder.log
 StandardError=append:/var/log/irgsh/builder.log
 
