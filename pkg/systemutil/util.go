@@ -86,9 +86,22 @@ func CmdExecContext(ctx context.Context, cmdStr string, cmdDesc string, logPath 
 	if len(cmdStr) == 0 {
 		return "", errors.New("No command string provided.")
 	}
+	cmd := exec.CommandContext(ctx, "bash", "-c", "set -o pipefail && "+cmdStr)
+	return runCommand(ctx, cmd, cmdStr, cmdDesc, logPath, true)
+}
 
-	origCmd := cmdStr
+func CmdExecArgsContext(ctx context.Context, name string, args []string, env []string, desc string, logPath string) (string, error) {
+	if name == "" {
+		return "", errors.New("no command provided")
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = append(os.Environ(), env...)
+	return runCommand(ctx, cmd, strings.Join(append([]string{name}, args...), " "), desc, logPath, false)
+}
 
+func runCommand(ctx context.Context, cmd *exec.Cmd, display string, desc string, logPath string, privilegedCancel bool) (string, error) {
+	var output strings.Builder
+	writer := io.MultiWriter(os.Stdout, &output)
 	if len(logPath) > 0 {
 		logDir := filepath.Dir(logPath)
 		if mkErr := os.MkdirAll(logDir, os.ModePerm); mkErr != nil {
@@ -98,59 +111,42 @@ func CmdExecContext(ctx context.Context, cmdStr string, cmdDesc string, logPath 
 		if openErr != nil {
 			return "", fmt.Errorf("failed to open log file %s: %w", logPath, openErr)
 		}
+		defer f.Close()
 		_, _ = f.WriteString("\n")
-		if len(cmdDesc) > 0 {
-			cmdDescSplitted := strings.Split(cmdDesc, "\n")
+		if len(desc) > 0 {
+			cmdDescSplitted := strings.Split(desc, "\n")
 			for _, desc := range cmdDescSplitted {
 				_, _ = f.WriteString("##### " + desc + "\n")
 			}
 		}
-		_, _ = f.WriteString("##### RUN " + cmdStr + "\n")
-		f.Close()
-		// The command is wrapped in a brace group before being piped: `|`
-		// binds tighter than `&&`, so `a && b | tee log` would only log the
-		// output of `b`, silently dropping every earlier step of the
-		// `&&`-chains the workers are built from.
-		cmdStr = "{ " + cmdStr + "\n} 2>&1 | tee -a " + logPath
+		_, _ = f.WriteString("##### RUN " + display + "\n")
+		writer = io.MultiWriter(os.Stdout, f, &output)
 	}
-	// `set -o pipefail` will forces to return the original exit code
-	cmd := exec.CommandContext(ctx, "bash", "-c", "set -o pipefail && "+cmdStr)
-	// The command gets its own process group so that cancelling it reaches
-	// everything it started: a pbuilder or live-build run is a whole tree of
-	// processes, and killing only the bash at its root would leave the rest
-	// running.
+	cmd.Stdout = writer
+	cmd.Stderr = writer
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	// Closed once the command is done, so a pending SIGKILL is dropped rather
-	// than aimed at whatever process group has since taken over the id.
-	exited := make(chan struct{})
 	cmd.Cancel = func() error {
-		terminateGroup(cmd.Process.Pid, exited)
+		terminateGroup(cmd.Process.Pid, privilegedCancel)
 		return nil
 	}
-	// Go's own fallback kill only reaches the direct child, so leave it well
-	// after terminateGroup has escalated to SIGKILL itself.
 	cmd.WaitDelay = killGrace + 10*time.Second
-	output, err := cmd.CombinedOutput()
-	close(exited)
-	out = string(output)
+	err := cmd.Run()
+	out := output.String()
 	if err != nil {
 		cmdErr := &CommandError{
-			Desc:   cmdDesc,
-			Cmd:    origCmd,
+			Desc:   desc,
+			Cmd:    display,
 			Output: out,
 			Err:    err,
 			InLog:  len(logPath) > 0,
 		}
-		// Mark the failure in the job log itself, right after the output that
-		// caused it, so a reader (or a live log stream) sees which step failed
-		// even when the caller goes on to ignore the error.
 		if cmdErr.InLog {
 			_ = WriteLogFile(logPath, "##### FAILED: "+cmdErr.Summary())
 		}
 		err = cmdErr
 	}
 
-	return
+	return out, err
 }
 
 // killGrace is how long a cancelled command's process group is given to exit
@@ -159,27 +155,26 @@ func CmdExecContext(ctx context.Context, cmdStr string, cmdDesc string, logPath 
 // room; a build that ignores it does not get to keep the worker.
 const killGrace = 15 * time.Second
 
-// terminateGroup asks a command's whole process group to stop, and kills what
-// is still there after killGrace. A group that exits in time closes exited and
-// is never killed.
-func terminateGroup(pid int, exited <-chan struct{}) {
-	signalGroup(pid, "TERM")
-	go func() {
-		select {
-		case <-exited:
-		case <-time.After(killGrace):
-			signalGroup(pid, "KILL")
+func terminateGroup(pid int, privileged bool) {
+	signalGroup(pid, "TERM", privileged)
+	deadline := time.NewTimer(killGrace)
+	defer deadline.Stop()
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		if errors.Is(syscall.Kill(-pid, 0), syscall.ESRCH) {
+			return
 		}
-	}()
+		select {
+		case <-poll.C:
+		case <-deadline.C:
+			signalGroup(pid, "KILL", privileged)
+			return
+		}
+	}
 }
 
-// signalGroup signals every process in the group led by pid.
-//
-// It then repeats the signal through passwordless sudo, because a command run
-// under sudo (the ISO build is) leaves root owned processes that a worker
-// running as an ordinary user may not signal itself. That second attempt fails
-// harmlessly where there is no passwordless sudo.
-func signalGroup(pid int, sig string) {
+func signalGroup(pid int, sig string, privileged bool) {
 	var signum syscall.Signal
 	switch sig {
 	case "KILL":
@@ -190,7 +185,9 @@ func signalGroup(pid int, sig string) {
 	if err := syscall.Kill(-pid, signum); err != nil && !errors.Is(err, syscall.ESRCH) {
 		log.Printf("systemutil: unable to send SIG%s to process group %d: %v\n", sig, pid, err)
 	}
-	_ = exec.Command("sudo", "-n", "bash", "-c", "kill -"+sig+" -"+strconv.Itoa(pid)).Run()
+	if privileged {
+		_ = exec.Command("sudo", "-n", "bash", "-c", "kill -"+sig+" -"+strconv.Itoa(pid)).Run()
+	}
 }
 
 // outputExcerpt returns the last few lines of a command output so the error

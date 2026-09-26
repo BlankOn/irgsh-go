@@ -327,7 +327,7 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 
 	// Clean up package dir
 	log.Println("Cleaning up...")
-	if err := u.shell.Run("rm -rf " + sq(filepath.Join(tmpDir, "package"))); err != nil {
+	if err := os.RemoveAll(workDir); err != nil {
 		return domain.SubmitResponse{}, err
 	}
 

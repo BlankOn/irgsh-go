@@ -1,12 +1,163 @@
 package systemutil
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
+
+func TestCmdExecArgsContextTreatsArgumentsLiterally(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "expanded")
+	logPath := filepath.Join(dir, "command.log")
+	arg := "$(touch " + marker + ")"
+	out, err := CmdExecArgsContext(context.Background(), "printf", []string{"%s", arg}, nil, "literal argv", logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != arg {
+		t.Fatalf("expected %q, got %q", arg, out)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("argument was interpreted by a shell: %v", err)
+	}
+	contents, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contents), "literal argv") || !strings.Contains(string(contents), arg) {
+		t.Fatalf("missing command record:\n%s", contents)
+	}
+}
+
+func TestCmdExecArgsContextCancellationDoesNotUseSudo(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "sudo-called")
+	sudo := filepath.Join(dir, "sudo")
+	if err := os.WriteFile(sudo, []byte("#!/bin/sh\ntouch \"$SUDO_MARKER\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("SUDO_MARKER", marker)
+	pidPath := filepath.Join(dir, "command.pid")
+	t.Setenv("COMMAND_PID", pidPath)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := CmdExecArgsContext(ctx, "sh", []string{"-c", "echo $$ > \"$COMMAND_PID\"; exec sleep 60"}, nil, "cancel", "")
+		done <- err
+	}()
+	waitForTestPID(t, pidPath)
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("expected cancellation error")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("sudo was called: %v", err)
+	}
+}
+
+func waitForTestPID(t *testing.T, filename string) int {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(filename)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if err == nil {
+			pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+			if err == nil && pid > 0 {
+				return pid
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("process readiness was not recorded")
+	return 0
+}
+
+func TestCmdExecArgsContextCancellationKillsDetachedOutputDescendant(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "child.pid")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := CmdExecArgsContext(ctx, "sh", []string{"-c", `sh -c 'trap "" TERM; echo $$ > "$CHILD_PID"; exec sleep 60' >/dev/null 2>&1 & wait`}, []string{"CHILD_PID=" + pidPath}, "cancel resistant descendant", "")
+		done <- err
+	}()
+	childPID := waitForTestPID(t, pidPath)
+	t.Cleanup(func() { _ = syscall.Kill(childPID, syscall.SIGKILL) })
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected cancellation error")
+		}
+	case <-time.After(killGrace + 5*time.Second):
+		t.Fatal("command did not finish group cancellation")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile("/proc/" + strconv.Itoa(childPID) + "/stat")
+		if os.IsNotExist(err) || (err == nil && strings.HasPrefix(string(data[strings.LastIndex(string(data), ")")+1:]), " Z ")) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("SIGTERM-resistant descendant %d survived command cancellation", childPID)
+}
+
+func TestCmdExecArgsContextCancellationTerminatesDescendant(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "child.pid")
+	t.Setenv("CHILD_PID", pidPath)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := CmdExecArgsContext(ctx, "sh", []string{"-c", "sleep 60 & echo $! > \"$CHILD_PID\"; wait"}, nil, "cancel descendants", "")
+		done <- err
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	var childPID int
+	for time.Now().Before(deadline) {
+		contents, err := os.ReadFile(pidPath)
+		if err == nil {
+			childPID, err = strconv.Atoi(strings.TrimSpace(string(contents)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if childPID == 0 {
+		t.Fatal("child PID was not recorded")
+	}
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("expected cancellation error")
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(childPID, 0); errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = syscall.Kill(childPID, syscall.SIGKILL)
+	t.Fatalf("descendant process %d still exists", childPID)
+}
 
 func TestCmdExec_FailureMarksTheLog(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "job", "repo.log")
