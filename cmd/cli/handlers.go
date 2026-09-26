@@ -15,7 +15,7 @@ type CLIService interface {
 	SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error)
 	PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error)
-	SubmitISO(ctx context.Context, dist, branch string, noCache bool) (domain.SubmitResponse, error)
+	SubmitISO(ctx context.Context, dist, branch, commit string, noCache bool) (domain.SubmitResponse, error)
 	ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	ISOLog(ctx context.Context, pipelineID string) (string, error)
 	SubmitImport(ctx context.Context, params domain.ImportParams) (domain.SubmitResponse, error)
@@ -132,6 +132,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				cli.StringFlag{
 					Name:  "branch",
 					Usage: "Live build git branch name, e.g. without-praya (required)",
+				},
+				cli.StringFlag{
+					Name:  "commit",
+					Usage: "Full 40-character commit on the branch to build instead of the branch tip",
 				},
 				cli.BoolFlag{
 					Name:  "no-cache",
@@ -299,7 +303,7 @@ func packageLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 
 func isoSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		_, err := svc.SubmitISO(ctx, c.String("dist"), c.String("branch"), c.Bool("no-cache"))
+		_, err := svc.SubmitISO(ctx, c.String("dist"), c.String("branch"), c.String("commit"), c.Bool("no-cache"))
 		return err
 	}
 }
