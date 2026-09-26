@@ -48,9 +48,9 @@ func (c BuilderConfig) Attempts() int {
 }
 
 type ISOConfig struct {
-	// Workdir is the persistent live-build tree the build script runs in.
-	// chroot/, cache/, auto/ and local/ are reused between builds unless the
-	// submission asks for a cacheless build.
+	// Workdir is the live-build tree the build script runs in. Every build
+	// rebuilds config/ and auto/ and purges the cache; a cacheless build also
+	// removes cache/, chroot/, auto/ and local/ first.
 	Workdir      string `json:"workdir" validate:"required"`
 	Outputdir    string `json:"outputdir" validate:"required"`
 	DistCodename string `json:"dist_codename" validate:"required"` // verbeek - the distribution this ISO builder builds for, also its queue identity

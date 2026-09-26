@@ -187,9 +187,12 @@ irgsh-cli build-iso log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_i
 
 Running `irgsh-cli build-iso status` and `irgsh-cli build-iso log` without argument will reference the latest submitted ISO build pipeline ID.
 
-An ISO worker needs passwordless `sudo`, plus `git`, `live-build` and
-`zsyncmake`, and runs on an isolated host. The finished image is left on the
-worker under `iso.outputdir`, with `current/` pointing at the newest build.
+An ISO worker runs as the dedicated `irgsh-iso` account without `sudo`. It needs
+`git`, `zsyncmake`, `uidmap`, a subordinate ID range, unprivileged user
+namespaces, and a live-build that supports unprivileged builds; see the
+[rootless guide](docs/rootless-builder.md#iso-builder). The finished image is
+left on the worker under `iso.outputdir`, with `current/` pointing at the newest
+build.
 
 ## FAQ
 

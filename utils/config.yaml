@@ -57,9 +57,9 @@ repo:
   gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:
-  # The persistent live-build tree the build script runs in. chroot/, cache/,
-  # auto/ and local/ are reused between builds unless the job is submitted
-  # with --no-cache.
+  # The live-build tree the build script runs in. Every build rebuilds
+  # config/ and auto/ and purges the cache; --no-cache also removes cache/,
+  # chroot/, auto/ and local/ first.
   workdir: '/var/lib/irgsh/iso'
   outputdir: '/tmp/jahitan'
   public_base_url: 'http://jahitan.blankonlinux.id'

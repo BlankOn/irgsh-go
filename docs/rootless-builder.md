@@ -232,6 +232,47 @@ containers, or shared-account builder execution on the shared production host.
 Do not repoint release symlinks manually or reuse the native workdir as legacy
 state. Chief, repo, ISO, signing keys, and archive ownership stay unchanged.
 
+## ISO builder
+
+`irgsh-iso` runs as the dedicated `irgsh-iso` account. Each build runs the bundled
+script inside `unshare --map-auto --map-root-user --mount --pid --fork
+--kill-child --mount-proc`, so live-build is namespace root mapped to the
+account and its subordinate IDs, and job mounts end with the namespace. The
+worker needs no `sudo`.
+
+Use a host that allows unprivileged user namespaces (on Ubuntu 24.04 set
+`kernel.apparmor_restrict_unprivileged_userns=0`), with `git`, `zsyncmake`,
+`uidmap`, and `util-linux` (`unshare`, `flock`). live-build must fall back to a
+bind mount of `/sys` and detach it lazily: `/usr/lib/live/build/chroot_sysfs`
+must contain `mount -o rbind /sys chroot/sys` and `umount -l chroot/sys`.
+Debian's `1:20250814` does not qualify; install the BlankOn live-build package
+built from upstream master at or after `531cdb98` with the lazy `/sys` teardown.
+The worker checks all of this at startup and refuses to run otherwise.
+
+Packaging and the installer create the account without subordinate IDs.
+Allocate a range that overlaps no other account, for example:
+
+```sh
+sudo usermod --add-subuids 589824-655359 --add-subgids 589824-655359 irgsh-iso
+grep '^irgsh-iso:' /etc/subuid /etc/subgid
+```
+
+To migrate a host that built ISO images with `sudo`, drain and stop the worker,
+then remove the root-owned live-build state and hand the ISO directories to the
+account. Keep the published images in `iso.outputdir`:
+
+```sh
+sudo systemctl stop irgsh-iso.service
+sudo rm -rf /var/lib/irgsh/iso/{cache,chroot,auto,local,config,tmp}
+sudo chown -R irgsh-iso:irgsh-iso /var/lib/irgsh/iso <iso.outputdir>
+sudo systemctl daemon-reload
+sudo systemctl start irgsh-iso.service
+sudo systemctl show irgsh-iso.service -p User -p Group -p WorkingDirectory -p MainPID
+```
+
+Record a full build of each live-build layout as `irgsh-iso`, and a cancelled
+build followed by `findmnt | grep live-build` returning nothing.
+
 ## Target-host evidence record
 
 Record the tested IRGSH commit and release, date, operator, sanitized commands,
