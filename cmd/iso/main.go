@@ -79,7 +79,7 @@ func main() {
 
 		// Prepare workdir. This is the persistent live-build tree the build
 		// script runs in, not a per-job directory.
-		err = os.MkdirAll(irgshConfig.ISO.Workdir, 0755)
+		err = os.MkdirAll(irgshConfig.ISO.Workdir, 0700)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
 		}
@@ -119,6 +119,9 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
+		if err := validateCurrentISOHost(); err != nil {
+			return err
+		}
 
 		go serve()
 
@@ -151,7 +154,9 @@ func main() {
 		return nil
 
 	}
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // ISOBuildWithMonitoring wraps the BuildISO function with active task tracking

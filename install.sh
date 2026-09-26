@@ -112,8 +112,17 @@ if ! getent passwd irgsh-builder >/dev/null; then
 		--gecos "IRGSH Builder" irgsh-builder
 fi
 adduser irgsh-builder irgsh
+if ! getent group irgsh-iso >/dev/null; then
+	addgroup --system irgsh-iso
+fi
+if ! getent passwd irgsh-iso >/dev/null; then
+	adduser --system --home /var/lib/irgsh/iso --no-create-home \
+		--ingroup irgsh-iso --disabled-password --shell /usr/sbin/nologin \
+		--gecos "IRGSH ISO Builder" irgsh-iso
+fi
+adduser irgsh-iso irgsh
 chown irgsh:irgsh /var/lib/irgsh
-for state in chief repo iso gnupg; do
+for state in chief repo gnupg; do
 	if [ -d "/var/lib/irgsh/$state" ]; then
 		chown -R irgsh:irgsh "/var/lib/irgsh/$state"
 	fi
@@ -121,6 +130,7 @@ done
 chown -R irgsh:irgsh /var/log/irgsh
 chmod 0755 /var/lib/irgsh /var/log/irgsh
 install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
+install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 chown root:irgsh /etc/irgsh /etc/irgsh/config.yaml
 chmod 0750 /etc/irgsh
 chmod 0640 /etc/irgsh/config.yaml

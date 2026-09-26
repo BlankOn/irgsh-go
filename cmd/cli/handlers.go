@@ -139,7 +139,7 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.BoolFlag{
 					Name:  "no-cache",
-					Usage: "Clear the reusable live-build directories (cache, chroot, auto, local) before building",
+					Usage: "Remove the worker's live-build cache, chroot, auto and local directories before building",
 				},
 			},
 			Action: isoSubmitAction(ctx, svc),

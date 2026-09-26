@@ -159,7 +159,7 @@ ranges administratively; base creation and builds remain unprivileged, using
 only the narrow set-ID mapping helpers. The dedicated account receives no
 signing keys, deployment credentials, or runtime socket access. See the
 [rootless builder guide](docs/rootless-builder.md) for prerequisites and evidence.
-ISO builds require passwordless sudo and can create root-owned process trees. Repo
+ISO builds run as the dedicated `irgsh-iso` account inside an unprivileged user, mount, and PID namespace; job mounts end with the namespace. Repo
 initialization destroys and recreates configured suites. These operations belong
 on explicitly authorized, isolated hosts; normal development and tests must not
 silently invoke them.
@@ -200,7 +200,7 @@ partial or stale artifact to repo.
 Cancellation is a Redis mark plus a live publication. A worker checks the mark
 before starting; a running interruptible job receives context cancellation. The
 command helper places the process in its own group, sends SIGTERM, and escalates
-to SIGKILL after the grace period. Builder commands use direct argument arrays
+to SIGKILL after the grace period. Builder and ISO commands use direct argument arrays
 and process-group signals without sudo, wait for termination before cleanup, and
 never collect artifacts after cancellation.
 

@@ -103,13 +103,14 @@ if [ $OVERWRITE_WORKDIR = 1 ]; then
 fi
 
 chown irgsh:irgsh /var/lib/irgsh
-for state in chief repo iso gnupg; do
+for state in chief repo gnupg; do
 	if [ -d "/var/lib/irgsh/$state" ]; then
 		chown -R irgsh:irgsh "/var/lib/irgsh/$state"
 		chmod -R u+rw "/var/lib/irgsh/$state"
 	fi
 done
 install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
+install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 
 # GPG key
 if [ $OVERWRITE_GPG = 1 ]; then
