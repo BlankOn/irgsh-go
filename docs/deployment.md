@@ -23,6 +23,10 @@ use Debian package names and a host that runs repo instances for `verbeek` and
 `rani`; adapt unit names, config paths, and loopback ports to the units already
 defined on that host.
 
+Builder hosts must complete the [rootless builder prerequisites](rootless-builder.md)
+before selecting the new binary. Each builder instance needs its own account,
+subordinate IDs, workdir, initialized base, and component-specific config.
+
 Install the host tools:
 
 ```sh
@@ -94,6 +98,19 @@ Use these executable paths and stop deadlines in the other drop-ins:
 | builder | `/opt/irgsh/current/builder/bin/irgsh-builder` | `infinity` |
 | repo | `/opt/irgsh/current/repo/bin/irgsh-repo` | `infinity` |
 | iso | `/opt/irgsh/current/iso/bin/irgsh-iso` | `infinity` |
+
+For `irgsh-builder@verbeek.service`, preserve the selected config and dedicated
+identity in its drop-in:
+
+```ini
+[Service]
+User=irgsh-builder-verbeek
+Group=irgsh-builder-verbeek
+WorkingDirectory=/var/lib/irgsh/builder-verbeek
+ExecStart=
+ExecStart=/opt/irgsh/current/builder/bin/irgsh-builder -c /etc/irgsh/builder-verbeek.yaml
+TimeoutStopSec=infinity
+```
 
 The ISO drop-in must also select the release helper:
 

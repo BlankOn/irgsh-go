@@ -47,6 +47,9 @@ test-release-policy:
 test-deploy:
 	./utils/deploy/irgsh-deploy_test.sh
 
+test-provisioning:
+	bash utils/scripts/provisioning_test.sh
+
 release-in-docker: release
 	# It's possible this release command will be used inside a container
 	# Let it rewriteable for host environment

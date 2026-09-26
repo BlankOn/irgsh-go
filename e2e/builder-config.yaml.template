@@ -1,0 +1,16 @@
+redis: 'redis://127.0.0.1:6379'
+monitoring:
+  enabled: true
+  heartbeat_interval: 5
+  instance_timeout: 30
+  cleanup_interval: 3600
+notification:
+  webhook_url: ''
+chief:
+  address: 'http://127.0.0.1:8080'
+builder:
+  workdir: '/tmp/irgsh-e2e/builder'
+  dist_codename: 'verbeek'
+  upstream_dist_codename: 'sid'
+  upstream_dist_url: 'http://deb.debian.org/debian'
+  build_attempts: 2

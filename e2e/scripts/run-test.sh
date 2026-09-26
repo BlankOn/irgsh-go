@@ -12,6 +12,7 @@ irgsh-cli config --chief http://chief:8080 --key "$GPG_KEY"
 echo "=== Submitting test package ==="
 # Use bromo-theme, the canonical test package from HACKING.md.
 irgsh-cli package \
+    --dist verbeek \
     --experimental \
     --source https://github.com/BlankOn/bromo-theme.git \
     --package https://github.com/BlankOn-packages/bromo-theme.git \

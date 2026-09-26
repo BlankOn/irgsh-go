@@ -14,16 +14,33 @@ case "$1" in
                     --gecos "IRGSH System User" irgsh
         fi
 
+        if ! getent group irgsh-builder >/dev/null; then
+            addgroup --system irgsh-builder
+        fi
+
+        if ! getent passwd irgsh-builder >/dev/null; then
+            adduser --system --home /var/lib/irgsh/builder --no-create-home \
+                    --ingroup irgsh-builder --disabled-password --shell /usr/sbin/nologin \
+                    --gecos "IRGSH Builder" irgsh-builder
+        fi
+        adduser irgsh-builder irgsh
+
         # Ensure home directory exists
         if [ ! -d /var/lib/irgsh ]; then
             mkdir -p /var/lib/irgsh
         fi
 
         # Set proper ownership and permissions
-        chown -R irgsh:irgsh /var/lib/irgsh
+        chown irgsh:irgsh /var/lib/irgsh
+        for state in chief repo iso gnupg; do
+            if [ -d "/var/lib/irgsh/$state" ]; then
+                chown -R irgsh:irgsh "/var/lib/irgsh/$state"
+            fi
+        done
         chown -R irgsh:irgsh /var/log/irgsh
         chmod 755 /var/lib/irgsh
         chmod 755 /var/log/irgsh
+        install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
 
         # Make config directory readable by irgsh user
         chgrp irgsh /etc/irgsh
@@ -35,10 +52,6 @@ case "$1" in
             chmod 640 /etc/irgsh/config.yaml
         fi
 
-        # Add irgsh user to docker group if docker is installed
-        if getent group docker >/dev/null; then
-            usermod -aG docker irgsh || true
-        fi
         ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

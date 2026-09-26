@@ -1,6 +1,8 @@
 services:
   redis:
     image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
     networks: [irgsh]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -14,11 +16,11 @@ services:
     environment:
       IRGSH_CONFIG_PATH: /etc/irgsh/config.yaml
     volumes:
-      - ./config.yaml:/etc/irgsh/config.yaml:ro
-      - /tmp/irgsh-e2e/chief:/tmp/irgsh-e2e/chief
-      - /tmp/irgsh-e2e/gnupg:/tmp/irgsh-e2e/gnupg
+      - /tmp/irgsh-e2e/config.yaml:/etc/irgsh/config.yaml:ro
+      - chief:/tmp/irgsh-e2e/chief
+      - gnupg:/tmp/irgsh-e2e/gnupg
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     networks: [irgsh]
     depends_on:
       redis:
@@ -29,23 +31,6 @@ services:
       timeout: 3s
       retries: 10
 
-  builder:
-    image: irgsh-e2e
-    command: irgsh-builder
-    environment:
-      IRGSH_CONFIG_PATH: /etc/irgsh/config.yaml
-    volumes:
-      - ./config.yaml:/etc/irgsh/config.yaml:ro
-      # Same path on host and in container so Docker volume mounts work
-      # when builder runs "docker run -v /tmp/irgsh-e2e/builder/...".
-      - /tmp/irgsh-e2e/builder:/tmp/irgsh-e2e/builder
-      - /var/run/docker.sock:/var/run/docker.sock
-    privileged: true
-    networks: [irgsh]
-    depends_on:
-      chief:
-        condition: service_healthy
-
   repo:
     image: irgsh-e2e
     command: ["irgsh-repo", "--config", "/etc/irgsh/config.yaml"]
@@ -53,11 +38,11 @@ services:
       IRGSH_CONFIG_PATH: /etc/irgsh/config.yaml
       GNUPGHOME: /tmp/irgsh-e2e/gnupg
     volumes:
-      - ./config.yaml:/etc/irgsh/config.yaml:ro
-      - /tmp/irgsh-e2e/repo:/tmp/irgsh-e2e/repo
-      - /tmp/irgsh-e2e/gnupg:/tmp/irgsh-e2e/gnupg
+      - /tmp/irgsh-e2e/config.yaml:/etc/irgsh/config.yaml:ro
+      - repo:/tmp/irgsh-e2e/repo
+      - gnupg:/tmp/irgsh-e2e/gnupg
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     networks: [irgsh]
     depends_on:
       chief:
@@ -65,3 +50,10 @@ services:
 
 networks:
   irgsh:
+
+volumes:
+  chief:
+  repo:
+    name: e2e_repo
+  gnupg:
+    name: e2e_gnupg

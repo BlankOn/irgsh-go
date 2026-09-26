@@ -16,15 +16,13 @@ DEV_INSTALL=0
 
 apt update
 
-# Check if docker is installed
-if [[ -x "$(command -v docker)" && $(docker --version) ]]; then
-    echo "Docker installed [OK]"
-else
-    echo "Installing docker"
-    apt install -y docker.io
-fi
+apt install -y gnupg sbuild mmdebstrap uidmap dpkg-dev devscripts ca-certificates debhelper python3-apt reprepro jq
 
-apt install -y gnupg pbuilder debootstrap devscripts debhelper python3-apt reprepro jq
+SBUILD_VERSION=$(sbuild --version | sed -n 's/^sbuild (Debian sbuild) \([^ ]*\).*/\1/p')
+if [ -z "$SBUILD_VERSION" ] || ! dpkg --compare-versions "$SBUILD_VERSION" ge 0.87.0; then
+	echo 'sbuild >= 0.87.0 is required; configure a supported package source before installing IRGSH' >&2
+	exit 1
+fi
 
 if [ -f ./target/release.tar.gz ]; then
 	# For development/testing purpose
@@ -97,18 +95,35 @@ systemctl daemon-reload
 if [ ! -f "/etc/irgsh/config.yaml" ]; then
 	cp -v $TEMP_PATH/irgsh-go/etc/irgsh/config.yaml /etc/irgsh/config.yaml
 fi
-# irgsh user
-#groupadd irgsh || true
-if getent passwd irgsh >/dev/null 2>&1; then
-	echo "irgsh user is already exists"
-else
-	useradd -d /var/lib/irgsh -s /bin/bash -G root -u 880 -U irgsh
-	chown -R irgsh:irgsh /var/lib/irgsh
-	chmod -R u+rw /var/lib/irgsh
-	usermod -aG docker irgsh
-	echo "irgsh user added to system"
+if ! getent group irgsh >/dev/null; then
+	addgroup --system irgsh
 fi
-#usermod -aG irgsh irgsh
+if ! getent passwd irgsh >/dev/null; then
+	adduser --system --home /var/lib/irgsh --no-create-home \
+		--ingroup irgsh --disabled-password --shell /bin/bash \
+		--gecos "IRGSH System User" irgsh
+fi
+if ! getent group irgsh-builder >/dev/null; then
+	addgroup --system irgsh-builder
+fi
+if ! getent passwd irgsh-builder >/dev/null; then
+	adduser --system --home /var/lib/irgsh/builder --no-create-home \
+		--ingroup irgsh-builder --disabled-password --shell /usr/sbin/nologin \
+		--gecos "IRGSH Builder" irgsh-builder
+fi
+adduser irgsh-builder irgsh
+chown irgsh:irgsh /var/lib/irgsh
+for state in chief repo iso gnupg; do
+	if [ -d "/var/lib/irgsh/$state" ]; then
+		chown -R irgsh:irgsh "/var/lib/irgsh/$state"
+	fi
+done
+chown -R irgsh:irgsh /var/log/irgsh
+chmod 0755 /var/lib/irgsh /var/log/irgsh
+install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
+chown root:irgsh /etc/irgsh /etc/irgsh/config.yaml
+chmod 0750 /etc/irgsh
+chmod 0640 /etc/irgsh/config.yaml
 echo "Installing files [OK]"
 echo
 
@@ -139,7 +154,7 @@ if [ $DEV_INSTALL = 1 ]; then
 	su -c "GNUPGHOME=/var/lib/irgsh/gnupg gpg --import < /tmp/pubkey" -s /bin/bash irgsh
 
 	# reinit repo
-	su -c "irgsh-repo init > /dev/null" -s /bin/bash irgsh
+	su -c "irgsh-repo -c /etc/irgsh/config.yaml init > /dev/null" -s /bin/bash irgsh
 
 fi
 

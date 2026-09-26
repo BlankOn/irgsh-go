@@ -22,6 +22,7 @@ chief:
 
 builder:
   workdir: '/tmp/irgsh-e2e/builder'
+  dist_codename: 'verbeek'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://deb.debian.org/debian'
 

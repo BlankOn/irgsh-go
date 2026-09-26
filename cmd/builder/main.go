@@ -107,6 +107,9 @@ func main() {
 			Aliases: []string{"i"},
 			Usage:   "Rebuild the base with unprivileged mmdebstrap",
 			Action: func(c *cli.Context) error {
+				if err := validateCurrentBuilderHost(); err != nil {
+					return err
+				}
 				err := InitBase()
 				return err
 			},
@@ -116,6 +119,9 @@ func main() {
 			Aliases: []string{"i"},
 			Usage:   "Rebuild the base with unprivileged mmdebstrap",
 			Action: func(c *cli.Context) error {
+				if err := validateCurrentBuilderHost(); err != nil {
+					return err
+				}
 				err := UpdateBase()
 				return err
 			},
@@ -125,6 +131,9 @@ func main() {
 	app.Action = func(c *cli.Context) error {
 		var err error
 
+		if err = validateCurrentBuilderHost(); err != nil {
+			return err
+		}
 		go serve()
 
 		// Start monitoring heartbeat if enabled
@@ -155,7 +164,9 @@ func main() {
 		return nil
 
 	}
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // BuildWithMonitoring wraps the Build function with active task tracking

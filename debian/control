@@ -13,12 +13,15 @@ Package: irgsh
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         adduser
-Suggests: pbuilder,
-          debootstrap,
-          reprepro,
-          dh-make,
-          docker.io | docker-ce
+         adduser,
+         sbuild (>= 0.87.0),
+         mmdebstrap,
+         uidmap,
+         dpkg-dev,
+         devscripts,
+         ca-certificates
+Suggests: reprepro,
+          dh-make
 Description: Server components for Debian-derived distribution maintenance
  IRGSH (pronunciation: irgis) is an all-in-one tool to create and maintain
  Debian-derived GNU/Linux distribution: from packaging to repository, from
