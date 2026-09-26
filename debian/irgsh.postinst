@@ -25,6 +25,17 @@ case "$1" in
         fi
         adduser irgsh-builder irgsh
 
+        if ! getent group irgsh-iso >/dev/null; then
+            addgroup --system irgsh-iso
+        fi
+
+        if ! getent passwd irgsh-iso >/dev/null; then
+            adduser --system --home /var/lib/irgsh/iso --no-create-home \
+                    --ingroup irgsh-iso --disabled-password --shell /usr/sbin/nologin \
+                    --gecos "IRGSH ISO Builder" irgsh-iso
+        fi
+        adduser irgsh-iso irgsh
+
         # Ensure home directory exists
         if [ ! -d /var/lib/irgsh ]; then
             mkdir -p /var/lib/irgsh
@@ -32,7 +43,7 @@ case "$1" in
 
         # Set proper ownership and permissions
         chown irgsh:irgsh /var/lib/irgsh
-        for state in chief repo iso gnupg; do
+        for state in chief repo gnupg; do
             if [ -d "/var/lib/irgsh/$state" ]; then
                 chown -R irgsh:irgsh "/var/lib/irgsh/$state"
             fi
@@ -41,6 +52,7 @@ case "$1" in
         chmod 755 /var/lib/irgsh
         chmod 755 /var/log/irgsh
         install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
+        install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
 
         # Make config directory readable by irgsh user
         chgrp irgsh /etc/irgsh

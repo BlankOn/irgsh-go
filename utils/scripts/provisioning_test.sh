@@ -120,7 +120,7 @@ reject_calls() {
 
 check_ownership() {
 	reject_calls 'builder-rani|^(useradd|groupadd|usermod|userdel|groupdel|deluser|delgroup|gpasswd|sudo|curl|docker)[[:space:]]|--add-subuids|--add-subgids|[[:space:]](docker|root)[[:space:]]'
-	reject_calls $'^(chown|chmod|rm).*\t(-[[:alpha:]]*[rR][[:alpha:]]*|--recursive)\t.*\t/var/lib/irgsh(/builder)?\t$'
+	reject_calls $'^(chown|chmod|rm).*\t(-[[:alpha:]]*[rR][[:alpha:]]*|--recursive)\t.*\t/var/lib/irgsh(/builder|/iso)?\t$'
 	[[ $(< "$sandbox/var/lib/irgsh/builder-rani/state") == 'another instance' ]] || fail 'another builder state changed'
 	[[ $(< "$sandbox/etc/subuid") == 'other:100000:65536' ]] || fail 'subordinate UID ranges changed'
 	[[ $(< "$sandbox/etc/subgid") == 'other:200000:65536' ]] || fail 'subordinate GID ranges changed'
@@ -146,18 +146,24 @@ check_account() {
 	expect_call adduser --system --home /var/lib/irgsh/builder --no-create-home --ingroup irgsh-builder --disabled-password --shell /usr/sbin/nologin --gecos 'IRGSH Builder' irgsh-builder
 	expect_call adduser irgsh-builder irgsh
 	expect_call install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
+	expect_call addgroup --system irgsh-iso
+	expect_call adduser --system --home /var/lib/irgsh/iso --no-create-home --ingroup irgsh-iso --disabled-password --shell /usr/sbin/nologin --gecos 'IRGSH ISO Builder' irgsh-iso
+	expect_call adduser irgsh-iso irgsh
+	expect_call install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
 }
 
 run_case postinst-fresh 0 irgsh.postinst ''
 check_account
-[[ $(grep -c '^adduser' "$PROVISION_LOG") == 3 ]] || fail 'unexpected account or group grant'
+[[ $(grep -c '^adduser' "$PROVISION_LOG") == 5 ]] || fail 'unexpected account or group grant'
 
 export PROVISION_EXISTING=1
 run_case postinst-repeated 0 irgsh.postinst ''
 reject_calls '^addgroup|^adduser[[:space:]]--system'
 expect_call adduser irgsh-builder irgsh
 expect_call install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
-[[ $(grep -c '^adduser' "$PROVISION_LOG") == 1 ]] || fail 'unexpected repeated group grant'
+expect_call adduser irgsh-iso irgsh
+expect_call install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+[[ $(grep -c '^adduser' "$PROVISION_LOG") == 2 ]] || fail 'unexpected repeated group grant'
 
 export PROVISION_GROUP_EXIT=43
 run_case postinst-group-failure 43 irgsh.postinst ''
@@ -167,6 +173,7 @@ export PROVISION_GROUP_EXIT=0
 run_case init-success 0 init.sh ynnyy
 expect_call su -c 'GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo -c /etc/irgsh/config.yaml init' -s /bin/bash irgsh
 expect_call su -s /bin/bash -c 'irgsh-builder init-base' irgsh-builder
+expect_call install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
 [[ $(grep '^su' "$PROVISION_LOG" | cut -f3) == $'GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo -c /etc/irgsh/config.yaml init\n/bin/bash' ]] || fail 'repo must initialize before builder base'
 
 export PROVISION_REPO_EXIT=44
@@ -194,5 +201,12 @@ export PROVISION_REPO_EXIT=44
 run_case installer-repo-failure 44 install.sh ''
 reject_calls '^systemctl[[:space:]]enable'
 if grep -q 'Happy hacking!' "$sandbox/installer-repo-failure.output"; then fail 'failed installer reported success'; fi
+
+for unit in debian/irgsh-iso.service utils/systemctl/irgsh-iso.service; do
+	grep -qx 'User=irgsh-iso' "$root/$unit" || fail "$unit must run as irgsh-iso"
+	grep -qx 'Group=irgsh-iso' "$root/$unit" || fail "$unit must use the irgsh-iso group"
+	grep -qx 'WorkingDirectory=/var/lib/irgsh/iso' "$root/$unit" || fail "$unit must start in the ISO workdir"
+	if grep -q 'GNUPGHOME' "$root/$unit"; then fail "$unit must not reference signing keys"; fi
+done
 
 printf 'PASS: 9 provisioning scenarios\n'
