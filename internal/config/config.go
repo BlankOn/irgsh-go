@@ -34,29 +34,10 @@ type BuilderConfig struct {
 	DistCodename         string `json:"dist_codename" validate:"required"`          // verbeek - the distribution this builder builds for, also its queue identity
 	UpstreamDistCodename string `json:"upstream_dist_codename" validate:"required"` // sid
 	UpstreamDistUrl      string `json:"upstream_dist_url" validate:"required"`      // http://kartolo.sby.datautama.net.id/debian
-	// DNS are the fallback resolvers written into the build chroot's
-	// resolv.conf, after whatever resolvers the container already has.
-	// Empty means DefaultBuilderDNS.
-	DNS []string `json:"dns"`
-	// BuildAttempts is how many times a build whose log shows a transient
-	// network/DNS failure is retried. Zero or less means DefaultBuildAttempts.
-	BuildAttempts int `json:"build_attempts"`
+	BuildAttempts        int    `json:"build_attempts"`
 }
 
-// DefaultBuilderDNS are the fallback resolvers used when builder.dns is unset.
-var DefaultBuilderDNS = []string{"1.1.1.1", "8.8.8.8"}
-
-// DefaultBuildAttempts is the number of pbuilder attempts used when
-// builder.build_attempts is unset.
 const DefaultBuildAttempts = 3
-
-// Resolvers returns the configured fallback resolvers, or the defaults.
-func (c BuilderConfig) Resolvers() []string {
-	if len(c.DNS) == 0 {
-		return DefaultBuilderDNS
-	}
-	return c.DNS
-}
 
 // Attempts returns the configured build attempt count, or the default.
 func (c BuilderConfig) Attempts() int {

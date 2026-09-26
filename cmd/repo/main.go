@@ -89,6 +89,9 @@ func main() {
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
 		}
+		if err := migrateUDebComponents(irgshConfig.Repo); err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't migrate repository UDeb components: %v", err), 1)
+		}
 
 		logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
 		if err != nil {

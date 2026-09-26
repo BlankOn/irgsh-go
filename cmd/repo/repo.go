@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/blankon/irgsh-go/internal/logstream"
@@ -300,28 +301,15 @@ func Repo(payload string) (err error) {
 		}
 	}
 
-	// Injecting the package
-	cmdStr = fmt.Sprintf(`mkdir -p %s/%s && cd %s/%s/ && \
-	%s reprepro -v -v -v --nothingiserror --component %s includedeb %s %s/artifacts/%s/*.deb`,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.DistCodename+experimentalSuffix,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.DistCodename+experimentalSuffix,
-		gnupgDir,
-		raw["component"],
-		irgshConfig.Repo.DistCodename+experimentalSuffix,
-		irgshConfig.Repo.Workdir,
-		taskUUID,
-	)
-
-	_, err = systemutil.CmdExec(
-		cmdStr,
-		"Injecting the deb files from artifact to the repository",
-		logPath,
-	)
+	var binaryEnv []string
+	if !irgshConfig.IsDev {
+		binaryEnv = []string{"GNUPGHOME=" + irgshConfig.Repo.GnupgDir}
+	}
+	dist := irgshConfig.Repo.DistCodename + experimentalSuffix
+	err = includeBinaries(filepath.Join(irgshConfig.Repo.Workdir, dist), filepath.Join(artifactDir, taskUUID), dist, component, binaryEnv, logPath, systemutil.CmdExecArgsContextInDir)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+systemutil.FailureSummary(err))
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject binary files: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}

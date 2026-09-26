@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -102,12 +103,16 @@ func TestCollectArtifactsRequiresBuildinfo(t *testing.T) {
 }
 
 func TestCollectArtifactsRejectsSymlink(t *testing.T) {
-	job, attempt, source := artifactFixture(t)
-	if err := os.Symlink(job.Log, filepath.Join(attempt.Result, "linked.deb")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
-		t.Fatal("accepted a symlink artifact")
+	for _, name := range []string{"linked.deb", "hello_1.0_amd64.build"} {
+		t.Run(name, func(t *testing.T) {
+			job, attempt, source := artifactFixture(t)
+			if err := os.Symlink(job.Log, filepath.Join(attempt.Result, name)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := collectArtifacts(context.Background(), job, attempt, source); err == nil {
+				t.Fatal("accepted a symlink artifact")
+			}
+		})
 	}
 }
 
@@ -620,8 +625,10 @@ func TestBuildUploadsArtifactsThenFinalLogAndCleansOnlyJob(t *testing.T) {
 			previousConfig := irgshConfig
 			t.Cleanup(func() { irgshConfig = previousConfig })
 			irgshConfig = config.IrgshConfig{}
+			irgshConfig.Builder = baseFixture(t)
 			irgshConfig.Builder.Workdir = filepath.Join(t.TempDir(), "builder space")
 			irgshConfig.Builder.DistCodename = "verbeek"
+			base := oldBaseFixture(t, irgshConfig.Builder)
 			job, err := newBuildJob(irgshConfig.Builder.Workdir, buildSubmission{TaskUUID: "job-123"})
 			if err != nil {
 				t.Fatal(err)
@@ -693,28 +700,7 @@ func TestBuildUploadsArtifactsThenFinalLogAndCleansOnlyJob(t *testing.T) {
 			}))
 			defer server.Close()
 			irgshConfig.Chief.Address = server.URL
-			dockerDir := t.TempDir()
-			script := `#!/bin/sh
-set -eu
-printf '%s\n' "$@" >> "$DOCKER_ARGS"
-if [ "$1" = rm ]; then exit 0; fi
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        --cidfile) shift; printf 'test-container\n' > "$1" ;;
-        -v) shift; result=${1%:/tmp/build} ;;
-    esac
-    shift
-done
-test "$result/hello_1.0.dsc" -ef "$result/../input/hello_1.0.dsc"
-printf 'binary bytes' > "$result/hello_1.0_amd64.deb"
-printf 'build info' > "$result/hello_1.0_amd64.buildinfo"
-`
-			if err := os.WriteFile(filepath.Join(dockerDir, "docker"), []byte(script), 0755); err != nil {
-				t.Fatal(err)
-			}
-			argsPath := filepath.Join(t.TempDir(), "docker-args")
-			t.Setenv("DOCKER_ARGS", argsPath)
-			t.Setenv("PATH", dockerDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			argsPath := nativeCommandFixture(t)
 			payload := validBuildPayload(t)
 			next, err := Build(payload)
 			wantLog := "[ BUILD DONE ]"
@@ -748,9 +734,9 @@ printf 'build info' > "$result/hello_1.0_amd64.buildinfo"
 				}
 			}
 			args, err := os.ReadFile(argsPath)
-			wantArgs := []string{"run", "--privileged=true", "--user", "0:0", "-e", "BUILD_ATTEMPTS=3", "--cidfile", filepath.Join(job.Root, "1", "tmp", "container.cid"), "-v", filepath.Join(job.Root, "1", "result") + ":/tmp/build", "-i", "pbocker", "bash", "-c", "/build.sh", "rm", "-f", "test-container"}
-			if err != nil || string(args) != strings.Join(wantArgs, "\n")+"\n" {
-				t.Fatalf("docker arguments = %q, %v", args, err)
+			wantArgs, marshalErr := json.Marshal([]any{[]string{"--chroot-mode=unshare", "--chroot=" + filepath.Join(job.Root, "1", "base.tar"), "--dist=verbeek", "--arch=amd64", "--arch-all", "--arch-any", "--no-source", "--enable-network", "--nolog", "--build-dir=" + filepath.Join(job.Root, "1", "result"), filepath.Join(job.Root, "1", "input", "hello_1.0.dsc")}, base.Config, filepath.Join(job.Root, "1", "tmp")})
+			if err != nil || marshalErr != nil || string(args) != string(wantArgs) {
+				t.Fatalf("sbuild arguments = %q, %v, %v", args, err, marshalErr)
 			}
 		})
 	}

@@ -103,18 +103,9 @@ func main() {
 
 	app.Commands = []cli.Command{
 		{
-			Name:    "init-builder",
-			Aliases: []string{"i"},
-			Usage:   "Initialize builder",
-			Action: func(c *cli.Context) error {
-				err := InitBuilder()
-				return err
-			},
-		},
-		{
 			Name:    "init-base",
 			Aliases: []string{"i"},
-			Usage:   "Initialize pbuilder base.tgz. This need to be run under sudo or root",
+			Usage:   "Rebuild the base with unprivileged mmdebstrap",
 			Action: func(c *cli.Context) error {
 				err := InitBase()
 				return err
@@ -123,7 +114,7 @@ func main() {
 		{
 			Name:    "update-base",
 			Aliases: []string{"i"},
-			Usage:   "update base.tgz",
+			Usage:   "Rebuild the base with unprivileged mmdebstrap",
 			Action: func(c *cli.Context) error {
 				err := UpdateBase()
 				return err
