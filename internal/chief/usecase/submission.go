@@ -163,37 +163,38 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 	submissionsDir := ss.storage.SubmissionsDir()
 	oldTarball := filepath.Join(submissionsDir, oldTaskUUID+".tar.gz")
 	newTarball := filepath.Join(submissionsDir, newTaskUUID+".tar.gz")
-	oldDir := filepath.Join(submissionsDir, oldTaskUUID)
-	newDir := filepath.Join(submissionsDir, newTaskUUID)
 
-	log.Printf("Retry: copying submission files from %s to %s\n", oldTaskUUID, newTaskUUID)
+	log.Printf("Retry: copying submission tarball from %s to %s\n", oldTaskUUID, newTaskUUID)
 
-	if _, err := os.Stat(oldTarball); os.IsNotExist(err) {
+	sourceInfo, err := os.Stat(oldTarball)
+	if os.IsNotExist(err) {
 		log.Printf("Original submission tarball not found: %s\n", oldTarball)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusNotFound, `{"error": "original submission tarball not found, cannot retry"}`)
 	}
-
-	if err := ss.storage.CopyFileWithSudo(oldTarball, newTarball); err != nil {
-		log.Printf("Failed to copy submission tarball: %v\n", err)
+	if err != nil {
+		log.Printf("Failed to stat submission tarball: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission files for retry"}`)
 	}
 
-	if _, err := os.Stat(oldDir); err == nil {
-		if err := ss.storage.CopyDirWithSudo(oldDir, newDir); err != nil {
-			log.Printf("Failed to copy submission directory: %v\n", err)
-			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission directory for retry"}`)
+	queueStarted := false
+	defer func() {
+		if !queueStarted {
+			if err := os.Remove(newTarball); err != nil && !os.IsNotExist(err) {
+				log.Printf("Failed to remove retry tarball: %v\n", err)
+			}
 		}
+	}()
+
+	if err := systemutil.CopyFile(oldTarball, newTarball, sourceInfo.Mode()); err != nil {
+		log.Printf("Failed to copy submission tarball: %v\n", err)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission files for retry"}`)
+	}
+	if err := os.Chmod(newTarball, sourceInfo.Mode()); err != nil {
+		log.Printf("Failed to preserve submission tarball mode: %v\n", err)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to copy submission files for retry"}`)
 	}
 
-	if err := ss.storage.ChownWithSudo(newTarball); err != nil {
-		log.Printf("Failed to chown tarball: %v\n", err)
-	}
-
-	if err := ss.storage.ChownRecursiveWithSudo(newDir); err != nil {
-		log.Printf("Failed to chown submission directory: %v\n", err)
-	}
-
-	log.Printf("Retry: submission files copied successfully\n")
+	log.Printf("Retry: submission tarball copied successfully\n")
 
 	submission := domain.Submission{
 		TaskUUID:              newTaskUUID,
@@ -217,6 +218,7 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
 	}
 
+	queueStarted = true
 	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send retry build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
