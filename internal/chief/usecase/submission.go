@@ -16,6 +16,7 @@ import (
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/pkg/gitref"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
@@ -255,6 +256,12 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 	}
 	if submission.Branch == "" {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch is required")
+	}
+	if !gitref.ValidBranch(submission.Branch) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch contains unsupported characters")
+	}
+	if submission.Commit != "" && !gitref.ValidCommit(submission.Commit) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "commit must be a full 40-character lowercase SHA")
 	}
 
 	submission.Timestamp = time.Now()

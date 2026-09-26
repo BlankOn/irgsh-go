@@ -95,13 +95,21 @@ func CmdExecArgsContext(ctx context.Context, name string, args []string, env []s
 }
 
 func CmdExecArgsContextInDir(ctx context.Context, name string, args []string, env []string, directory string, desc string, logPath string) (string, error) {
+	return cmdExecArgs(ctx, name, args, env, directory, desc, logPath, false)
+}
+
+func CmdExecPrivilegedArgsContextInDir(ctx context.Context, name string, args []string, env []string, directory string, desc string, logPath string) (string, error) {
+	return cmdExecArgs(ctx, name, args, env, directory, desc, logPath, true)
+}
+
+func cmdExecArgs(ctx context.Context, name string, args []string, env []string, directory string, desc string, logPath string, privilegedCancel bool) (string, error) {
 	if name == "" {
 		return "", errors.New("no command provided")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = directory
 	cmd.Env = append(cmd.Environ(), env...)
-	return runCommand(ctx, cmd, strings.Join(append([]string{name}, args...), " "), desc, logPath, false)
+	return runCommand(ctx, cmd, strings.Join(append([]string{name}, args...), " "), desc, logPath, privilegedCancel)
 }
 
 func runCommand(ctx context.Context, cmd *exec.Cmd, display string, desc string, logPath string, privilegedCancel bool) (string, error) {

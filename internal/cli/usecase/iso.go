@@ -6,9 +6,10 @@ import (
 	"fmt"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
+	"github.com/blankon/irgsh-go/pkg/gitref"
 )
 
-func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, branch string, noCache bool) (domain.SubmitResponse, error) {
+func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, branch, commit string, noCache bool) (domain.SubmitResponse, error) {
 	if _, err := u.config.Load(); err != nil {
 		return domain.SubmitResponse{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
 	}
@@ -19,10 +20,19 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, branch string, noCache
 	if branch == "" {
 		return domain.SubmitResponse{}, errors.New("--branch is required")
 	}
+	if !gitref.ValidBranch(branch) {
+		return domain.SubmitResponse{}, fmt.Errorf("--branch %q is not a supported branch name", branch)
+	}
+	if commit != "" && !gitref.ValidCommit(commit) {
+		return domain.SubmitResponse{}, fmt.Errorf("--commit %q must be a full 40-character lowercase commit SHA", commit)
+	}
 
 	fmt.Printf("Submitting ISO build job...\n")
 	fmt.Printf("Distribution: %s\n", dist)
 	fmt.Printf("Branch: %s\n", branch)
+	if commit != "" {
+		fmt.Printf("Commit: %s\n", commit)
+	}
 	if noCache {
 		fmt.Println("Cacheless build: the worker will clear cache, chroot, auto and local first")
 	}
@@ -30,6 +40,7 @@ func (u *CLIUsecase) SubmitISO(ctx context.Context, dist, branch string, noCache
 	submission := domain.ISOSubmission{
 		Dist:    dist,
 		Branch:  branch,
+		Commit:  commit,
 		NoCache: noCache,
 	}
 

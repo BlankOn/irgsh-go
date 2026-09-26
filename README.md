@@ -157,9 +157,17 @@ configuration (`iso.repo_url`), so you only name the distribution and branch,
 irgsh-cli build-iso --dist verbeek --branch without-praya
 ```
 
-The worker builds in a persistent live-build tree and reuses `cache/`,
-`chroot/`, `auto/` and `local/` between builds. Pass `--no-cache` to have it
-clear those first,
+Pin a commit on that branch with its full SHA,
+
+```
+irgsh-cli build-iso --dist verbeek --branch variant-gnome --commit 0123456789abcdef0123456789abcdef01234567
+```
+
+The branch may use the variant layout (`variant`, `config/common/`,
+`config/<variant>/`, `auto/`, and `config/common/includes.chroot/etc/blankon/archive.conf`)
+or the legacy flat `config/` layout. Every build purges the live-build cache.
+Pass `--no-cache` to also remove the worker's `cache/`, `chroot/`, `auto/` and
+`local/` directories first,
 
 ```
 irgsh-cli build-iso --dist verbeek --branch without-praya --no-cache
@@ -180,8 +188,8 @@ irgsh-cli build-iso log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_i
 Running `irgsh-cli build-iso status` and `irgsh-cli build-iso log` without argument will reference the latest submitted ISO build pipeline ID.
 
 An ISO worker needs passwordless `sudo`, plus `git`, `live-build` and
-`zsyncmake`. The finished image is left on the worker under `iso.outputdir`,
-with `current/` pointing at the newest build.
+`zsyncmake`, and runs on an isolated host. The finished image is left on the
+worker under `iso.outputdir`, with `current/` pointing at the newest build.
 
 ## FAQ
 

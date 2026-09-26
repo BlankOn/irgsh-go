@@ -333,6 +333,7 @@ func TestBuildISO_Success(t *testing.T) {
 	resp, err := svc.BuildISO(domain.ISOSubmission{
 		Dist:    "verbeek",
 		Branch:  "main",
+		Commit:  "0123456789abcdef0123456789abcdef01234567",
 		NoCache: true,
 	})
 	require.NoError(t, err)
@@ -350,6 +351,45 @@ func TestBuildISO_Success(t *testing.T) {
 	// the branch and the cacheless flag off the wire.
 	assert.Equal(t, "verbeek", queuedDist)
 	assert.Contains(t, string(queuedPayload), `"branch":"main"`)
+	assert.Contains(t, string(queuedPayload), `"commit":"0123456789abcdef0123456789abcdef01234567"`)
 	assert.Contains(t, string(queuedPayload), `"noCache":true`)
 	assert.NotContains(t, string(queuedPayload), "repoUrl")
+}
+
+func TestBuildISO_RejectsUnsafeRevision(t *testing.T) {
+	for name, submission := range map[string]domain.ISOSubmission{
+		"shell branch":     {Dist: "verbeek", Branch: "main;id"},
+		"option branch":    {Dist: "verbeek", Branch: "-main"},
+		"dotted branch":    {Dist: "verbeek", Branch: "a..b"},
+		"short commit":     {Dist: "verbeek", Branch: "main", Commit: "0123456"},
+		"uppercase commit": {Dist: "verbeek", Branch: "main", Commit: "0123456789ABCDEF0123456789ABCDEF01234567"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			queued := false
+			tq := &mockTaskQueue{sendISOTaskFn: func(string, string, []byte) error {
+				queued = true
+				return nil
+			}}
+			svc := newTestSubmissionService(tq, &mockFileStorage{}, &mockGPGVerifier{}, nil, nil)
+			_, err := svc.BuildISO(submission)
+			require.Error(t, err)
+			var httpErr httputil.HTTPError
+			require.True(t, errors.As(err, &httpErr))
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.False(t, queued)
+		})
+	}
+}
+
+func TestBuildISO_OmitsEmptyCommit(t *testing.T) {
+	var queuedPayload []byte
+	tq := &mockTaskQueue{sendISOTaskFn: func(_ string, _ string, payload []byte) error {
+		queuedPayload = payload
+		return nil
+	}}
+	svc := newTestSubmissionService(tq, &mockFileStorage{}, &mockGPGVerifier{}, nil, nil)
+	_, err := svc.BuildISO(domain.ISOSubmission{Dist: "verbeek", Branch: "feature/iso"})
+	require.NoError(t, err)
+	assert.Contains(t, string(queuedPayload), `"branch":"feature/iso"`)
+	assert.NotContains(t, string(queuedPayload), `"commit"`)
 }

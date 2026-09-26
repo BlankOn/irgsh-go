@@ -60,10 +60,12 @@ checks their installability, and injects the requested versions. Reprepro state
 and its exported `www` tree are durable state owned by the repo worker.
 
 `irgsh-iso` consumes `iso` tasks. It runs the bundled live-build script against
-the worker-configured repository and the client-selected branch. Its workdir is
-a persistent live-build tree whose cache, chroot, auto, and local directories are
-reused unless the submission requests `noCache`. Finished images stay on the ISO
-worker under its output directory.
+the worker-configured repository, the client-selected branch, and an optional
+pinned commit. The script accepts the variant layout (`variant`, `config/common/`,
+`config/<variant>/`, `auto/`) and the legacy flat `config/` layout, rebuilds
+`config/` and `auto/` from that revision for every job, and purges the
+live-build cache before building. Finished images stay on the ISO worker under
+its output directory.
 
 Redis carries Machinery tasks, worker heartbeats, job-history observations, live
 log messages, and cancellation signals. It is therefore both a scheduling and
@@ -115,11 +117,18 @@ place unless `--force-version` requests reinjection.
 
 ### ISO pipeline
 
-The client submits a target distribution, live-build branch, and optional
-`noCache`. The live-build repository URL belongs to worker configuration and is
-not accepted from the client. Chief routes the task to the target distribution's
-ISO queue. The worker writes its build environment, optionally clears the four
-reused directories, and invokes the installed build script.
+The client submits a target distribution, live-build branch, optional full
+commit SHA, and optional `noCache`. CLI, chief, and worker each accept only
+safe branch names and 40-character lowercase commits. The live-build repository
+URL belongs to worker configuration and is not accepted from the client. Chief
+routes the task to the target distribution's ISO queue. The worker writes its
+build environment, optionally removes the cache, chroot, auto, and local
+directories, and invokes the installed script with literal arguments. The
+script rejects a pinned commit that is not on the branch, points every
+live-build mirror at the revision's `archive.conf` (required for the variant
+layout), logs the resolved repository, branch, commit, layout, variant, and
+archive, and names images `blankon-live-image-<variant>-amd64`, or
+`blankon-live-image-amd64` for the legacy layout.
 
 Success requires both a zero script exit and a changed `current/current.txt`.
 This prevents an old image in `current/` from making a failed build look
