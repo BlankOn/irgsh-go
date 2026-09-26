@@ -119,6 +119,9 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
+		if err := validateCurrentISOHost(); err != nil {
+			return err
+		}
 
 		go serve()
 
@@ -151,7 +154,9 @@ func main() {
 		return nil
 
 	}
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // ISOBuildWithMonitoring wraps the BuildISO function with active task tracking
