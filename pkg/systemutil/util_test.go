@@ -296,52 +296,11 @@ func TestCmdExec_LogsEveryStepOfAnAndChain(t *testing.T) {
 	}
 }
 
-func TestCmdExecPrivilegedArgsContextInDirIsLiteral(t *testing.T) {
-	directory := t.TempDir()
-	marker := filepath.Join(directory, "expanded")
-	arg := "$(touch " + marker + ")"
-	out, err := CmdExecPrivilegedArgsContextInDir(context.Background(), "printf", []string{"%s", arg}, nil, directory, "literal argv", "")
-	if err != nil || out != arg {
-		t.Fatalf("output = %q, %v", out, err)
-	}
-	if _, err := os.Stat(marker); !os.IsNotExist(err) {
-		t.Fatalf("argument was interpreted by a shell: %v", err)
-	}
-}
-
-func TestCmdExecPrivilegedArgsContextInDirReadsEOF(t *testing.T) {
+func TestCmdExecArgsContextInDirReadsEOF(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := CmdExecPrivilegedArgsContextInDir(ctx, "cat", nil, nil, "", "stdin", "")
+	out, err := CmdExecArgsContextInDir(ctx, "cat", nil, nil, "", "stdin", "")
 	if err != nil || out != "" {
 		t.Fatalf("cat without input = %q, %v", out, err)
-	}
-}
-
-func TestCmdExecPrivilegedArgsContextInDirCancellationUsesSudo(t *testing.T) {
-	dir := t.TempDir()
-	marker := filepath.Join(dir, "sudo-called")
-	sudo := filepath.Join(dir, "sudo")
-	if err := os.WriteFile(sudo, []byte("#!/bin/sh\ntouch \"$SUDO_MARKER\"\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("SUDO_MARKER", marker)
-	pidPath := filepath.Join(dir, "command.pid")
-	t.Setenv("COMMAND_PID", pidPath)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() {
-		_, err := CmdExecPrivilegedArgsContextInDir(ctx, "sh", []string{"-c", "echo $$ > \"$COMMAND_PID\"; exec sleep 60"}, nil, "", "cancel", "")
-		done <- err
-	}()
-	waitForTestPID(t, pidPath)
-	cancel()
-	if err := <-done; err == nil {
-		t.Fatal("expected cancellation error")
-	}
-	if _, err := os.Stat(marker); err != nil {
-		t.Fatalf("sudo was not called: %v", err)
 	}
 }

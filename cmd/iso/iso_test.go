@@ -26,13 +26,15 @@ const (
 	testCommit = "0123456789abcdef0123456789abcdef01234567"
 )
 
+var testNamespace = []string{"--map-auto", "--map-root-user", "--mount", "--pid", "--fork", "--kill-child", "--mount-proc", "--"}
+
 func TestISOScriptArgs(t *testing.T) {
 	got, err := isoScriptArgs(testScript, testRepo, ISOSubmission{Branch: "variant-gnome"})
-	if want := []string{"-n", testScript, testRepo, "variant-gnome"}; err != nil || !slices.Equal(got, want) {
+	if want := append(slices.Clone(testNamespace), testScript, testRepo, "variant-gnome"); err != nil || !slices.Equal(got, want) {
 		t.Fatalf("args = %q, %v; want %q", got, err, want)
 	}
 	got, err = isoScriptArgs(testScript, testRepo, ISOSubmission{Branch: "feature/iso", Commit: testCommit})
-	if want := []string{"-n", testScript, testRepo, "feature/iso", testCommit}; err != nil || !slices.Equal(got, want) {
+	if want := append(slices.Clone(testNamespace), testScript, testRepo, "feature/iso", testCommit); err != nil || !slices.Equal(got, want) {
 		t.Fatalf("args = %q, %v; want %q", got, err, want)
 	}
 }
@@ -59,7 +61,7 @@ func TestISOSubmissionWithoutCommitBuildsBranchTip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := isoScriptArgs(testScript, testRepo, submission)
-	if want := []string{"-n", testScript, testRepo, "main"}; err != nil || !slices.Equal(got, want) {
+	if want := append(slices.Clone(testNamespace), testScript, testRepo, "main"); err != nil || !slices.Equal(got, want) {
 		t.Fatalf("args = %q, %v; want %q", got, err, want)
 	}
 }

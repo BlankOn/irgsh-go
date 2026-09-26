@@ -90,7 +90,7 @@ func isoScriptArgs(scriptPath, repoURL string, submission ISOSubmission) ([]stri
 	if !gitref.ValidBranch(submission.Branch) {
 		return nil, fmt.Errorf("iso task branch %q is not a supported branch name", submission.Branch)
 	}
-	args := []string{"-n", scriptPath, repoURL, submission.Branch}
+	args := []string{"--map-auto", "--map-root-user", "--mount", "--pid", "--fork", "--kill-child", "--mount-proc", "--", scriptPath, repoURL, submission.Branch}
 	if submission.Commit == "" {
 		return args, nil
 	}
@@ -201,7 +201,7 @@ func BuildISO(payload string) (next string, err error) {
 
 	if submission.NoCache {
 		systemutil.WriteLog(logPath, "[ ISO BUILD ] Cacheless build requested, clearing cache, chroot, auto and local")
-		if _, cleanErr := systemutil.CmdExecPrivilegedArgsContextInDir(ctx, "sudo", []string{"-n", "rm", "-rf", "--", "cache", "chroot", "auto", "local"}, nil, buildDir, "Clearing live-build cache", logPath); cleanErr != nil {
+		if _, cleanErr := systemutil.CmdExecArgsContextInDir(ctx, "unshare", []string{"--map-auto", "--map-root-user", "--", "rm", "-rf", "--", "cache", "chroot", "auto", "local"}, nil, buildDir, "Clearing live-build cache", logPath); cleanErr != nil {
 			return fail(fmt.Errorf("unable to clear live-build directories: %w", cleanErr))
 		}
 	}
@@ -220,7 +220,7 @@ func BuildISO(payload string) (next string, err error) {
 	// build from a stale one left by an earlier job.
 	buildIDBefore := currentBuildID()
 
-	_, err = systemutil.CmdExecPrivilegedArgsContextInDir(ctx, "sudo", scriptArgs, nil, buildDir, "Building ISO image", logPath)
+	_, err = systemutil.CmdExecArgsContextInDir(ctx, "unshare", scriptArgs, nil, buildDir, "Building ISO image", logPath)
 	if err != nil {
 		return fail(fmt.Errorf("build failed: %w", err))
 	}
