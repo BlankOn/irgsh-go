@@ -2,7 +2,8 @@
 
 # Bundled BlankOn live-build script, run by irgsh-iso.
 #
-# It runs inside the ISO worker's configured workdir (iso.workdir). Every job
+# irgsh-iso runs it as its unprivileged account inside a new user, mount, and
+# PID namespace, in the worker's configured workdir (iso.workdir). Every job
 # rebuilds config/ and auto/ from the selected live-build revision, and
 # lb clean --purge removes the previous chroot and cache.
 #
@@ -26,17 +27,11 @@ fi
 LOCKFILE="${BUILD_LOCKFILE:-/tmp/blankon-build.lock}"
 
 if [ -z "$4" ]; then
-    if [ -f "$LOCKFILE" ]; then
-        OLD_PID=$(cat "$LOCKFILE")
-        if ps -p "$OLD_PID" > /dev/null 2>&1; then
-            echo "Error: Build already in progress (PID: $OLD_PID). Exiting."
-            exit 1
-        else
-            echo "Warning: Removing stale lock file from PID $OLD_PID"
-            rm -f "$LOCKFILE"
-        fi
+    exec 9> "$LOCKFILE"
+    if ! flock -n 9; then
+        echo "Error: Build already in progress. Exiting."
+        exit 1
     fi
-    echo $$ > "$LOCKFILE"
 fi
 
 send_telegram() {
@@ -50,7 +45,6 @@ send_telegram() {
 }
 
 cleanup() {
-    rm -f "$LOCKFILE"
     if [ -n "$REPO" ] && [ -n "$BRANCH" ]; then
         if [ -n "$COMMIT_URL" ]; then
             send_telegram "💿 Jahitan harian $TODAY-$TODAY_COUNT [ revisi <a href=\\\"$COMMIT_URL\\\">$COMMIT</a> ] dari $REPO_NAME cabang $BRANCH $RESULT. $FAILURE_REASON $ACTION di ${PUBLISH_URL}/$TODAY-$TODAY_COUNT/"
@@ -71,7 +65,7 @@ fail() {
 prepare_config() {
     local source=$1
     local directory
-    sudo rm -rf config auto variant
+    rm -rf config auto variant
     if [ -f "$source/variant" ]; then
         LAYOUT=variant
         VARIANT=$(<"$source/variant")
@@ -92,7 +86,7 @@ prepare_config() {
         IMAGE_NAME="blankon-live-image-$VARIANT-$ARCH"
     else
         LAYOUT=legacy
-        sudo cp -R "$source/config" config || fail "Error: config is missing from $BRANCH"
+        cp -R "$source/config" config || fail "Error: config is missing from $BRANCH"
         if [ -d "$source/auto" ]; then
             cp -a "$source/auto" auto || fail "Error: Failed to copy auto from $BRANCH"
         fi
@@ -113,7 +107,7 @@ apply_archive_config() {
     if ! [[ "$ARCHIVE_URI" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$ ]]; then
         fail "Error: $conf defines an invalid ARCHIVE_URI: $ARCHIVE_URI"
     fi
-    sudo sed -i -E "s#^(LB_(PARENT_)?MIRROR_[A-Z_]+=)\".*\"#\\1\"${ARCHIVE_URI}\"#" config/bootstrap
+    sed -i -E "s#^(LB_(PARENT_)?MIRROR_[A-Z_]+=)\".*\"#\\1\"${ARCHIVE_URI}\"#" config/bootstrap
     applied=$(grep -cE "^LB_(PARENT_)?MIRROR_[A-Z_]+=\"${ARCHIVE_URI}\"" config/bootstrap 2>/dev/null)
     if [ "${applied:-0}" -eq 0 ]; then
         fail "Error: no mirror entries in config/bootstrap were set to $ARCHIVE_URI"
@@ -129,20 +123,20 @@ publish() {
     zsyncmake -u "${PUBLISH_URL}/current/$IMAGE_NAME.hybrid.iso" -o "$TARGET_DIR/$IMAGE_NAME.hybrid.iso.zsync" "$TARGET_DIR/$IMAGE_NAME.hybrid.iso" || return 1
     sum=$(sha256sum "$TARGET_DIR/$IMAGE_NAME.hybrid.iso") || return 1
     printf '%s  %s\n' "${sum%% *}" "$IMAGE_NAME.hybrid.iso" > "$TARGET_DIR/$IMAGE_NAME.hybrid.iso.sha256sum" || return 1
-    sudo rm -rf "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current.old" &&
-        sudo cp -R "$TARGET_DIR" "$JAHITAN_PATH/current.new" &&
-        echo "$TODAY-$TODAY_COUNT" | sudo tee "$JAHITAN_PATH/current.new/current.txt" > /dev/null ||
+    rm -rf "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current.old" &&
+        cp -R "$TARGET_DIR" "$JAHITAN_PATH/current.new" &&
+        echo "$TODAY-$TODAY_COUNT" | tee "$JAHITAN_PATH/current.new/current.txt" > /dev/null ||
         return 1
     if [ -e "$JAHITAN_PATH/current" ]; then
-        sudo mv "$JAHITAN_PATH/current" "$JAHITAN_PATH/current.old" || return 1
+        mv "$JAHITAN_PATH/current" "$JAHITAN_PATH/current.old" || return 1
     fi
-    if ! sudo mv "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current"; then
+    if ! mv "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current"; then
         if [ -e "$JAHITAN_PATH/current.old" ]; then
-            sudo mv "$JAHITAN_PATH/current.old" "$JAHITAN_PATH/current"
+            mv "$JAHITAN_PATH/current.old" "$JAHITAN_PATH/current"
         fi
         return 1
     fi
-    sudo rm -rf "$JAHITAN_PATH/current.old"
+    rm -rf "$JAHITAN_PATH/current.old"
 }
 
 RESULT="gagal terbit ❌"
@@ -159,13 +153,11 @@ IMAGE_NAME="blankon-live-image-$ARCH"
 
 START=$(date +%s)
 
-sudo umount $(mount | grep live-build | cut -d ' ' -f 3) || true
-
 if [ -z "$REPO" ] || [ -z "$BRANCH" ]
 then
-  sudo lb clean
-  sudo lb config --architectures $ARCH
-  sudo time lb build | sudo tee -a blankon-live-image-$ARCH.build.log
+  lb clean
+  lb config --architectures $ARCH
+  time lb build | tee -a blankon-live-image-$ARCH.build.log
   exit $?
 fi
 
@@ -173,15 +165,14 @@ echo "Processing $REPO $BRANCH $COMMIT ..."
 
 TODAY=$(date '+%Y%m%d')
 
-TODAY_COUNT=$(ls "$JAHITAN_PATH" | grep "$TODAY" | wc -l)
+TODAY_COUNT=$(find "$JAHITAN_PATH" -mindepth 1 -maxdepth 1 -type d -name "$TODAY-*" | wc -l)
 TODAY_COUNT=$(($TODAY_COUNT + 1))
 
 TARGET_DIR=$JAHITAN_PATH/$TODAY-$TODAY_COUNT
 SOURCE_DIR=./tmp/$TODAY-$TODAY_COUNT
 
 mkdir -p "$TARGET_DIR"
-sudo mkdir -p tmp || true
-sudo chmod -R a+rw tmp
+mkdir -p tmp
 
 if ! git clone -b "$BRANCH" "$REPO" "$SOURCE_DIR" 2>&1; then
     fail "Error: Failed to clone $REPO branch $BRANCH"
@@ -192,7 +183,7 @@ fi
 
 if [ -n "$COMMIT" ]; then
     git -C "$SOURCE_DIR" checkout -q "$COMMIT" || fail "Error: Failed to checkout commit $COMMIT"
-    git -C "$SOURCE_DIR" merge-base --is-ancestor "$COMMIT" "origin/$BRANCH" || fail "Error: Commit $COMMIT is not on branch $BRANCH"
+    git -C "$SOURCE_DIR" merge-base --is-ancestor "$COMMIT" "refs/remotes/origin/$BRANCH" || fail "Error: Commit $COMMIT is not on branch $BRANCH"
     [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" = "$COMMIT" ] || fail "Error: HEAD does not match commit $COMMIT"
 fi
 
@@ -204,14 +195,14 @@ COMMIT_URL="$CLEAN_REPO_URL/commit/$COMMIT"
 prepare_config "$SOURCE_DIR"
 sed -i 's/BUILD_NUMBER/'"$TODAY-$TODAY_COUNT"'/g' config/bootloaders/syslinux_common/splash.svg
 
-sudo lb clean --purge || fail "Error: lb clean failed"
-sudo lb config --architectures $ARCH || fail "Error: lb config failed"
+lb clean --purge || fail "Error: lb clean failed"
+lb config --architectures $ARCH || fail "Error: lb config failed"
 apply_archive_config
 
 echo "[ ISO BUILD ] repo=$REPO branch=$BRANCH commit=$COMMIT_FULL layout=$LAYOUT variant=${VARIANT:-none} archive=${ARCHIVE_URI:-config/bootstrap}"
 
-sudo rm -rf "$IMAGE_NAME.build.log"
-sudo lb build 2>&1 | tee "$IMAGE_NAME.build.log"
+rm -rf "$IMAGE_NAME.build.log"
+lb build 2>&1 | tee "$IMAGE_NAME.build.log"
 LB_STATUS=${PIPESTATUS[0]}
 
 BUILD_FAILED=0
@@ -237,7 +228,5 @@ echo $TOTAL_DURATION
 echo $TOTAL_DURATION >> "$IMAGE_NAME.build.log"
 tail -n 100 "$IMAGE_NAME.build.log" > "$TARGET_DIR/$IMAGE_NAME.tail100.build.log.txt"
 cp -v "$IMAGE_NAME.build.log" "$TARGET_DIR/$IMAGE_NAME.build.log.txt"
-
-sudo umount $(mount | grep live-build | cut -d ' ' -f 3) || true
 
 exit $BUILD_FAILED

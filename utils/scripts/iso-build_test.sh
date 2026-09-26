@@ -43,12 +43,11 @@ write_stub() {
 
 make_stubs() {
 	mkdir -p "$stubs"
-	write_stub sudo '#!/bin/bash
-exec "$@"'
-	write_stub mount '#!/bin/sh
-exit 0'
-	write_stub umount '#!/bin/sh
-exit 0'
+	for denied in sudo mount umount; do
+		write_stub "$denied" "#!/bin/sh
+echo \"$denied is not allowed: \$*\" >&2
+exit 97"
+	done
 	write_stub curl '#!/bin/sh
 exit 0'
 	write_stub mv '#!/bin/bash
@@ -312,6 +311,29 @@ test_failures_keep_current() {
 	((tests += 1))
 }
 
+test_build_lock() {
+	local work="$sandbox/locked"
+	mkdir -p "$work"
+	exec 8> "$work/build.lock"
+	flock -n 8 || fail "cannot take the test lock"
+	expect_failure "$work" "Build already in progress" "$variant_repo" variant-gnome
+	exec 8>&-
+	printf '1\n' > "$work/build.lock"
+	run_build "$work" "$variant_repo" variant-gnome || fail "stale lock blocked the build: $(tail -n 20 "$work/run.log")"
+	assert_equal "$(cat "$work/out/current/current.txt")" "$today-1"
+	((tests += 1))
+}
+
+test_no_privileged_commands() {
+	local log
+	for log in "$sandbox"/*/run.log; do
+		if grep -qE '(sudo|mount|umount) is not allowed' "$log"; then
+			fail "$log used a privileged command"
+		fi
+	done
+	((tests += 1))
+}
+
 make_stubs
 make_variant_repo
 make_legacy_repo
@@ -321,4 +343,6 @@ test_rejected_revisions
 test_rejected_variant_layouts
 test_legacy_layout
 test_failures_keep_current
+test_build_lock
+test_no_privileged_commands
 printf '%d ISO build script tests passed\n' "$tests"
