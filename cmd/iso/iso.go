@@ -11,6 +11,7 @@ import (
 
 	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/notification"
+	"github.com/blankon/irgsh-go/pkg/gitref"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
@@ -28,6 +29,7 @@ type ISOSubmission struct {
 	TaskUUID  string `json:"taskUUID"`
 	Dist      string `json:"dist"`
 	Branch    string `json:"branch"`
+	Commit    string `json:"commit,omitempty"`
 	NoCache   bool   `json:"noCache"`
 	Timestamp string `json:"timestamp"`
 }
@@ -84,6 +86,20 @@ func currentBuildID() string {
 	return strings.TrimSpace(string(data))
 }
 
+func isoScriptArgs(scriptPath, repoURL string, submission ISOSubmission) ([]string, error) {
+	if !gitref.ValidBranch(submission.Branch) {
+		return nil, fmt.Errorf("iso task branch %q is not a supported branch name", submission.Branch)
+	}
+	args := []string{"-n", scriptPath, repoURL, submission.Branch}
+	if submission.Commit == "" {
+		return args, nil
+	}
+	if !gitref.ValidCommit(submission.Commit) {
+		return nil, fmt.Errorf("iso task commit %q is not a full lowercase commit SHA", submission.Commit)
+	}
+	return append(args, submission.Commit), nil
+}
+
 // BuildISO is the main ISO build task
 func BuildISO(payload string) (next string, err error) {
 	in := []byte(payload)
@@ -101,8 +117,10 @@ func BuildISO(payload string) (next string, err error) {
 		return "", fmt.Errorf("iso task targeted dist %q but this iso instance serves %q",
 			submission.Dist, irgshConfig.ISO.DistCodename)
 	}
-	if submission.Branch == "" {
-		return "", fmt.Errorf("iso task has no branch")
+	scriptPath := isoScriptPath()
+	scriptArgs, err := isoScriptArgs(scriptPath, irgshConfig.ISO.RepoURL, submission)
+	if err != nil {
+		return "", err
 	}
 
 	// Extract job info for notifications
@@ -171,15 +189,11 @@ func BuildISO(payload string) (next string, err error) {
 		return fail(err)
 	}
 
-	scriptPath := isoScriptPath()
 	if _, statErr := os.Stat(scriptPath); os.IsNotExist(statErr) {
 		err = fmt.Errorf("iso-build.sh script not found at %s", scriptPath)
 		return fail(err)
 	}
 
-	// The build runs in the configured workdir, a persistent live-build tree:
-	// chroot/, cache/, auto/ and local/ are reused between builds so a rebuild
-	// does not start from scratch.
 	buildDir := irgshConfig.ISO.Workdir
 	if err = writeBuildEnv(buildDir); err != nil {
 		return fail(fmt.Errorf("unable to write build .env: %w", err))
@@ -187,33 +201,26 @@ func BuildISO(payload string) (next string, err error) {
 
 	if submission.NoCache {
 		systemutil.WriteLog(logPath, "[ ISO BUILD ] Cacheless build requested, clearing cache, chroot, auto and local")
-		cleanCmd := fmt.Sprintf("cd %s && sudo rm -rf cache chroot auto local", buildDir)
-		if _, cleanErr := systemutil.CmdExecContext(ctx, cleanCmd, "Clearing live-build cache", logPath); cleanErr != nil {
+		if _, cleanErr := systemutil.CmdExecPrivilegedArgsContextInDir(ctx, "sudo", []string{"-n", "rm", "-rf", "--", "cache", "chroot", "auto", "local"}, nil, buildDir, "Clearing live-build cache", logPath); cleanErr != nil {
 			return fail(fmt.Errorf("unable to clear live-build directories: %w", cleanErr))
 		}
 	}
 
+	revision := "branch tip"
+	if submission.Commit != "" {
+		revision = submission.Commit
+	}
+
 	systemutil.WriteLog(logPath, fmt.Sprintf(
-		"[ ISO BUILD START ] Building ISO from %s branch %s in %s, output to %s",
-		irgshConfig.ISO.RepoURL, submission.Branch, buildDir, irgshConfig.ISO.Outputdir))
+		"[ ISO BUILD START ] Building ISO from %s branch %s at %s in %s, output to %s",
+		irgshConfig.ISO.RepoURL, submission.Branch, revision, buildDir, irgshConfig.ISO.Outputdir))
 
 	// What the output directory published before this build. The script only
 	// advances it on success, so comparing afterwards distinguishes a fresh
 	// build from a stale one left by an earlier job.
 	buildIDBefore := currentBuildID()
 
-	// Execute: sudo iso-build.sh <repo-url> <branch>, in the shared workdir.
-	// pipefail so the script's exit code survives the pipe into tee.
-	cmdStr := fmt.Sprintf("cd %s && set -o pipefail && yes | sudo %s %s %s 2>&1 | tee -a %s",
-		buildDir, scriptPath, irgshConfig.ISO.RepoURL, submission.Branch, logPath)
-
-	log.Println("Executing: " + cmdStr)
-	_, err = systemutil.CmdExecContext(
-		ctx,
-		cmdStr,
-		"Building ISO image",
-		logPath,
-	)
+	_, err = systemutil.CmdExecPrivilegedArgsContextInDir(ctx, "sudo", scriptArgs, nil, buildDir, "Building ISO image", logPath)
 	if err != nil {
 		return fail(fmt.Errorf("build failed: %w", err))
 	}
