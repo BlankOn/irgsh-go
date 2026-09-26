@@ -2,17 +2,14 @@
 
 # Bundled BlankOn live-build script, run by irgsh-iso.
 #
-# It is meant to run inside the ISO worker's configured workdir
-# (iso.workdir), which is a persistent live-build tree: chroot/, cache/,
-# auto/ and local/ are deliberately reused between builds. Pass --no-cache to
-# irgsh-cli build-iso to have the worker clear them beforehand.
+# It runs inside the ISO worker's configured workdir (iso.workdir). Every job
+# rebuilds config/ and auto/ from the selected live-build revision, and
+# lb clean --purge removes the previous chroot and cache.
 #
 # Deployment values come from a .env file in the current directory, which
 # irgsh-iso writes from its own config before every run.
 #
 # Usage: iso-build.sh <repo-url> <branch> [commit] [skip-lock]
-
-# Load configuration from .env file
 
 if [ -f .env ]; then
   source .env
@@ -26,7 +23,6 @@ if [ -z "$JAHITAN_PATH" ]; then
   exit 1
 fi
 
-# Create Lockfile
 LOCKFILE="${BUILD_LOCKFILE:-/tmp/blankon-build.lock}"
 
 if [ -z "$4" ]; then
@@ -43,8 +39,6 @@ if [ -z "$4" ]; then
     echo $$ > "$LOCKFILE"
 fi
 
-# Helper function. Announcing to Telegram is optional: irgsh deployments do not
-# have to carry a bot token just to build an ISO.
 send_telegram() {
     local message="$1"
     if [ -z "$TELEGRAM_BOT_KEY" ]; then
@@ -59,37 +53,105 @@ cleanup() {
     rm -f "$LOCKFILE"
     if [ -n "$REPO" ] && [ -n "$BRANCH" ]; then
         if [ -n "$COMMIT_URL" ]; then
-            # Clone succeeded, we have commit info
             send_telegram "💿 Jahitan harian $TODAY-$TODAY_COUNT [ revisi <a href=\\\"$COMMIT_URL\\\">$COMMIT</a> ] dari $REPO_NAME cabang $BRANCH $RESULT. $FAILURE_REASON $ACTION di ${PUBLISH_URL}/$TODAY-$TODAY_COUNT/"
         else
-            # Clone failed, no commit info available
             send_telegram "💿 Jahitan harian $TODAY-$TODAY_COUNT dari $REPO_NAME cabang $BRANCH $RESULT. $FAILURE_REASON "
         fi
     fi
 }
 
-# Setup trap
 trap cleanup EXIT
 
-## Default messages
+fail() {
+    FAILURE_REASON="$1"
+    echo "$FAILURE_REASON"
+    exit 1
+}
+
+prepare_config() {
+    local source=$1
+    local directory
+    sudo rm -rf config auto variant
+    if [ -f "$source/variant" ]; then
+        LAYOUT=variant
+        VARIANT=$(<"$source/variant")
+        if ! [[ "$VARIANT" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            fail "Error: Invalid variant: $VARIANT"
+        fi
+        for directory in config/common "config/$VARIANT" auto; do
+            if [ ! -d "$source/$directory" ]; then
+                fail "Error: $directory is missing from $BRANCH"
+            fi
+        done
+        mkdir config &&
+            cp -a "$source/config/common/." config/ &&
+            cp -a "$source/config/$VARIANT/." config/ &&
+            cp -a "$source/auto" auto &&
+            cp "$source/variant" variant ||
+            fail "Error: Failed to assemble the $VARIANT configuration"
+        IMAGE_NAME="blankon-live-image-$VARIANT-$ARCH"
+    else
+        LAYOUT=legacy
+        sudo cp -R "$source/config" config || fail "Error: config is missing from $BRANCH"
+        if [ -d "$source/auto" ]; then
+            cp -a "$source/auto" auto || fail "Error: Failed to copy auto from $BRANCH"
+        fi
+    fi
+}
+
+apply_archive_config() {
+    local conf=config/includes.chroot/etc/blankon/archive.conf
+    local applied
+    if [ ! -r "$conf" ]; then
+        if [ "$LAYOUT" = variant ]; then
+            fail "Error: $conf is missing"
+        fi
+        echo "archive.conf is absent; using the mirrors from config/bootstrap"
+        return
+    fi
+    ARCHIVE_URI=$(. ./config/includes.chroot/etc/blankon/archive.conf && printf '%s' "$ARCHIVE_URI")
+    if ! [[ "$ARCHIVE_URI" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$ ]]; then
+        fail "Error: $conf defines an invalid ARCHIVE_URI: $ARCHIVE_URI"
+    fi
+    sudo sed -i -E "s#^(LB_(PARENT_)?MIRROR_[A-Z_]+=)\".*\"#\\1\"${ARCHIVE_URI}\"#" config/bootstrap
+    applied=$(grep -cE "^LB_(PARENT_)?MIRROR_[A-Z_]+=\"${ARCHIVE_URI}\"" config/bootstrap 2>/dev/null)
+    if [ "${applied:-0}" -eq 0 ]; then
+        fail "Error: no mirror entries in config/bootstrap were set to $ARCHIVE_URI"
+    fi
+    echo "Pointed $applied mirror entries in config/bootstrap at $ARCHIVE_URI"
+}
+
+publish() {
+    local suffix sum
+    for suffix in contents files packages hybrid.iso; do
+        cp -v "$IMAGE_NAME.$suffix" "$TARGET_DIR/$IMAGE_NAME.$suffix" || return 1
+    done
+    zsyncmake -u "${PUBLISH_URL}/current/$IMAGE_NAME.hybrid.iso" -o "$TARGET_DIR/$IMAGE_NAME.hybrid.iso.zsync" "$TARGET_DIR/$IMAGE_NAME.hybrid.iso" || return 1
+    sum=$(sha256sum "$TARGET_DIR/$IMAGE_NAME.hybrid.iso") || return 1
+    printf '%s  %s\n' "${sum%% *}" "$IMAGE_NAME.hybrid.iso" > "$TARGET_DIR/$IMAGE_NAME.hybrid.iso.sha256sum" || return 1
+    sudo rm -rf "$JAHITAN_PATH/current.new" &&
+        sudo cp -R "$TARGET_DIR" "$JAHITAN_PATH/current.new" &&
+        echo "$TODAY-$TODAY_COUNT" | sudo tee "$JAHITAN_PATH/current.new/current.txt" > /dev/null &&
+        sudo rm -rf "$JAHITAN_PATH/current" &&
+        sudo mv "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current"
+}
+
 RESULT="gagal terbit ❌"
 ACTION="Log build dapat disimak"
 FAILURE_REASON=""
 
-## Args
 REPO=$1
 BRANCH=$2
 COMMIT=$3
 REPO_NAME=$(echo "$REPO" | sed -E 's|.*github.com[:/]([^/]+/[^/.]+)(\.git)?|\1|')
 
-# Optional
 ARCH=amd64
+IMAGE_NAME="blankon-live-image-$ARCH"
 
 START=$(date +%s)
 
 sudo umount $(mount | grep live-build | cut -d ' ' -f 3) || true
 
-## Skip further steps if this is a build in local computer
 if [ -z "$REPO" ] || [ -z "$BRANCH" ]
 then
   sudo lb clean
@@ -100,69 +162,59 @@ fi
 
 echo "Processing $REPO $BRANCH $COMMIT ..."
 
-## Assume that this is in prod
 TODAY=$(date '+%Y%m%d')
 
 TODAY_COUNT=$(ls "$JAHITAN_PATH" | grep "$TODAY" | wc -l)
 TODAY_COUNT=$(($TODAY_COUNT + 1))
 
 TARGET_DIR=$JAHITAN_PATH/$TODAY-$TODAY_COUNT
+SOURCE_DIR=./tmp/$TODAY-$TODAY_COUNT
 
 mkdir -p "$TARGET_DIR"
 sudo mkdir -p tmp || true
 sudo chmod -R a+rw tmp
 
-## Preparation
-if ! git clone -b "$BRANCH" "$REPO" "./tmp/$TODAY-$TODAY_COUNT" 2>&1; then
-    FAILURE_REASON="Error: Failed to clone $REPO branch $BRANCH"
-    echo "$FAILURE_REASON"
-    exit 1
+if ! git clone -b "$BRANCH" "$REPO" "$SOURCE_DIR" 2>&1; then
+    fail "Error: Failed to clone $REPO branch $BRANCH"
 fi
-# Double-check the clone succeeded by verifying .git exists
-if [ ! -d "./tmp/$TODAY-$TODAY_COUNT/.git" ]; then
-    FAILURE_REASON="Error: Clone directory is missing or incomplete"
-    echo "$FAILURE_REASON"
-    exit 1
+if [ ! -d "$SOURCE_DIR/.git" ]; then
+    fail "Error: Clone directory is missing or incomplete"
 fi
 
-# If a specific commit was passed, switch to it.
-# If not, stay on the latest code from the branch.
 if [ -n "$COMMIT" ]; then
-    git -C "./tmp/$TODAY-$TODAY_COUNT" checkout "$COMMIT"
+    git -C "$SOURCE_DIR" checkout -q "$COMMIT" || fail "Error: Failed to checkout commit $COMMIT"
+    git -C "$SOURCE_DIR" merge-base --is-ancestor "$COMMIT" "origin/$BRANCH" || fail "Error: Commit $COMMIT is not on branch $BRANCH"
+    [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" = "$COMMIT" ] || fail "Error: HEAD does not match commit $COMMIT"
 fi
 
-COMMIT=$(git -C ./tmp/$TODAY-$TODAY_COUNT rev-parse --short HEAD)
+COMMIT_FULL=$(git -C "$SOURCE_DIR" rev-parse HEAD)
+COMMIT=$(git -C "$SOURCE_DIR" rev-parse --short HEAD)
 CLEAN_REPO_URL=$(echo "$REPO" | sed 's/\.git$//')
 COMMIT_URL="$CLEAN_REPO_URL/commit/$COMMIT"
-mkdir -p ./tmp/$TODAY-$TODAY_COUNT
-sudo rm -rf config
-sudo cp -vR ./tmp/$TODAY-$TODAY_COUNT/config config
+
+prepare_config "$SOURCE_DIR"
 sed -i 's/BUILD_NUMBER/'"$TODAY-$TODAY_COUNT"'/g' config/bootloaders/syslinux_common/splash.svg
 
-## Build
 sudo lb clean --purge
 sudo lb config --architectures $ARCH
-sudo rm -rf blankon-live-image-$ARCH.build.log
-sudo lb build 2>&1 | tee blankon-live-image-$ARCH.build.log
-# lb build's own status, not tee's. Without this a failed build looks like a
-# successful one to everything downstream.
+apply_archive_config
+
+echo "[ ISO BUILD ] repo=$REPO branch=$BRANCH commit=$COMMIT_FULL layout=$LAYOUT variant=${VARIANT:-none} archive=${ARCHIVE_URI:-config/bootstrap}"
+
+sudo rm -rf "$IMAGE_NAME.build.log"
+sudo lb build 2>&1 | tee "$IMAGE_NAME.build.log"
 LB_STATUS=${PIPESTATUS[0]}
 
 BUILD_FAILED=0
-if [ "$LB_STATUS" -eq 0 ] && tail -n 10 blankon-live-image-$ARCH.build.log | grep -q "P: Build completed successfully"; then
-  RESULT="telah terbit ✅"
-  ACTION="Berkas citra dapat diunduh"
-  ## Export to jahitan
-  cp -v blankon-live-image-$ARCH.contents $TARGET_DIR/blankon-live-image-$ARCH.contents
-  cp -v blankon-live-image-$ARCH.files $TARGET_DIR/blankon-live-image-$ARCH.files
-  cp -v blankon-live-image-$ARCH.packages $TARGET_DIR/blankon-live-image-$ARCH.packages
-  cp -v blankon-live-image-$ARCH.hybrid.iso $TARGET_DIR/blankon-live-image-$ARCH.hybrid.iso
-  zsyncmake -u "${PUBLISH_URL}/current/blankon-live-image-amd64.hybrid.iso" -o $TARGET_DIR/blankon-live-image-$ARCH.hybrid.iso.zsync $TARGET_DIR/blankon-live-image-$ARCH.hybrid.iso
-  sha256sum $TARGET_DIR/blankon-live-image-$ARCH.hybrid.iso | sed 's#  .*/#  #' > $TARGET_DIR/blankon-live-image-$ARCH.hybrid.iso.sha256sum
-  sudo rm -rf $JAHITAN_PATH/current
-  #ln -s $TARGET_DIR $JAHITAN_PATH/current
-  sudo cp -vR $TARGET_DIR $JAHITAN_PATH/current
-  echo "$TODAY-$TODAY_COUNT" | sudo tee $JAHITAN_PATH/current/current.txt > /dev/null
+if [ "$LB_STATUS" -eq 0 ] && tail -n 10 "$IMAGE_NAME.build.log" | grep -q "P: Build completed successfully"; then
+  if publish; then
+    RESULT="telah terbit ✅"
+    ACTION="Berkas citra dapat diunduh"
+  else
+    BUILD_FAILED=1
+    FAILURE_REASON="Error: Failed to publish $IMAGE_NAME."
+    echo "$FAILURE_REASON"
+  fi
 else
   BUILD_FAILED=1
   FAILURE_REASON="Error: lb build did not complete successfully (exit $LB_STATUS)."
@@ -173,13 +225,10 @@ END=$(date +%s)
 DURATION=$((END - START))
 TOTAL_DURATION="Done in $(date -d@$DURATION -u +%H:%M:%S)."
 echo $TOTAL_DURATION
-echo $TOTAL_DURATION >> blankon-live-image-$ARCH.build.log
-tail -n 100 blankon-live-image-$ARCH.build.log > $TARGET_DIR/blankon-live-image-$ARCH.tail100.build.log.txt
-cp -v blankon-live-image-$ARCH.build.log $TARGET_DIR/blankon-live-image-$ARCH.build.log.txt
+echo $TOTAL_DURATION >> "$IMAGE_NAME.build.log"
+tail -n 100 "$IMAGE_NAME.build.log" > "$TARGET_DIR/$IMAGE_NAME.tail100.build.log.txt"
+cp -v "$IMAGE_NAME.build.log" "$TARGET_DIR/$IMAGE_NAME.build.log.txt"
 
-## Clean up the mounted entities
 sudo umount $(mount | grep live-build | cut -d ' ' -f 3) || true
 
-# Report the real outcome. The log copies above happen either way so a failed
-# build is still diagnosable.
 exit $BUILD_FAILED

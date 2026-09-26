@@ -47,6 +47,9 @@ test-release-policy:
 test-deploy:
 	./utils/deploy/irgsh-deploy_test.sh
 
+test-iso:
+	./utils/scripts/iso-build_test.sh
+
 test-provisioning:
 	bash utils/scripts/provisioning_test.sh
 
