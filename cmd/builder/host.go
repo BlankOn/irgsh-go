@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"strconv"
 	"strings"
-	"syscall"
+
+	"github.com/blankon/irgsh-go/internal/rootless"
 )
 
 type hostProbe struct {
@@ -54,10 +54,10 @@ func validateBuilderHost(probe hostProbe) error {
 	if _, err := probe.Output(paths["dpkg"], "--compare-versions", version, "ge", "0.87.0"); err != nil {
 		return fmt.Errorf("sbuild >= 0.87.0 is required for unshare_mmdebstrap_auto_create; install a supported version: %w", err)
 	}
-	if !hasSubordinateRange(probe.SubUID, probe.Username) {
+	if !rootless.HasSubordinateRange(probe.SubUID, probe.Username) {
 		return fmt.Errorf("/etc/subuid needs its first %s row in exact <account>:<start>:<count> form with at least 65536 IDs ending at or below 4294967294; provision the builder subordinate UID range", probe.Username)
 	}
-	if !hasSubordinateRange(probe.SubGID, probe.Username) {
+	if !rootless.HasSubordinateRange(probe.SubGID, probe.Username) {
 		return fmt.Errorf("/etc/subgid needs its first %s row in exact <account>:<start>:<count> form with at least 65536 IDs ending at or below 4294967294; provision the builder subordinate GID range", probe.Username)
 	}
 	for _, name := range []string{"newuidmap", "newgidmap"} {
@@ -65,35 +65,11 @@ func validateBuilderHost(probe hostProbe) error {
 		if err != nil {
 			return fmt.Errorf("inspect %s mapping helper; reinstall the uidmap package: %w", name, err)
 		}
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat.Uid != 0 {
-			return fmt.Errorf("%s mapping helper must be owned by root; restore permissions with the uidmap package", name)
-		}
-		if info.Mode()&os.ModeSetuid == 0 {
-			return fmt.Errorf("%s mapping helper needs the setuid bit; restore permissions with the uidmap package", name)
+		if err := rootless.CheckMappingHelper(name, info); err != nil {
+			return err
 		}
 	}
 	return nil
-}
-
-func hasSubordinateRange(contents []byte, username string) bool {
-	for _, line := range strings.Split(string(contents), "\n") {
-		fields := strings.Split(line, ":")
-		if fields[0] != username {
-			continue
-		}
-		if len(fields) != 3 {
-			return false
-		}
-		start, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			return false
-		}
-		count, err := strconv.ParseUint(fields[2], 10, 64)
-		const maxID = uint64(1<<32 - 2)
-		return err == nil && count >= 65536 && start <= maxID && count-1 <= maxID-start
-	}
-	return false
 }
 
 func validateCurrentBuilderHost() error {
