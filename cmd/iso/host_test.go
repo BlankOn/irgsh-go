@@ -155,6 +155,9 @@ func TestISOMainExitsOnHostPreflightFailure(t *testing.T) {
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 		t.Fatalf("exit error = %v; output:\n%s", err, output)
 	}
+	if info, err := os.Stat(cfg.ISO.Workdir); err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("workdir mode = %v, %v; want 0700", info, err)
+	}
 	for _, message := range []string{
 		"irgsh-iso must run as a non-root account",
 		"determine irgsh-iso username",

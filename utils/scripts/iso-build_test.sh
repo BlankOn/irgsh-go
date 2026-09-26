@@ -324,6 +324,26 @@ test_build_lock() {
 	((tests += 1))
 }
 
+test_symlinked_output() {
+	local work="$sandbox/symlinked"
+	mkdir -p "$work/published"
+	ln -s published "$work/out"
+	run_build "$work" "$variant_repo" variant-gnome || fail "first build failed: $(tail -n 20 "$work/run.log")"
+	run_build "$work" "$variant_repo" variant-gnome || fail "second build failed: $(tail -n 20 "$work/run.log")"
+	assert_equal "$(cat "$work/published/current/current.txt")" "$today-2"
+	((tests += 1))
+}
+
+test_unusable_lock() {
+	local work="$sandbox/unusable-lock"
+	mkdir -p "$work/build.lock"
+	expect_failure "$work" "cannot open lock file $work/build.lock" "$variant_repo" variant-gnome
+	if grep -q "Build already in progress" "$work/run.log"; then
+		fail "an unusable lock file was reported as a running build"
+	fi
+	((tests += 1))
+}
+
 test_no_privileged_commands() {
 	local log
 	for log in "$sandbox"/*/run.log; do
@@ -344,5 +364,7 @@ test_rejected_variant_layouts
 test_legacy_layout
 test_failures_keep_current
 test_build_lock
+test_symlinked_output
+test_unusable_lock
 test_no_privileged_commands
 printf '%d ISO build script tests passed\n' "$tests"

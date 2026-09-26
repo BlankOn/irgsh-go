@@ -79,7 +79,7 @@ func main() {
 
 		// Prepare workdir. This is the persistent live-build tree the build
 		// script runs in, not a per-job directory.
-		err = os.MkdirAll(irgshConfig.ISO.Workdir, 0755)
+		err = os.MkdirAll(irgshConfig.ISO.Workdir, 0700)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
 		}

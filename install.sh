@@ -130,7 +130,7 @@ done
 chown -R irgsh:irgsh /var/log/irgsh
 chmod 0755 /var/lib/irgsh /var/log/irgsh
 install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
-install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 chown root:irgsh /etc/irgsh /etc/irgsh/config.yaml
 chmod 0750 /etc/irgsh
 chmod 0640 /etc/irgsh/config.yaml

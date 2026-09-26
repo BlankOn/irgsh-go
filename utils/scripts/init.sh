@@ -110,7 +110,7 @@ for state in chief repo gnupg; do
 	fi
 done
 install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
-install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 
 # GPG key
 if [ $OVERWRITE_GPG = 1 ]; then

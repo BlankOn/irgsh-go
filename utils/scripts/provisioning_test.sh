@@ -149,7 +149,7 @@ check_account() {
 	expect_call addgroup --system irgsh-iso
 	expect_call adduser --system --home /var/lib/irgsh/iso --no-create-home --ingroup irgsh-iso --disabled-password --shell /usr/sbin/nologin --gecos 'IRGSH ISO Builder' irgsh-iso
 	expect_call adduser irgsh-iso irgsh
-	expect_call install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+	expect_call install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 }
 
 run_case postinst-fresh 0 irgsh.postinst ''
@@ -162,7 +162,7 @@ reject_calls '^addgroup|^adduser[[:space:]]--system'
 expect_call adduser irgsh-builder irgsh
 expect_call install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
 expect_call adduser irgsh-iso irgsh
-expect_call install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+expect_call install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 [[ $(grep -c '^adduser' "$PROVISION_LOG") == 2 ]] || fail 'unexpected repeated group grant'
 
 export PROVISION_GROUP_EXIT=43
@@ -173,7 +173,7 @@ export PROVISION_GROUP_EXIT=0
 run_case init-success 0 init.sh ynnyy
 expect_call su -c 'GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo -c /etc/irgsh/config.yaml init' -s /bin/bash irgsh
 expect_call su -s /bin/bash -c 'irgsh-builder init-base' irgsh-builder
-expect_call install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+expect_call install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 [[ $(grep '^su' "$PROVISION_LOG" | cut -f3) == $'GNUPGHOME=/var/lib/irgsh/gnupg irgsh-repo -c /etc/irgsh/config.yaml init\n/bin/bash' ]] || fail 'repo must initialize before builder base'
 
 export PROVISION_REPO_EXIT=44

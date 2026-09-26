@@ -27,7 +27,10 @@ fi
 LOCKFILE="${BUILD_LOCKFILE:-/tmp/blankon-build.lock}"
 
 if [ -z "$4" ]; then
-    exec 9> "$LOCKFILE"
+    if ! exec 9> "$LOCKFILE"; then
+        echo "Error: cannot open lock file $LOCKFILE"
+        exit 1
+    fi
     if ! flock -n 9; then
         echo "Error: Build already in progress. Exiting."
         exit 1
@@ -165,7 +168,7 @@ echo "Processing $REPO $BRANCH $COMMIT ..."
 
 TODAY=$(date '+%Y%m%d')
 
-TODAY_COUNT=$(find "$JAHITAN_PATH" -mindepth 1 -maxdepth 1 -type d -name "$TODAY-*" | wc -l)
+TODAY_COUNT=$(find -H "$JAHITAN_PATH" -mindepth 1 -maxdepth 1 -type d -name "$TODAY-*" | wc -l)
 TODAY_COUNT=$(($TODAY_COUNT + 1))
 
 TARGET_DIR=$JAHITAN_PATH/$TODAY-$TODAY_COUNT

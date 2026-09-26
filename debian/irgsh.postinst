@@ -52,7 +52,7 @@ case "$1" in
         chmod 755 /var/lib/irgsh
         chmod 755 /var/log/irgsh
         install -d -o irgsh-builder -g irgsh-builder -m 0755 /var/lib/irgsh/builder
-        install -d -o irgsh-iso -g irgsh-iso -m 0755 /var/lib/irgsh/iso
+        install -d -o irgsh-iso -g irgsh-iso -m 0700 /var/lib/irgsh/iso
 
         # Make config directory readable by irgsh user
         chgrp irgsh /etc/irgsh
