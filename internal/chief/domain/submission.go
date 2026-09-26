@@ -109,6 +109,7 @@ type ISOSubmission struct {
 	// never sees it.
 	Dist   string `json:"dist"`
 	Branch string `json:"branch"`
+	Commit string `json:"commit,omitempty"`
 	// NoCache asks the worker to clear the reusable live-build directories
 	// (cache, chroot, auto, local) before building.
 	NoCache bool `json:"noCache"`
