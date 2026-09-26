@@ -51,6 +51,14 @@ exit 0'
 exit 0'
 	write_stub curl '#!/bin/sh
 exit 0'
+	write_stub mv '#!/bin/bash
+if [ -n "$MV_FAIL_SOURCE" ] && [ "$1" = "$MV_FAIL_SOURCE" ]; then
+	exit 1
+fi
+for real in /usr/bin/mv /bin/mv; do
+	[ -x "$real" ] && exec "$real" "$@"
+done
+exit 127'
 	write_stub zsyncmake '#!/bin/bash
 printf "%s\n" "$*" >> "$STUB_LOG/zsyncmake.calls"
 [ -z "$ZSYNC_FAIL" ] || exit 1
@@ -62,7 +70,11 @@ done
 	write_stub lb '#!/bin/bash
 printf "%s\n" "$*" >> "$STUB_LOG/lb.calls"
 case "$1" in
+clean)
+	[ -z "$LB_CLEAN_FAIL" ] || exit 1
+	;;
 config)
+	[ -z "$LB_CONFIG_FAIL" ] || exit 1
 	if [ -n "$LB_NO_MIRRORS" ]; then
 		printf "LB_DISTRIBUTION=\"sinambung\"\n" > config/bootstrap
 	else
@@ -131,6 +143,21 @@ make_variant_repo() {
 	branch_from "$variant_repo" bad-archive "$variant_tip"
 	printf 'ARCHIVE_URI="http://arsip.invalid/a#b&c"\n' > "$variant_repo/config/common/includes.chroot/etc/blankon/archive.conf"
 	commit_all "$variant_repo" "bad archive"
+
+	branch_from "$variant_repo" empty-archive "$variant_tip"
+	printf 'ARCHIVE_URI=""\n' > "$variant_repo/config/common/includes.chroot/etc/blankon/archive.conf"
+	commit_all "$variant_repo" "empty archive"
+
+	branch_from "$variant_repo" no-common "$variant_tip"
+	rm -r "$variant_repo/config/common"
+	commit_all "$variant_repo" "no common"
+
+	branch_from "$variant_repo" no-auto "$variant_tip"
+	rm -r "$variant_repo/auto"
+	commit_all "$variant_repo" "no auto"
+
+	git -C "$variant_repo" -c user.name=IRGSH -c user.email=irgsh@example.invalid tag -a pinned-tag -m pinned "$variant_first"
+	variant_tag_object=$(git -C "$variant_repo" rev-parse pinned-tag)
 
 	branch_from "$variant_repo" bad-variant "$variant_tip"
 	printf 'Gnome!\n' > "$variant_repo/variant"
@@ -211,6 +238,7 @@ test_rejected_revisions() {
 	expect_failure "$sandbox/off-branch" "is not on branch variant-gnome" "$variant_repo" variant-gnome "$variant_off"
 	expect_failure "$sandbox/missing-commit" "Failed to checkout commit" "$variant_repo" variant-gnome 0123456789abcdef0123456789abcdef01234567
 	expect_failure "$sandbox/missing-branch" "Failed to clone" "$variant_repo" no-such-branch
+	expect_failure "$sandbox/tag-object" "HEAD does not match commit $variant_tag_object" "$variant_repo" variant-gnome "$variant_tag_object"
 	((tests += 1))
 }
 
@@ -223,6 +251,9 @@ test_rejected_variant_layouts() {
 		fail "lb build ran without archive.conf"
 	fi
 	expect_failure "$sandbox/bad-archive" "invalid ARCHIVE_URI" "$variant_repo" bad-archive
+	expect_failure "$sandbox/empty-archive" "invalid ARCHIVE_URI" "$variant_repo" empty-archive
+	expect_failure "$sandbox/no-common" "config/common is missing" "$variant_repo" no-common
+	expect_failure "$sandbox/no-auto" "auto is missing" "$variant_repo" no-auto
 	LB_NO_MIRRORS=1 expect_failure "$sandbox/no-mirrors" "no mirror entries" "$variant_repo" variant-gnome
 	((tests += 1))
 }
@@ -249,6 +280,11 @@ test_failures_keep_current() {
 	local work="$sandbox/shared"
 	LB_FAIL=1 expect_failure "$sandbox/lb-failure" "lb build did not complete successfully" "$variant_repo" variant-gnome
 	ZSYNC_FAIL=1 expect_failure "$sandbox/publish-failure" "Failed to publish blankon-live-image-gnome-amd64" "$variant_repo" variant-gnome
+	LB_CLEAN_FAIL=1 expect_failure "$sandbox/clean-failure" "lb clean failed" "$legacy_repo" legacy-plain
+	LB_CONFIG_FAIL=1 expect_failure "$sandbox/config-failure" "lb config failed" "$legacy_repo" legacy-plain
+	if grep -q '^build' "$sandbox/clean-failure/lb.calls" "$sandbox/config-failure/lb.calls"; then
+		fail "lb build ran after a failed setup step"
+	fi
 
 	run_build "$work" "$variant_repo" variant-gnome || fail "variant build failed: $(tail -n 20 "$work/run.log")"
 	run_build "$work" "$legacy_repo" legacy-plain || fail "legacy build failed: $(tail -n 20 "$work/run.log")"
@@ -264,6 +300,15 @@ test_failures_keep_current() {
 	fi
 	assert_equal "$(cat "$work/out/current/current.txt")" "$today-2"
 	assert_absent "$work/out/current.new"
+	if MV_FAIL_SOURCE="$work/out/current.new" run_build "$work" "$variant_repo" variant-gnome; then
+		fail "failing swap succeeded"
+	fi
+	assert_contains "$work/run.log" "Failed to publish blankon-live-image-gnome-amd64"
+	assert_equal "$(cat "$work/out/current/current.txt")" "$today-2"
+	assert_absent "$work/out/current.old"
+	run_build "$work" "$variant_repo" variant-gnome || fail "variant build failed: $(tail -n 20 "$work/run.log")"
+	assert_equal "$(cat "$work/out/current/current.txt")" "$today-6"
+	assert_absent "$work/out/current.old"
 	((tests += 1))
 }
 

@@ -129,11 +129,20 @@ publish() {
     zsyncmake -u "${PUBLISH_URL}/current/$IMAGE_NAME.hybrid.iso" -o "$TARGET_DIR/$IMAGE_NAME.hybrid.iso.zsync" "$TARGET_DIR/$IMAGE_NAME.hybrid.iso" || return 1
     sum=$(sha256sum "$TARGET_DIR/$IMAGE_NAME.hybrid.iso") || return 1
     printf '%s  %s\n' "${sum%% *}" "$IMAGE_NAME.hybrid.iso" > "$TARGET_DIR/$IMAGE_NAME.hybrid.iso.sha256sum" || return 1
-    sudo rm -rf "$JAHITAN_PATH/current.new" &&
+    sudo rm -rf "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current.old" &&
         sudo cp -R "$TARGET_DIR" "$JAHITAN_PATH/current.new" &&
-        echo "$TODAY-$TODAY_COUNT" | sudo tee "$JAHITAN_PATH/current.new/current.txt" > /dev/null &&
-        sudo rm -rf "$JAHITAN_PATH/current" &&
-        sudo mv "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current"
+        echo "$TODAY-$TODAY_COUNT" | sudo tee "$JAHITAN_PATH/current.new/current.txt" > /dev/null ||
+        return 1
+    if [ -e "$JAHITAN_PATH/current" ]; then
+        sudo mv "$JAHITAN_PATH/current" "$JAHITAN_PATH/current.old" || return 1
+    fi
+    if ! sudo mv "$JAHITAN_PATH/current.new" "$JAHITAN_PATH/current"; then
+        if [ -e "$JAHITAN_PATH/current.old" ]; then
+            sudo mv "$JAHITAN_PATH/current.old" "$JAHITAN_PATH/current"
+        fi
+        return 1
+    fi
+    sudo rm -rf "$JAHITAN_PATH/current.old"
 }
 
 RESULT="gagal terbit ❌"
@@ -195,8 +204,8 @@ COMMIT_URL="$CLEAN_REPO_URL/commit/$COMMIT"
 prepare_config "$SOURCE_DIR"
 sed -i 's/BUILD_NUMBER/'"$TODAY-$TODAY_COUNT"'/g' config/bootloaders/syslinux_common/splash.svg
 
-sudo lb clean --purge
-sudo lb config --architectures $ARCH
+sudo lb clean --purge || fail "Error: lb clean failed"
+sudo lb config --architectures $ARCH || fail "Error: lb config failed"
 apply_archive_config
 
 echo "[ ISO BUILD ] repo=$REPO branch=$BRANCH commit=$COMMIT_FULL layout=$LAYOUT variant=${VARIANT:-none} archive=${ARCHIVE_URI:-config/bootstrap}"
