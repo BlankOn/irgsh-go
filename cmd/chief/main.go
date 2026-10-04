@@ -19,6 +19,7 @@ import (
 	chiefrepository "github.com/blankon/irgsh-go/internal/chief/repository"
 	chiefusecase "github.com/blankon/irgsh-go/internal/chief/usecase"
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/internal/storage"
 )
@@ -38,7 +39,7 @@ func main() {
 	app.Version = version
 
 	app.Action = func(c *cli.Context) error {
-		irgshConfig, err := config.LoadConfig()
+		irgshConfig, err := config.LoadConfig(config.ComponentChief)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -69,6 +70,7 @@ func main() {
 				storageDB,
 				irgshConfig.Storage.MaxJobs,
 				irgshConfig.Storage.MaxISOJobs,
+				irgshConfig.Storage.MaxImportJobs,
 			)
 			if err != nil {
 				log.Printf("Failed to initialize monitoring registry: %v\n", err)
@@ -94,18 +96,40 @@ func main() {
 		}
 
 		taskQueue := chiefrepository.NewMachineryTaskQueue(server)
+
+		// Cancellation travels over Redis, so without it jobs simply cannot
+		// be cancelled - that is a reason to refuse the request, not a reason
+		// to refuse to start.
+		var cancelSignal chiefusecase.CancelSignal
+		if requester, cancelErr := chiefrepository.NewCancelSignal(irgshConfig.Redis); cancelErr != nil {
+			log.Printf("Job cancellation disabled: %v\n", cancelErr)
+		} else {
+			cancelSignal = requester
+			defer requester.Close()
+		}
+
 		svc, err := chiefusecase.NewChiefUsecase(
 			irgshConfig,
 			taskQueue,
 			monitoringRegistry,
 			chiefStorage,
 			chiefGPG,
+			cancelSignal,
 			version,
 		)
 		if err != nil {
 			log.Fatalf("Failed to initialize chief service: %v\n", err)
 		}
 		chiefService = svc
+
+		// Live log streaming is an addition to the uploaded log files, so a
+		// Redis failure here only disables streaming.
+		if subscriber, subErr := logstream.NewSubscriber(irgshConfig.Redis); subErr != nil {
+			log.Printf("Live log streaming disabled: %v\n", subErr)
+		} else {
+			logSubscriber = subscriber
+			defer subscriber.Close()
+		}
 
 		httpServer := setupRoutes(irgshConfig, artifactHTTPEndpoint)
 
@@ -138,6 +162,10 @@ func main() {
 
 var chiefService ChiefService
 
+// logSubscriber reads job logs the workers publish while a job runs. It stays
+// nil when Redis is unreachable, in which case only finished logs are served.
+var logSubscriber logStreamSource
+
 func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHTTPEndpoint) *http.Server {
 	mux := http.NewServeMux()
 
@@ -145,14 +173,24 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	mux.HandleFunc("/api/v1/submit", PackageSubmitHandler)
 	mux.HandleFunc("/api/v1/status", BuildStatusHandler)
 	mux.HandleFunc("/api/v1/retry", RetryHandler)
+	mux.HandleFunc("/api/v1/cancel", CancelHandler)
 	mux.HandleFunc("/api/v1/artifact-upload", artifactUploadHandler())
 	mux.HandleFunc("/api/v1/log-upload", logUploadHandler())
 	mux.HandleFunc("/api/v1/submission-upload", submissionUploadHandler())
 	mux.HandleFunc("/api/v1/build-iso", BuildISOHandler)
 	mux.HandleFunc("/api/v1/iso-status", ISOStatusHandler)
+	mux.HandleFunc("/api/v1/import", ImportPackagesHandler)
+	mux.HandleFunc("/api/v1/import-status", ImportStatusHandler)
+	mux.HandleFunc("/api/v1/repo-info", RepoInfoHandler)
 	mux.HandleFunc("/api/v1/version", VersionHandler)
 
+	mux.HandleFunc("/api/v1/log-stream", logStreamHandler(cfg.Chief.Workdir+"/logs", logSubscriber))
+	mux.HandleFunc("/logs/stream", logViewerHandler())
+
 	mux.HandleFunc("/maintainers", MaintainersHandler)
+
+	mux.HandleFunc("/assets/logo.png", logoHandler)
+	mux.HandleFunc("/favicon.ico", faviconHandler)
 
 	mux.HandleFunc("/", indexHandler)
 
@@ -163,18 +201,21 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	submissionFs := http.FileServer(http.Dir(cfg.Chief.Workdir + "/submissions"))
 	mux.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
-	// rootMux forwards prefixed browser traffic to mux while also keeping mux
-	// reachable at root so workers can call /api/v1/* without config changes.
 	rootMux := http.NewServeMux()
 	if cfg.Chief.BaseURL != "" {
 		rootMux.Handle(cfg.Chief.BaseURL+"/", http.StripPrefix(cfg.Chief.BaseURL, mux))
 	}
 	rootMux.Handle("/", mux)
 
+	// No ReadTimeout: it is a deadline on the whole request, body included,
+	// and submission-upload streams tarballs of tens or hundreds of MB. A
+	// maintainer on a slow link would have the read deadline fire mid-body,
+	// which surfaces as a truncated multipart form (HTTP 400) rather than as
+	// a timeout. ReadHeaderTimeout still caps a client that stalls before
+	// sending its headers.
 	return &http.Server{
 		Handler:           rootMux,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       15 * time.Second,
 		IdleTimeout:       90 * time.Second,
 	}
 }

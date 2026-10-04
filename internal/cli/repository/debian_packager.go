@@ -150,8 +150,33 @@ func (d *ShellDebianPackager) Sign(dir, keyFingerprint string) error {
 	return d.shell.RunInteractive(cmd)
 }
 
-func (d *ShellDebianPackager) GenBuildInfo(dir string) error {
-	cmd := fmt.Sprintf("cd %s && dpkg-genbuildinfo", sq(dir))
+// unmetDepsPrefix is emitted by dpkg-checkbuilddeps when build dependencies
+// are not satisfied on the local machine.
+const unmetDepsPrefix = "dpkg-checkbuilddeps: error: unmet build dependencies: "
+
+// CheckBuildDeps reports the build dependencies that are missing locally.
+// It returns an empty string when every build dependency is satisfied.
+func (d *ShellDebianPackager) CheckBuildDeps(dir string) (string, error) {
+	out, err := d.shell.Output(fmt.Sprintf("cd %s && dpkg-checkbuilddeps", sq(dir)))
+	if err == nil {
+		return "", nil
+	}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, unmetDepsPrefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, unmetDepsPrefix)), nil
+		}
+	}
+	// dpkg-checkbuilddeps failed for a reason other than unmet dependencies
+	// (missing debian/control, tool not installed, ...).
+	return "", fmt.Errorf("dpkg-checkbuilddeps failed: %w", err)
+}
+
+// BuildBinary runs a local binary build. It is used to validate a package
+// before it is handed to the build farm, so it deliberately streams its
+// output to the terminal.
+func (d *ShellDebianPackager) BuildBinary(dir string) error {
+	cmd := fmt.Sprintf("cd %s && dpkg-buildpackage -us -uc -ui -b", sq(dir))
 	return d.shell.RunInteractive(cmd)
 }
 

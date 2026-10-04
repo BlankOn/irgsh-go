@@ -7,10 +7,10 @@ import (
 
 func TestNormalizeChiefConfig(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     ChiefConfig
-		wantAddr  string
-		wantBase  string
+		name       string
+		input      ChiefConfig
+		wantAddr   string
+		wantBase   string
 		wantPublic string
 	}{
 		{
@@ -20,8 +20,8 @@ func TestNormalizeChiefConfig(t *testing.T) {
 				BaseURL:   "/irgsh/",
 				PublicURL: "https://irgsh.id/",
 			},
-			wantAddr:  "http://localhost:8080",
-			wantBase:  "/irgsh",
+			wantAddr:   "http://localhost:8080",
+			wantBase:   "/irgsh",
 			wantPublic: "https://irgsh.id",
 		},
 		{
@@ -31,8 +31,8 @@ func TestNormalizeChiefConfig(t *testing.T) {
 				BaseURL:   "irgsh",
 				PublicURL: "https://irgsh.id",
 			},
-			wantAddr:  "http://localhost:8080",
-			wantBase:  "/irgsh",
+			wantAddr:   "http://localhost:8080",
+			wantBase:   "/irgsh",
 			wantPublic: "https://irgsh.id",
 		},
 		{
@@ -42,8 +42,8 @@ func TestNormalizeChiefConfig(t *testing.T) {
 				BaseURL:   "/",
 				PublicURL: "https://irgsh.id",
 			},
-			wantAddr:  "http://localhost:8080",
-			wantBase:  "",
+			wantAddr:   "http://localhost:8080",
+			wantBase:   "",
 			wantPublic: "https://irgsh.id",
 		},
 		{
@@ -53,8 +53,8 @@ func TestNormalizeChiefConfig(t *testing.T) {
 				BaseURL:   "",
 				PublicURL: "",
 			},
-			wantAddr:  "http://localhost:8080",
-			wantBase:  "",
+			wantAddr:   "http://localhost:8080",
+			wantBase:   "",
 			wantPublic: "",
 		},
 		{
@@ -64,8 +64,8 @@ func TestNormalizeChiefConfig(t *testing.T) {
 				BaseURL:   "/api/v1/",
 				PublicURL: "https://irgsh.id",
 			},
-			wantAddr:  "http://localhost:8080",
-			wantBase:  "/api/v1",
+			wantAddr:   "http://localhost:8080",
+			wantBase:   "/api/v1",
 			wantPublic: "https://irgsh.id",
 		},
 	}
@@ -140,6 +140,7 @@ func TestBaseURLValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &IrgshConfig{
+				Redis: "redis://localhost:6379",
 				Chief: ChiefConfig{
 					Address:  "http://localhost:8080",
 					Workdir:  "/tmp",
@@ -152,7 +153,7 @@ func TestBaseURLValidation(t *testing.T) {
 					UpstreamDistUrl:      "http://deb.debian.org/debian",
 				},
 			}
-			err := applyDefaults(cfg)
+			err := applyDefaults(cfg, ComponentChief)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("applyDefaults() error = %v, wantErr %v", err, tt.wantErr)
 			}

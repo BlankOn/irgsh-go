@@ -1,127 +1,470 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="10">
+    <!-- Without this a phone browser lays the page out at its default 980px
+         viewport and then zooms out, so the mobile media queries never match. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>IRGSH Chief</title>
+    <link rel="icon" href="{{baseurl "/favicon.ico"}}">
     <style>
+        /* Styling follows blankonlinux.id/en/download: 30px/700 page title,
+           muted uppercase section labels, hairline rgba(204,204,204,.5)
+           borders at 10px radius, 10px/16px rows, #171717 primary buttons.
+           The dashboard's own layout and structure are unchanged. */
+        :root {
+            --blankon-red: #ff0000;
+            --fg: #09090b;
+            --muted: #737373;
+            --hairline: rgba(204, 204, 204, 0.5);
+            --surface: #f5f5f5;
+            --primary: #171717;
+            --primary-fg: #fafafa;
+            --radius: 10px;
+            --radius-sm: 8px;
+            --sans:
+                -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+                'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            --mono:
+                ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                'Liberation Mono', 'Courier New', monospace;
+        }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
         body {
-            font-family: monospace;
-            margin: 20px;
-            background-color: #f5f5f5;
+            font-family: var(--sans);
+            font-size: 14px;
+            line-height: 20px;
+            color: var(--fg);
+            margin: 0;
+            background-color: #fff;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .page {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 48px 16px 64px;
         }
         .header {
-            background: #333;
-            color: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 40px;
         }
-        .logo {
-            font-size: 14px;
-            line-height: 1.2;
-            margin-bottom: 10px;
+        .header h1 {
+            font-size: 30px;
+            line-height: 36px;
+            font-weight: 700;
+            margin: 0;
         }
-        .nav {
-            margin-top: 10px;
+        .header .subtitle {
+            font-size: 16px;
+            line-height: 24px;
+            color: var(--muted);
+            margin: 12px 0 0 0;
         }
-        .nav a {
-            color: #4CAF50;
-            text-decoration: none;
-            margin-right: 10px;
+        .source-link {
+            margin: 8px 0 0 0;
         }
-        .nav a:hover {
+        .source-link a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            /* A long URL must wrap rather than push the page sideways on a phone. */
+            overflow-wrap: anywhere;
             text-decoration: underline;
+            text-underline-offset: 4px;
         }
-        .summary {
-            background: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 4px solid #4CAF50;
-            display: inline-block;
+        .ext-icon {
+            width: 14px;
+            height: 14px;
+            flex: none;
+            /* The paths stroke with currentColor, so this greys the symbol
+               without touching the colour of the label beside it. The site
+               renders this icon at muted/70. */
+            color: rgba(115, 115, 115, 0.7);
         }
-        .summary-item {
-            display: inline-block;
-            margin-right: 30px;
+        .section-title {
             font-size: 14px;
-            vertical-align: top;
+            line-height: 20px;
+            font-weight: 600;
+            letter-spacing: 0.35px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 40px 0 12px 0;
         }
-        .summary-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             background: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius);
+            overflow: hidden;
         }
         th {
-            background: #333;
-            color: #fff;
-            padding: 12px;
+            background: var(--surface);
+            color: var(--muted);
+            padding: 10px 16px;
             text-align: left;
             font-size: 12px;
+            line-height: 16px;
+            font-weight: 600;
+            letter-spacing: 0.35px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--hairline);
+            white-space: nowrap;
         }
         td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #ddd;
-            font-size: 11px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--hairline);
+            font-size: 14px;
+            line-height: 20px;
+            vertical-align: top;
         }
-        tr:hover {
-            background-color: #f9f9f9;
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
+        tbody tr:hover {
+            background-color: var(--surface);
+        }
+        a {
+            color: var(--muted);
+        }
+        a:hover {
+            color: var(--primary);
+        }
+        .mono {
+            font-family: var(--mono);
         }
         .status-online {
-            color: #4CAF50;
-            font-weight: bold;
+            color: #16a34a;
+            font-weight: 500;
         }
         .status-offline {
-            color: #f44336;
-            font-weight: bold;
+            color: #dc2626;
+            font-weight: 500;
         }
         .status-warning {
-            color: #ff9800;
-            font-weight: bold;
+            color: #ca8a04;
+            font-weight: 500;
         }
         .badge {
             display: inline-block;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 16px;
+            font-weight: 500;
         }
         .badge-builder {
             background: #2196F3;
-            color: white;
+            color: #fff;
         }
         .badge-repo {
             background: #FF9800;
-            color: white;
+            color: #fff;
         }
         .badge-iso {
             background: #9C27B0;
-            color: white;
+            color: #fff;
         }
         .metric {
-            font-size: 11px;
-            color: #666;
+            color: var(--muted);
         }
-        .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            color: #333;
+        .tabs {
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid var(--hairline);
+            margin-bottom: 16px;
         }
-        .refresh-info {
-            color: #666;
-            font-size: 11px;
-            margin-top: 20px;
+        .tab-button {
+            background: none;
+            color: var(--muted);
+            border: 0;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            margin-bottom: -1px;
+            padding: 10px 2px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 20px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .tab-button:hover {
+            color: var(--primary);
+        }
+        .tab-button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        .tab-pane {
+            display: none;
+        }
+        .tab-pane.active {
+            display: block;
+        }
+        label {
+            color: var(--muted);
+        }
+        select {
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 20px;
+            color: var(--fg);
+            background: #fff;
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+        }
+        @media (max-width: 640px) {
+            .page {
+                padding: 32px 16px 48px;
+            }
+            /* A job table is far wider than a phone. It keeps its real table
+               layout and scrolls inside its own container, so the page itself
+               never scrolls sideways. */
+            table {
+                min-width: 640px;
+            }
         }
         .empty-state {
             background: #fff;
+            border: 1px solid var(--hairline);
+            border-radius: var(--radius);
             padding: 40px;
             text-align: center;
-            color: #999;
+            color: var(--muted);
+        }
+        #nd-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            height: 56px;
+            font-family:
+                -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+                'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #nd-nav * {
+            box-sizing: border-box;
+        }
+        #nd-nav .nav-blur {
+            position: relative;
+            background: rgba(245, 245, 245, 0.8);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid #e4e4e7;
+        }
+        /* Brand red accent line under the top bar, fading out to both edges */
+        #nd-nav .nav-blur::after {
+            content: '';
+            position: absolute;
+            inset-inline: 0;
+            bottom: -2px;
+            height: 2px;
+            pointer-events: none;
+            background: linear-gradient(
+                to right,
+                transparent 0%,
+                transparent 30%,
+                var(--blankon-red) 50%,
+                transparent 70%,
+                transparent 100%
+            );
+        }
+        #nd-nav .nav-inner {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 1400px;
+            height: 56px;
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+        #nd-nav .nav-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            color: #09090b;
+            text-decoration: none;
+        }
+        #nd-nav .nav-title img {
+            display: block;
+            height: 24px;
+            width: auto;
+            max-width: 100%;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+        #nd-nav .nav-links {
+            display: flex;
+            flex-direction: row;
+            /* Stretched, not centred: each item then spans the full 56px bar,
+               so the pointer keeps hovering all the way down to the dropdown. */
+            align-self: stretch;
+            align-items: stretch;
+            gap: 8px;
+            margin: 0;
+            padding: 0 24px;
+            list-style: none;
+        }
+        #nd-nav .nav-links > li {
+            display: flex;
+            align-items: stretch;
+        }
+        #nd-nav .nav-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin: 0;
+            padding: 0 8px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 20px;
+            color: #737373;
+            text-decoration: none;
+            background: none;
+            border: 0;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        #nd-nav .nav-item:hover {
+            color: #171717;
+            text-decoration: none;
+        }
+        #nd-nav .nav-item svg {
+            width: 16px;
+            height: 16px;
+        }
+        #nd-nav .nav-menu {
+            position: relative;
+        }
+        #nd-nav .nav-chevron {
+            transition: transform 0.15s;
+        }
+        #nd-nav .nav-menu.open > .nav-item .nav-chevron {
+            transform: rotate(180deg);
+        }
+        #nd-nav .nav-menu-list {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            z-index: 50;
+            margin: 4px 0 0 0;
+            padding: 4px 0;
+            min-width: 160px;
+            list-style: none;
+            background: #f5f5f5;
+            border: 1px solid rgba(204, 204, 204, 0.5);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.15s, visibility 0.15s;
+        }
+        #nd-nav .nav-menu.open > .nav-menu-list {
+            visibility: visible;
+            opacity: 1;
+        }
+        #nd-nav .nav-external {
+            width: 14px;
+            height: 14px;
+            flex: none;
+            /* The paths stroke with currentColor, so this greys the symbol
+               without touching the colour of the label beside it. The site
+               renders this icon at muted/70. */
+            color: rgba(115, 115, 115, 0.7);
+        }
+        #nd-nav .nav-menu-list a {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            line-height: 20px;
+            color: #737373;
+            text-decoration: none;
+        }
+        #nd-nav .nav-menu-list a:hover {
+            background: rgba(209, 209, 209, 0.5);
+            color: #171717;
+        }
+        #nd-nav .nav-toggle {
+            display: none;
+            margin-left: auto;
+            padding: 8px;
+            color: var(--muted);
+            background: none;
+            border: 0;
+            cursor: pointer;
+        }
+        #nd-nav .nav-toggle svg {
+            display: block;
+            width: 20px;
+            height: 20px;
+            transition: transform 0.15s;
+        }
+        #nd-nav .nav-toggle[aria-expanded="true"] svg {
+            transform: rotate(180deg);
+        }
+        @media (max-width: 640px) {
+            #nd-nav .nav-toggle {
+                display: inline-flex;
+            }
+            /* The links drop out of the bar into a panel below it. */
+            #nd-nav .nav-links {
+                display: none;
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0;
+                padding: 8px 16px 16px;
+                background: #f5f5f5;
+                border-bottom: 1px solid #e4e4e7;
+            }
+            #nd-nav .nav-links.open {
+                display: flex;
+            }
+            /* Inside that panel a floating popup would be clipped, so the
+               submenu expands inline instead. */
+            #nd-nav .nav-menu-list {
+                display: none;
+                visibility: visible;
+                opacity: 1;
+                position: static;
+                min-width: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0 0 0 16px;
+                background: none;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            #nd-nav .nav-menu.open > .nav-menu-list {
+                display: block;
+            }
+            #nd-nav .nav-links > li {
+                display: block;
+            }
+            #nd-nav .nav-item {
+                padding: 8px 0;
+            }
+            #nd-nav .nav-menu-list a {
+                padding-left: 0;
+            }
         }
         @keyframes spin-gear {
             from { transform: rotate(0deg); }
@@ -134,171 +477,327 @@
     </style>
 </head>
 <body>
+    <header id="nd-nav">
+        <div class="nav-blur">
+            <nav class="nav-inner">
+                <a class="nav-title" href="https://blankonlinux.id/en">
+                    <img src="{{baseurl "/assets/logo.png"}}?version=2" alt="BlankOn Linux" width="1620" height="187">
+                </a>
+                <ul class="nav-links" id="navLinks">
+                    <li><a class="nav-item" href="https://blankonlinux.id/en/download">Download</a></li>
+                    <li><a class="nav-item" href="https://blankonlinux.id/en/wiki/">Wiki</a></li>
+                    <li class="nav-menu">
+                        <button type="button" class="nav-item" id="devMenuButton" aria-haspopup="menu" aria-expanded="false">
+                            Development
+                            <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                        </button>
+                        <ul class="nav-menu-list">
+                            <li><a href="https://blankonlinux.id/en/team">Team</a></li>
+                            <li><a href="https://irgsh.blankonlinux.id/">IRGSH</a></li>
+                            <li><a href="https://packages.blankonlinux.id/">Packages</a></li>
+                            <li><a href="https://security.blankonlinux.id/">Security</a></li>
+                            <li><a href="https://jahitan.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Jahitan<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                            <li><a href="https://arsip.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Arsip<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                            <li><a href="https://arsip-dev.blankonlinux.id/" target="_blank" rel="noopener noreferrer">Arsip Dev<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                            <li><a href="https://github.com/blankon" target="_blank" rel="noopener noreferrer">Github<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                        </ul>
+                    </li>
+                    <li><a class="nav-item" href="https://blankon.id/en/sponsorship" target="_blank" rel="noopener noreferrer">Sponsorship<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                    <li><a class="nav-item" href="https://blankon.id/en/donate" target="_blank" rel="noopener noreferrer">Donate<svg class="nav-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></li>
+                </ul>
+                <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <div class="page">
     <div class="header">
-        <div>irgsh-chief {{.Version}}</div>
+        <h1>IRGSH</h1>
+        <p class="subtitle">Distributed packaging factory for BlankOn Linux - v{{.Version}}</p>
+        <p class="source-link"><a href="https://github.com/blankon/irgsh-go" target="_blank" rel="noopener noreferrer">https://github.com/blankon/irgsh-go<svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></p>
     </div>
+
+{{- if .HasMonitoring}}
+<div class="section-title">Workers</div>
+    {{- if .Workers}}
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Dist</th>
+                    <th>Hostname</th>
+                    <th>Status</th>
+                    <th>Uptime</th>
+                    <th>Tasks</th>
+                    <th>CPU</th>
+                    <th>Memory</th>
+                    <th>Disk</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{- range .Workers}}
+                <tr>
+                    <td><span class="badge {{.BadgeClass}}">{{.Type}}</span></td>
+                    <td>{{.Dist}}</td>
+                    <td>{{.Hostname}}</td>
+                    <td><span class="{{.StatusClass}}">{{.Status}}</span></td>
+                    <td>{{.Uptime}}</td>
+                    <td>{{.ActiveTasks}} / {{.Concurrency}}</td>
+                    <td class="metric">{{.CPU}} / 100</td>
+                    <td class="metric">{{.Memory}}</td>
+                    <td class="metric">{{.Disk}}</td>
+                </tr>
+            {{- end}}
+            </tbody>
+        </table>
+    </div>
+    {{- else}}
+    <div class="empty-state">No worker instances found</div>
+    {{- end}}
+{{- end}}
 
 <div class="section-title">Package Maintainers</div>
 {{- if .Maintainers}}
-    <table>
-        <thead>
-            <tr>
-                <th>GPG Key</th>
-                <th>Name</th>
-                <th>Email</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{- range .Maintainers}}
-            <tr>
-                <td style="font-family: monospace;">{{.KeyID}}</td>
-                <td>{{.Name}}</td>
-                <td>{{.Email}}</td>
-            </tr>
-        {{- end}}
-        </tbody>
-    </table>
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>GPG Key</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{- range .Maintainers}}
+                <tr>
+                    <td class="mono">{{.KeyID}}</td>
+                    <td>{{.Name}}</td>
+                    <td>{{.Email}}</td>
+                </tr>
+            {{- end}}
+            </tbody>
+        </table>
+    </div>
 {{- else}}
     <div class="empty-state">No maintainers found</div>
 {{- end}}
 
-{{- if .HasMonitoring}}
-<div class="section-title">Workers</div>
-    <div class="summary">
-        <div class="summary-item">
-            <div class="summary-number">{{.Summary.Total}}</div>
-            <div>Total Instances</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-number" style="color: #4CAF50;">{{.Summary.Online}}</div>
-            <div>Online</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-number" style="color: #f44336;">{{.Summary.Offline}}</div>
-            <div>Offline</div>
-        </div>
-    {{- range .Summary.ByType}}
-        <div class="summary-item">
-            <div class="summary-number" style="color: #2196F3;">{{.Count}}</div>
-            <div>{{.Name}}</div>
-        </div>
-    {{- end}}
+    {{- if or .Jobs .ISOJobs .ImportJobs}}
+<div class="section-title">Recent Jobs</div>
+    <div class="tabs">
+        <button type="button" class="tab-button" data-tab="packaging">Packaging ({{len .Jobs}})</button>
+        <button type="button" class="tab-button" data-tab="imports">Package Imports ({{len .ImportJobs}})</button>
+        <button type="button" class="tab-button" data-tab="iso">ISO Builds ({{len .ISOJobs}})</button>
     </div>
 
-    {{- if .Workers}}
-    <table>
-        <thead>
-            <tr>
-                <th>Type</th>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Uptime</th>
-                <th>Tasks</th>
-                <th>CPU</th>
-                <th>Memory</th>
-                <th>Disk</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{- range .Workers}}
-            <tr>
-                <td><span class="badge {{.BadgeClass}}">{{.Type}}</span></td>
-                <td>{{.Hostname}}</td>
-                <td><span class="{{.StatusClass}}">{{.Status}}</span></td>
-                <td>{{.Uptime}}</td>
-                <td>{{.ActiveTasks}} / {{.Concurrency}}</td>
-                <td class="metric">{{.CPU}} / 100</td>
-                <td class="metric">{{.Memory}}</td>
-                <td class="metric">{{.Disk}}</td>
-            </tr>
+    <div class="tab-pane" id="tab-packaging">
+        {{- if .Jobs}}
+        <div style="margin-bottom: 12px;">
+            <label for="statusFilter" style="margin-right: 8px;">Filter by status:</label>
+            <select id="statusFilter" onchange="filterJobsByStatus(this.value)">
+                <option value="all">All</option>
+                <option value="DONE">DONE</option>
+                <option value="FAILED">FAILED</option>
+                <option value="CANCELED">CANCELED</option>
+                <option value="PENDING">PENDING</option>
+                <option value="UNKNOWN">UNKNOWN</option>
+            </select>
+        </div>
+        <div class="table-scroll">
+            <table id="packagingJobsTable">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Dist</th>
+                        <th>Package</th>
+                        <th>Version</th>
+                        <th>Maintainer</th>
+                        <th>Build</th>
+                        <th>Repo</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{- range .Jobs}}
+                    <tr data-status="{{.FilterStatus}}">
+                        <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
+                        <td>{{.DistComponent}}</td>
+                        <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span class="metric">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
+                        <td>{{.PackageVersion}}</td>
+                        <td>{{.Maintainer}}</td>
+                        <td><span class="{{.BuildStageClass}}">{{.BuildStateText}}</span><br><a href="{{baseurl "/logs/stream"}}?id={{.TaskUUID}}&amp;type=build" target="_blank">log</a></td>
+                        <td><span class="{{.RepoStageClass}}">{{.RepoStateText}}</span><br><a href="{{baseurl "/logs/stream"}}?id={{.TaskUUID}}&amp;type=repo" target="_blank">log</a></td>
+                        <td>
+                            {{- if .ShowSpinner}}
+                            <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            {{- else}}
+                            <span class="{{.StatusClass}}">{{.StatusText}}</span>
+                            {{- end}}
+                        </td>
+                    </tr>
+                {{- end}}
+                </tbody>
+            </table>
+        </div>
+        {{- else}}
+        <div class="empty-state">No packaging jobs found</div>
         {{- end}}
-        </tbody>
-    </table>
-    {{- else}}
-    <div class="empty-state">No worker instances found</div>
-    {{- end}}
-
-    {{- if .Jobs}}
-<div class="section-title">Recent Packaging Jobs</div>
-    <div style="margin-bottom: 10px;">
-        <label for="statusFilter" style="margin-right: 5px;">Filter by status:</label>
-        <select id="statusFilter" onchange="filterJobsByStatus(this.value)" style="padding: 4px 8px; font-size: 0.95em;">
-            <option value="all">All</option>
-            <option value="DONE">DONE</option>
-            <option value="FAILED">FAILED</option>
-            <option value="PENDING">PENDING</option>
-            <option value="UNKNOWN">UNKNOWN</option>
-        </select>
     </div>
-    <table id="packagingJobsTable">
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Package</th>
-                <th>Version</th>
-                <th>Maintainer</th>
-                <th>Component</th>
-                <th>Build</th>
-                <th>Repo</th>
-                <th>Status</th>
-                <th>UUID</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{- range .Jobs}}
-            <tr data-status="{{.FilterStatus}}">
-                <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
-                <td>{{.PackageName}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}{{if .RepoLinks}}<br><span style="font-size: 0.85em; color: #666;">{{range $i, $l := .RepoLinks}}{{if $i}}, {{end}}<a href="{{$l.URL}}" target="_blank">{{$l.Label}}</a>{{end}}</span>{{end}}</td>
-                <td>{{.PackageVersion}}</td>
-                <td>{{.Maintainer}}</td>
-                <td>{{.Component}}</td>
-                <td><span class="{{.BuildStageClass}}">{{.BuildStateText}}</span><br><a href="{{baseurl (printf "/logs/%s.build.log" .TaskUUID)}}" target="_blank" style="font-size:0.85em;">log</a></td>
-                <td><span class="{{.RepoStageClass}}">{{.RepoStateText}}</span><br><a href="{{baseurl (printf "/logs/%s.repo.log" .TaskUUID)}}" target="_blank" style="font-size:0.85em;">log</a></td>
-                <td>
-                    {{- if .ShowSpinner}}
-                    <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    {{- else}}
-                    <span class="{{.StatusClass}}">{{.StatusText}}</span>
-                    {{- end}}
-                </td>
-                <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
-            </tr>
-        {{- end}}
-        </tbody>
-    </table>
-    {{- end}}
 
-    {{- if .ISOJobs}}
-<div class="section-title">Recent ISO Build Jobs</div>
-    <table>
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Repository</th>
-                <th>Branch</th>
-                <th>Status</th>
-                <th>UUID</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{- range .ISOJobs}}
-            <tr>
-                <td>{{.TimeFormatted}}<br><span style="color: #666; font-size: 0.9em;">({{.TimeRelative}})</span></td>
-                <td>{{.RepoURL}}</td>
-                <td>{{.Branch}}</td>
-                <td><span class="{{.StatusClass}}">{{.State}}</span></td>
-                <td style="font-family: monospace; font-size: 0.85em;">{{.TaskUUID}}</td>
-            </tr>
+    <div class="tab-pane" id="tab-imports">
+        {{- if .ImportJobs}}
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Packages</th>
+                        <th>Importer</th>
+                        <th>Source</th>
+                        <th>Dist</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{- range .ImportJobs}}
+                    <tr>
+                        <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
+                        <td>{{.Packages}}{{if .IsExperimental}} <span style="color: #ff9800; font-weight: bold;">[experimental]</span>{{end}}</td>
+                        <td>{{.Maintainer}}</td>
+                        <td style="font-size: 0.9em;">{{.SourceURL}}</td>
+                        <td>{{.DistComponent}}</td>
+                        <td>
+                            {{- if .ShowSpinner}}
+                            <svg class="spinning-gear" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            {{- else}}
+                            <span class="{{.StatusClass}}">{{.State}}</span>
+                            {{- end}}
+                            <br><a href="{{baseurl "/logs/stream"}}?id={{.TaskUUID}}&amp;type=import" target="_blank">log</a>
+                        </td>
+                    </tr>
+                {{- end}}
+                </tbody>
+            </table>
+        </div>
+        {{- else}}
+        <div class="empty-state">No import jobs found</div>
         {{- end}}
-        </tbody>
-    </table>
-    {{- end}}
-{{- end}}
-
-    <div class="refresh-info">
-        Page auto-refreshes every 10 seconds
     </div>
+
+    <div class="tab-pane" id="tab-iso">
+        {{- if .ISOJobs}}
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Dist</th>
+                        <th>Branch</th>
+                        <th>Status</th>
+                        <th>UUID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{- range .ISOJobs}}
+                    <tr>
+                        <td>{{.TimeFormatted}}<br><span class="metric">({{.TimeRelative}})</span></td>
+                        <td>{{.Dist}}</td>
+                        <td>{{.Branch}}</td>
+                        <td><span class="{{.StatusClass}}">{{.State}}</span><br><a href="{{baseurl "/logs/stream"}}?id={{.TaskUUID}}&amp;type=iso" target="_blank">log</a></td>
+                        <td class="mono">{{.TaskUUID}}</td>
+                    </tr>
+                {{- end}}
+                </tbody>
+            </table>
+        </div>
+        {{- else}}
+        <div class="empty-state">No ISO build jobs found</div>
+        {{- end}}
+    </div>
+    {{- end}}
+
+
     <script>
+    // Top bar. On a phone the links collapse behind the chevron, and the
+    // Development submenu expands inline there because a floating popup would
+    // be clipped by the panel.
+    (function () {
+        var links = document.getElementById('navLinks');
+        var toggle = document.getElementById('navToggle');
+        var menu = document.querySelector('#nd-nav .nav-menu');
+        var menuButton = document.getElementById('devMenuButton');
+
+        var closeTimer;
+
+        function canHover() {
+            return window.matchMedia('(hover: hover)').matches;
+        }
+        function openMenu() {
+            if (!menu) return;
+            menu.classList.add('open');
+            if (menuButton) menuButton.setAttribute('aria-expanded', 'true');
+        }
+        function closeMenu() {
+            if (!menu) return;
+            clearTimeout(closeTimer);
+            menu.classList.remove('open');
+            if (menuButton) menuButton.setAttribute('aria-expanded', 'false');
+        }
+        function closePanel() {
+            if (!links || !toggle) return;
+            links.classList.remove('open');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+
+        if (toggle && links) {
+            toggle.addEventListener('click', function () {
+                var open = !links.classList.contains('open');
+                links.classList.toggle('open', open);
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (!open) closeMenu();
+            });
+        }
+        if (menu && menuButton) {
+            menuButton.addEventListener('click', function () {
+                // Hovering already opened it; tapping toggles.
+                var open = canHover() ? true : !menu.classList.contains('open');
+                clearTimeout(closeTimer);
+                menu.classList.toggle('open', open);
+                menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+
+            // A pointer that can hover opens the menu by hovering; a touch
+            // screen has no hover state and opens it by tapping, above.
+            // Closing waits 100ms so the pointer can cross the gap between the
+            // button and the panel without the menu vanishing under it.
+            menu.addEventListener('mouseenter', function () {
+                if (!canHover()) return;
+                clearTimeout(closeTimer);
+                openMenu();
+            });
+            menu.addEventListener('mouseleave', function () {
+                if (!canHover()) return;
+                clearTimeout(closeTimer);
+                closeTimer = setTimeout(closeMenu, 100);
+            });
+        }
+        document.addEventListener('pointerdown', function (event) {
+            if (menu && !menu.contains(event.target)) closeMenu();
+            if (links && toggle && !links.contains(event.target) && !toggle.contains(event.target)) {
+                closePanel();
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeMenu();
+                closePanel();
+            }
+        });
+    })();
+
     function filterJobsByStatus(status) {
         var table = document.getElementById('packagingJobsTable');
         if (!table) return;
@@ -312,6 +811,27 @@
             }
         }
     }
+
+    // Job tabs. The selected tab is kept in the URL fragment (not just JS
+    // state) so it survives a reload.
+    var jobTabs = ['packaging', 'imports', 'iso'];
+    function showJobTab(name) {
+        if (jobTabs.indexOf(name) === -1) name = 'packaging';
+        jobTabs.forEach(function(t) {
+            var pane = document.getElementById('tab-' + t);
+            if (pane) pane.classList.toggle('active', t === name);
+            var btn = document.querySelector('.tab-button[data-tab="' + t + '"]');
+            if (btn) btn.classList.toggle('active', t === name);
+        });
+        history.replaceState(null, '', '#tab-' + name);
+    }
+    document.querySelectorAll('.tab-button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            showJobTab(btn.getAttribute('data-tab'));
+        });
+    });
+    showJobTab(location.hash.replace('#tab-', ''));
     </script>
+    </div>
 </body>
 </html>

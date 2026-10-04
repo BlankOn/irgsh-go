@@ -132,6 +132,33 @@ func (r *Registry) GetRecentISOJobs(limit int) ([]*ISOJobInfo, error) {
 	return r.isoJobStore.GetRecentISOJobs(limit)
 }
 
+// ImportJobInfo is an alias to storage.ImportJobInfo
+type ImportJobInfo = storage.ImportJobInfo
+
+// RecordImportJob stores package import job metadata in SQLite
+func (r *Registry) RecordImportJob(job ImportJobInfo) error {
+	if r.importJobStore == nil {
+		return fmt.Errorf("import job store not initialized")
+	}
+	return r.importJobStore.RecordImportJob(job)
+}
+
+// GetRecentImportJobs retrieves the N most recent import jobs from SQLite
+func (r *Registry) GetRecentImportJobs(limit int) ([]*ImportJobInfo, error) {
+	if r.importJobStore == nil {
+		return nil, fmt.Errorf("import job store not initialized")
+	}
+	return r.importJobStore.GetRecentImportJobs(limit)
+}
+
+// UpdateImportJobState updates the state of an import job in SQLite
+func (r *Registry) UpdateImportJobState(taskUUID string, state string) error {
+	if r.importJobStore == nil {
+		return fmt.Errorf("import job store not initialized")
+	}
+	return r.importJobStore.UpdateImportJobState(taskUUID, state)
+}
+
 // GetISOJob retrieves an ISO job by UUID from SQLite
 func (r *Registry) GetISOJob(taskUUID string) (*ISOJobInfo, error) {
 	if r.isoJobStore == nil {

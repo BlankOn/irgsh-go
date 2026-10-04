@@ -2,12 +2,24 @@ package domain
 
 // Pipeline states returned by the chief API.
 const (
-	StateDone    = "DONE"
-	StateFailed  = "FAILED"
-	StateRepo    = "REPO"
+	StateDone     = "DONE"
+	StateFailed   = "FAILED"
+	StateRepo     = "REPO"
 	StateBuilding = "BUILDING"
 	StateUnknown  = "UNKNOWN"
+	StateCanceled = "CANCELED"
 )
+
+// IsFinishedState reports whether a job is over and cannot be cancelled any
+// more. It covers both the machinery task states and the pipeline level ones,
+// because callers hold a mixture of the two.
+func IsFinishedState(state string) bool {
+	switch state {
+	case "SUCCESS", StateDone, "FAILURE", StateFailed, StateCanceled:
+		return true
+	}
+	return false
+}
 
 // DeriveBuildPipelineState maps machinery build+repo task states to a
 // pipeline-level state for the package build flow.
@@ -45,6 +57,12 @@ func DeriveISOPipelineState(isoState string) string {
 	default:
 		return isoState
 	}
+}
+
+// DeriveImportPipelineState maps the import task machinery state to a
+// pipeline-level state.
+func DeriveImportPipelineState(importState string) string {
+	return DeriveISOPipelineState(importState)
 }
 
 // DeriveCurrentStage determines which pipeline stage is active based on

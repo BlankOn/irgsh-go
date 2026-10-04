@@ -9,6 +9,7 @@ import (
 // JobInfo contains metadata about a build job
 type JobInfo struct {
 	TaskUUID       string    `json:"task_uuid"`
+	Dist           string    `json:"dist"` // Target distribution this job builds for
 	PackageName    string    `json:"package_name"`
 	PackageVersion string    `json:"package_version"`
 	Maintainer     string    `json:"maintainer"`
@@ -46,11 +47,12 @@ func NewJobStore(db *DB, maxJobs int) *JobStore {
 func (s *JobStore) RecordJob(job JobInfo) error {
 	query := `
 		INSERT INTO jobs (
-			task_uuid, package_name, package_version, maintainer, component,
+			task_uuid, dist, package_name, package_version, maintainer, component,
 			is_experimental, submitted_at, state, current_stage, build_state,
 			repo_state, package_url, source_url, package_branch, source_branch
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(task_uuid) DO UPDATE SET
+			dist = excluded.dist,
 			package_name = excluded.package_name,
 			package_version = excluded.package_version,
 			maintainer = excluded.maintainer,
@@ -68,7 +70,7 @@ func (s *JobStore) RecordJob(job JobInfo) error {
 	`
 
 	_, err := s.db.Exec(query,
-		job.TaskUUID, job.PackageName, job.PackageVersion, job.Maintainer, job.Component,
+		job.TaskUUID, job.Dist, job.PackageName, job.PackageVersion, job.Maintainer, job.Component,
 		job.IsExperimental, job.SubmittedAt, job.State, job.CurrentStage, job.BuildState,
 		job.RepoState, job.PackageURL, job.SourceURL, job.PackageBranch, job.SourceBranch,
 	)
@@ -88,7 +90,7 @@ func (s *JobStore) RecordJob(job JobInfo) error {
 // GetJob retrieves a job by UUID
 func (s *JobStore) GetJob(taskUUID string) (*JobInfo, error) {
 	query := `
-		SELECT task_uuid, package_name, package_version, maintainer, component,
+		SELECT task_uuid, dist, package_name, package_version, maintainer, component,
 			   is_experimental, submitted_at, state, current_stage, build_state,
 			   repo_state, package_url, source_url, package_branch, source_branch
 		FROM jobs
@@ -97,7 +99,7 @@ func (s *JobStore) GetJob(taskUUID string) (*JobInfo, error) {
 
 	var job JobInfo
 	err := s.db.QueryRow(query, taskUUID).Scan(
-		&job.TaskUUID, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
+		&job.TaskUUID, &job.Dist, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
 		&job.IsExperimental, &job.SubmittedAt, &job.State, &job.CurrentStage, &job.BuildState,
 		&job.RepoState, &job.PackageURL, &job.SourceURL, &job.PackageBranch, &job.SourceBranch,
 	)
@@ -118,7 +120,7 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 	}
 
 	query := `
-		SELECT task_uuid, package_name, package_version, maintainer, component,
+		SELECT task_uuid, dist, package_name, package_version, maintainer, component,
 			   is_experimental, submitted_at, state, current_stage, build_state,
 			   repo_state, package_url, source_url, package_branch, source_branch
 		FROM jobs
@@ -136,7 +138,7 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 	for rows.Next() {
 		var job JobInfo
 		err := rows.Scan(
-			&job.TaskUUID, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
+			&job.TaskUUID, &job.Dist, &job.PackageName, &job.PackageVersion, &job.Maintainer, &job.Component,
 			&job.IsExperimental, &job.SubmittedAt, &job.State, &job.CurrentStage, &job.BuildState,
 			&job.RepoState, &job.PackageURL, &job.SourceURL, &job.PackageBranch, &job.SourceBranch,
 		)
@@ -154,22 +156,26 @@ func (s *JobStore) GetRecentJobs(limit int) ([]*JobInfo, error) {
 }
 
 // IsTerminalState returns true if the state is a final state that should not be overwritten.
+//
+// CANCELED is one of them: chief writes it the moment a cancellation is
+// accepted, and the worker's own report - a machinery FAILURE, once it gives
+// up on the job - must not replace it afterwards.
 func IsTerminalState(state string) bool {
 	switch state {
-	case "SUCCESS", "DONE", "FAILURE", "FAILED":
+	case "SUCCESS", "DONE", "FAILURE", "FAILED", "CANCELED":
 		return true
 	}
 	return false
 }
 
 // UpdateJobState updates the state of a job.
-// Terminal states (SUCCESS, DONE, FAILURE, FAILED) are never overwritten.
+// Terminal states (SUCCESS, DONE, FAILURE, FAILED, CANCELED) are never overwritten.
 func (s *JobStore) UpdateJobState(taskUUID, state string) error {
 	query := `
 		UPDATE jobs
 		SET state = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
-		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED', 'CANCELED')
 	`
 
 	result, err := s.db.Exec(query, state, taskUUID)
@@ -191,13 +197,13 @@ func (s *JobStore) UpdateJobState(taskUUID, state string) error {
 }
 
 // UpdateJobStages updates the build and repo states of a job.
-// Jobs already in a terminal state (SUCCESS, DONE, FAILURE, FAILED) are not updated.
+// Jobs already in a terminal state (SUCCESS, DONE, FAILURE, FAILED, CANCELED) are not updated.
 func (s *JobStore) UpdateJobStages(taskUUID, buildState, repoState, currentStage string) error {
 	query := `
 		UPDATE jobs
 		SET build_state = ?, repo_state = ?, current_stage = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE task_uuid = ?
-		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED')
+		AND state NOT IN ('SUCCESS', 'DONE', 'FAILURE', 'FAILED', 'CANCELED')
 	`
 
 	_, err := s.db.Exec(query, buildState, repoState, currentStage, taskUUID)

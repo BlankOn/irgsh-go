@@ -8,13 +8,27 @@ import (
 
 // TaskQueue abstracts the distributed task queue (machinery).
 type TaskQueue interface {
-	// SendBuildChain queues a build -> repo task chain.
-	SendBuildChain(taskUUID string, payload []byte) error
-	// SendISOTask queues a single ISO build task.
-	SendISOTask(taskUUID string, payload []byte) error
+	// SendBuildChain queues a build -> repo task chain on the given
+	// distribution's queue.
+	SendBuildChain(taskUUID, dist string, payload []byte) error
+	// SendISOTask queues a single ISO build task on the given distribution's
+	// queue.
+	SendISOTask(taskUUID, dist string, payload []byte) error
+	// SendImportTask queues a single package import task on the given
+	// (target) distribution's queue.
+	SendImportTask(taskUUID, dist string, payload []byte) error
 	// GetTaskState returns the current state string for a task.
 	// taskName is "build", "repo", or "iso".
 	GetTaskState(taskName, taskUUID string) string
+}
+
+// CancelSignal records and announces job cancellations, and reports whether a
+// job carries one. It is backed by Redis, which is how a worker hears about a
+// cancellation while it is running, and how a job that is only queued is
+// refused when a worker eventually picks it up.
+type CancelSignal interface {
+	Request(taskUUID string) error
+	IsRequested(taskUUID string) bool
 }
 
 // GPGVerifier handles GPG key listing and signature verification.
@@ -54,6 +68,14 @@ type JobStore interface {
 type ISOJobStore interface {
 	RecordISOJob(job monitoring.ISOJobInfo) error
 	GetRecentISOJobs(limit int) ([]*monitoring.ISOJobInfo, error)
+	UpdateISOJobState(taskUUID string, state string) error
+}
+
+// ImportJobStore tracks package import job state.
+type ImportJobStore interface {
+	RecordImportJob(job monitoring.ImportJobInfo) error
+	GetRecentImportJobs(limit int) ([]*monitoring.ImportJobInfo, error)
+	UpdateImportJobState(taskUUID string, state string) error
 }
 
 // InstanceRegistry manages worker instance tracking and dashboard summaries.

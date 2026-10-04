@@ -13,7 +13,9 @@ import (
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
 
+	"github.com/blankon/irgsh-go/internal/cancel"
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
@@ -26,6 +28,16 @@ var (
 	irgshConfig = config.IrgshConfig{}
 
 	activeTasks atomic.Int32
+
+	// logPublisher mirrors job logs to chief while a job is running. It stays
+	// nil when Redis is unreachable: live streaming is an addition to the log
+	// file, never a reason to fail a build.
+	logPublisher *logstream.Publisher
+
+	// cancelWatcher listens for the cancellation of a job this worker is
+	// running or is about to start. A nil watcher hands out jobs that are
+	// never cancelled.
+	cancelWatcher *cancel.Watcher
 )
 
 func main() {
@@ -49,18 +61,43 @@ func main() {
 	app.Before = func(c *cli.Context) error {
 		var err error
 		if configPath != "" {
-			irgshConfig, err = config.LoadConfigFromPath(configPath)
+			irgshConfig, err = config.LoadConfigFromPath(configPath, config.ComponentISO)
 		} else {
-			irgshConfig, err = config.LoadConfig()
+			irgshConfig, err = config.LoadConfig(config.ComponentISO)
 		}
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
 		}
 
-		// Prepare workdir
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs are uploaded there.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can upload logs to chief", 1)
+		}
+
+		// Prepare workdir. This is the persistent live-build tree the build
+		// script runs in, not a per-job directory.
 		err = os.MkdirAll(irgshConfig.ISO.Workdir, 0755)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
+		}
+		// Nothing else creates the output directory, and the build script
+		// needs it to exist to count today's builds.
+		err = os.MkdirAll(irgshConfig.ISO.Outputdir, 0755)
+		if err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't create outputdir: %v", err), 1)
+		}
+
+		logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("live log streaming disabled: %v\n", err)
+			logPublisher = nil
+		}
+
+		cancelWatcher, err = cancel.NewWatcher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("job cancellation disabled: %v\n", err)
+			cancelWatcher = nil
 		}
 
 		return nil
@@ -93,7 +130,7 @@ func main() {
 			&machineryConfig.Config{
 				Broker:        irgshConfig.Redis,
 				ResultBackend: irgshConfig.Redis,
-				DefaultQueue:  "irgsh",
+				DefaultQueue:  config.DistQueue(irgshConfig.ISO.DistCodename),
 			},
 		)
 		if err != nil {
@@ -130,6 +167,7 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeISO, irgshConfig.ISO.Workdir,
+		irgshConfig.ISO.DistCodename, monitoring.RepoHeartbeatInfo{},
 		interval, func() int { return int(activeTasks.Load()) },
 	)
 }

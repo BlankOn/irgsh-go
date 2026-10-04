@@ -13,7 +13,9 @@ import (
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
 
+	"github.com/blankon/irgsh-go/internal/cancel"
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
@@ -25,6 +27,17 @@ var (
 
 	irgshConfig = config.IrgshConfig{}
 	activeTasks atomic.Int32
+
+	// logPublisher mirrors job logs to chief while a job is running. It stays
+	// nil when Redis is unreachable: live streaming is an addition to the log
+	// file, never a reason to fail a job.
+	logPublisher *logstream.Publisher
+
+	// cancelWatcher listens for the cancellation of a job this worker holds.
+	// A repo job is only ever cancelled before it starts - see Repo - but an
+	// import job can be stopped while it downloads. A nil watcher hands out
+	// jobs that are never cancelled.
+	cancelWatcher *cancel.Watcher
 )
 
 func main() {
@@ -57,15 +70,34 @@ func main() {
 		}
 
 		var err error
-		irgshConfig, err = config.LoadConfigFromPath(configPath)
+		irgshConfig, err = config.LoadConfigFromPath(configPath, config.ComponentRepo)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
+		}
+
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs are uploaded there and
+		// artifacts are fetched from it.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can reach chief for artifacts and logs", 1)
 		}
 
 		// Prepare workdir
 		err = os.MkdirAll(irgshConfig.Repo.Workdir, 0755)
 		if err != nil {
 			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
+		}
+
+		logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("live log streaming disabled: %v\n", err)
+			logPublisher = nil
+		}
+
+		cancelWatcher, err = cancel.NewWatcher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("job cancellation disabled: %v\n", err)
+			cancelWatcher = nil
 		}
 
 		return nil
@@ -105,7 +137,7 @@ func main() {
 			&machineryConfig.Config{
 				Broker:        irgshConfig.Redis,
 				ResultBackend: irgshConfig.Redis,
-				DefaultQueue:  "irgsh",
+				DefaultQueue:  config.DistQueue(irgshConfig.Repo.DistCodename),
 			},
 		)
 		if err != nil {
@@ -114,6 +146,7 @@ func main() {
 
 		// Wrap Repo task with monitoring
 		server.RegisterTask("repo", RepoWithMonitoring)
+		server.RegisterTask("import", ImportWithMonitoring)
 		// One worker for synchronous
 		worker := server.NewWorker("repo", 1)
 		err = worker.Launch()
@@ -134,6 +167,14 @@ func RepoWithMonitoring(payload string) error {
 	return Repo(payload)
 }
 
+// ImportWithMonitoring wraps the Import function with active task tracking
+func ImportWithMonitoring(payload string) error {
+	activeTasks.Add(1)
+	defer activeTasks.Add(-1)
+
+	return Import(payload)
+}
+
 func startMonitoringHeartbeat() {
 	ttl := time.Duration(irgshConfig.Monitoring.InstanceTimeout) * time.Second
 	interval := time.Duration(irgshConfig.Monitoring.HeartbeatInterval) * time.Second
@@ -141,6 +182,11 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeRepo, irgshConfig.Repo.Workdir,
+		irgshConfig.Repo.DistCodename,
+		monitoring.RepoHeartbeatInfo{
+			PublicURL:      irgshConfig.Repo.PublicURL,
+			DistComponents: irgshConfig.Repo.DistComponents,
+		},
 		interval, func() int { return int(activeTasks.Load()) },
 	)
 }

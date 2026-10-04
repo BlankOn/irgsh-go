@@ -1,3 +1,156 @@
+irgsh (2.3.1-1) unstable; urgency=medium
+
+  * An import now replaces the version our repository carries, older or
+    newer. reprepro only upgrades on its own and skipped a downgrade with
+    "as it has already <newer version>"; the repo worker now removes an
+    imported source or binary whose listed version differs before
+    injecting it. The exact same version is still skipped, and
+    --force-version re-injects even that
+  * The repo worker's dependency check installs each imported package as
+    name=version, so a downgrade is checked as the version being imported
+    rather than the newer copy already in the repository
+  * That check also pins every downloaded version above the repository's own,
+    so a package depending on an exact version of a sibling being imported
+    with it (python3-uno on libreoffice-core) resolves against the sibling
+    instead of failing on the newer copy the import replaces. The sandbox
+    no longer reads the host's /etc/apt/preferences either
+  * Import every binary of a large source package, not just the first line
+    of them. apt-cache showsrc wraps the Binary field over several lines,
+    and only the first was read, so importing libreoffice fetched 41 of its
+    211 binaries - leaving out libreoffice-report-builder-bin, ure, the
+    libuno libraries and fonts-opensymbol, and failing the dependency check
+    on packages the import was meant to bring. Fixed in both the repo
+    worker and the CLI resolver
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Mon, 21 Sep 2026 12:00:00 +0700
+
+irgsh (2.3.0-1) unstable; urgency=medium
+
+  * The import dependency check now resolves against the repository chief
+    names for the target dist (repo.public_url, over /api/v1/repo-info)
+    instead of falling back to the maintainer's own apt sources, which do not
+    have to describe the distribution being imported into. Without a
+    published public_url the check is skipped with a note rather than
+    answering against the wrong repository and blocking a good import
+  * Fix two false negatives in that check. Every binary of a source package
+    is now resolvable, not just the ones named on the command line - an
+    import brings all of them anyway, and pinning only the named ones made
+    apt report siblings like libstrongswan as uninstallable. And each package
+    is tested on its own instead of all at once, so alternatives that declare
+    Conflicts on each other (strongswan-charon and charon-systemd) no longer
+    fail a check that a repository never asks them to pass. The repo worker's
+    pre-injection check gets the same two fixes
+  * irgsh-cli import now works out what else has to be imported when a
+    package needs something the target repository lacks, shows it as a table
+    with binary counts and download size, and asks y/N before queueing
+    anything. --yes accepts without prompting. A dependency the target
+    already has at an older version is reported as a blocker instead:
+    importing a newer libc6 would replace the C library the distribution is
+    built on
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 23:15:00 +0700
+
+irgsh (2.2.0-1) unstable; urgency=medium
+
+  * irgsh-cli import: --dist now names our distribution to import into, the
+    way it already does for package and ISO submissions, and the suite to
+    import from moves from --dist to a new --source-dist. --repo-dist is
+    gone. The flags now pair up: --dist/--component describe our side,
+    --source-dist/--source-component theirs
+  * The import wire format follows: "dist" is the target and what the job is
+    routed on, "sourceDist" the suite imported from. Chief and the repo
+    worker still accept the old shape (a payload carrying "targetDist" and no
+    "sourceDist"), so an un-upgraded irgsh-cli or chief keeps working; the
+    fallback can be dropped once every deployment is past this release
+  * The import_jobs table is unchanged: its dist column still holds the suite
+    imported from and target_dist ours, so existing rows read correctly
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 22:05:00 +0700
+
+irgsh (2.1.0-1) unstable; urgency=medium
+
+  * New command: irgsh-cli cancel <pipeline-id> stops a queued or running
+    package, ISO or import job. Cancellation is a mark in Redis
+    (irgsh:cancel:*), so a running worker stops at once and a worker that
+    only picks the job up later refuses to start it
+  * A cancelled job's commands are killed as a process group, so the whole
+    build tree stops rather than just the shell at its root; the builder
+    removes the container its docker run left behind
+  * The repo stage cannot be cancelled once it is running, on either side:
+    chief refuses the request and the repo worker ignores it. Interrupting
+    reprepro, during an export above all, can corrupt the repository
+    database. An import is interruptible while it downloads and becomes
+    uninterruptible just before it injects
+  * Chief records the job as CANCELED as soon as it accepts the request, so
+    the dashboard stops showing a spinner for it without waiting for the
+    worker; CANCELED is a terminal state and is not overwritten afterwards
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 10 Sep 2026 21:10:00 +0700
+
+irgsh (2.0.4-1) unstable; urgency=medium
+
+  * Name the distribution and the real component in job notifications: the
+    target tag is now [<suite>/<component>], e.g. [verbeek/main] instead of
+    [dev], for build, repo and import jobs. The dev/experimental split is a
+    suite (<dist>-experimental), which the old tag reported as if it were the
+    component; the component now comes from the submission's own component
+    field. A job carrying neither (ISO) drops the tag
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 08 Sep 2026 23:30:00 +0700
+
+irgsh (2.0.3-1) unstable; urgency=medium
+
+  * Include the distribution in the monitoring instance ID
+    (hostname-type-dist), so builder/repo/iso instances for different
+    distributions on one host no longer overwrite each other's heartbeat and
+    all show up in the chief dashboard
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 08 Sep 2026 23:00:00 +0700
+
+irgsh (2.0.2-1) unstable; urgency=medium
+
+  * irgsh-builder now accepts -c/--config to point at a specific config file;
+    without it the usual search path (/etc/irgsh/config.yaml first) is used
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Tue, 08 Sep 2026 10:00:00 +0700
+
+irgsh (2.0.1-1) unstable; urgency=medium
+
+  * Restyle the chief dashboard after blankonlinux.id: shared BlankOn top bar
+    (logo, links, Development menu, brand accent line), the site's neutral
+    palette and typography, and its bordered/rounded table styling
+  * Serve the BlankOn wordmark and favicon from the chief binary
+    (/assets/logo.png, /favicon.ico)
+  * Make the dashboard usable on phones: viewport meta tag, a collapsible top
+    bar menu, and job tables that scroll inside their own container
+  * Drop the 10-second meta refresh; the page is now reloaded manually
+  * Show dist and component as one column, and drop the UUID column from the
+    packaging and import job tables
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Sat, 05 Sep 2026 22:20:00 +0700
+
+irgsh (2.0.0-1) unstable; urgency=medium
+
+  * Add multi-distribution support: chief is now distribution-agnostic and
+    routes tasks by dist to per-distribution Machinery queues
+    (irgsh-<dist_codename>), replacing the single shared "irgsh" queue
+  * BREAKING: builder and iso now require a dist_codename in their config;
+    irgsh-cli requires --dist on `package submit` and `livebuild submit`,
+    and --repo-dist on `import` (existing --dist there still means the
+    source suite)
+  * BREAKING: wire format for Submission/ISOSubmission gains a required
+    dist field; ImportSubmission gains targetDist
+  * Config validation is now scoped per component (its own section plus
+    redis: only), so e.g. irgsh-repo no longer requires chief:/builder:
+    to be populated in its config file
+  * Convert the default install flow (make build-install/install.sh) from
+    sysv init scripts to native systemd units, matching how the Debian
+    package has always installed them
+  * Add dist/target_dist columns to the jobs, iso_jobs and import_jobs
+    SQLite tables (migrated automatically on existing databases)
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Fri, 04 Sep 2026 00:00:00 +0700
+
 irgsh (1.3.14-2) unstable; urgency=medium
 
   * Split irgsh-cli into a standalone binary package (Closes: #189)

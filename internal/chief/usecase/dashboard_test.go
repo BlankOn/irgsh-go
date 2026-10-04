@@ -97,6 +97,8 @@ func TestBuildJobView(t *testing.T) {
 	t.Run("done job", func(t *testing.T) {
 		job := &storage.JobInfo{
 			TaskUUID:       "test-uuid",
+			Dist:           "verbeek",
+			Component:      "main",
 			PackageName:    "pkg",
 			PackageVersion: "1.0",
 			Maintainer:     "User",
@@ -111,6 +113,7 @@ func TestBuildJobView(t *testing.T) {
 		}
 		v := buildJobView(job, loc)
 		assert.Equal(t, "DONE", v.FilterStatus)
+		assert.Equal(t, "verbeek/main", v.DistComponent)
 		assert.Equal(t, "status-online", v.StatusClass)
 		assert.Equal(t, "DONE", v.StatusText)
 		assert.False(t, v.ShowSpinner)
@@ -261,10 +264,10 @@ func TestResolveJobStates(t *testing.T) {
 	}
 
 	jobs := []*storage.JobInfo{
-		{TaskUUID: "done-job", State: "DONE"},         // terminal, skip
-		{TaskUUID: "unknown-job", State: "UNKNOWN"},    // UNKNOWN, skip
-		{TaskUUID: "active-job", State: "PENDING"},     // should resolve to DONE
-		{TaskUUID: "stale-job", State: "PENDING"},      // both empty, skip
+		{TaskUUID: "done-job", State: "DONE"},       // terminal, skip
+		{TaskUUID: "unknown-job", State: "UNKNOWN"}, // UNKNOWN, skip
+		{TaskUUID: "active-job", State: "PENDING"},  // should resolve to DONE
+		{TaskUUID: "stale-job", State: "PENDING"},   // both empty, skip
 	}
 
 	ds.resolveJobStates(jobs)
@@ -295,13 +298,76 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	}
 	maintainerSvc := NewMaintainerService(gpg)
 
-	ds, err := NewDashboardService("1.0.0", "/irgsh", &mockTaskQueue{}, maintainerSvc, nil, nil, nil)
+	ds, err := NewDashboardService("1.0.0", "/irgsh", &mockTaskQueue{}, maintainerSvc, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
 	err = ds.RenderIndexHTML(&buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "1.0.0")
+	// The shared BlankOn top bar renders even with no jobs, and points at the
+	// logo route chief serves out of the binary.
+	assert.Contains(t, buf.String(), `id="nd-nav"`)
+	assert.Contains(t, buf.String(), `src="/irgsh/assets/logo.png?version=2"`)
+	assert.Contains(t, buf.String(), `href="/irgsh/favicon.ico"`)
+}
+
+func TestDashboardService_LogoPNG(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", "", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	logo := ds.LogoPNG()
+	require.NotEmpty(t, logo)
+	assert.Equal(t, []byte("\x89PNG"), logo[:4])
+
+	icon := ds.FaviconICO()
+	require.NotEmpty(t, icon)
+	assert.Equal(t, []byte{0x00, 0x00, 0x01, 0x00}, icon[:4], "ICO header")
+}
+
+func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", "", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = ds.RenderLogViewerHTML(&buf, "2026-09-02-143346_abc_base-files", "repo")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "2026-09-02-143346_abc_base-files")
+	// The page must stream from the API and offer the uploaded file as "raw".
+	assert.Contains(t, out, `"/api/v1/log-stream"`)
+	assert.Contains(t, out, "/logs/2026-09-02-143346_abc_base-files.repo.log")
+}
+
+func TestDashboardService_RenderLogViewerHTML_BaseURL(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", "/irgsh", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = ds.RenderLogViewerHTML(&buf, "2026-09-02-143346_abc_base-files", "repo")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, `"/irgsh/api/v1/log-stream"`)
+	assert.Contains(t, out, `href="/irgsh/logs/2026-09-02-143346_abc_base-files.repo.log"`)
+	assert.Contains(t, out, `href="/irgsh/"`)
+	assert.NotContains(t, out, `href="/logs/`)
 }
 
 func TestDashboardService_BuildJobViews_NilJobStore(t *testing.T) {
@@ -321,10 +387,10 @@ func TestDashboardService_BuildISOJobViews(t *testing.T) {
 	isoStore := &mockISOJobStore{
 		getRecentISOJobsFn: func(limit int) ([]*monitoring.ISOJobInfo, error) {
 			return []*monitoring.ISOJobInfo{
-				{TaskUUID: "iso-1", RepoURL: "https://repo.example.com", Branch: "main", State: "SUCCESS", SubmittedAt: now},
-				{TaskUUID: "iso-2", RepoURL: "https://repo.example.com", Branch: "dev", State: "FAILURE", SubmittedAt: now},
-				{TaskUUID: "iso-3", RepoURL: "https://repo.example.com", Branch: "test", State: "STARTED", SubmittedAt: now},
-				{TaskUUID: "iso-4", RepoURL: "https://repo.example.com", Branch: "test", State: "PENDING", SubmittedAt: now},
+				{TaskUUID: "iso-1", Dist: "verbeek", Branch: "main", State: "SUCCESS", SubmittedAt: now},
+				{TaskUUID: "iso-2", Dist: "verbeek", Branch: "dev", State: "FAILURE", SubmittedAt: now},
+				{TaskUUID: "iso-3", Dist: "verbeek", Branch: "test", State: "STARTED", SubmittedAt: now},
+				{TaskUUID: "iso-4", Dist: "verbeek", Branch: "test", State: "PENDING", SubmittedAt: now},
 			}, nil
 		},
 	}
@@ -336,4 +402,15 @@ func TestDashboardService_BuildISOJobViews(t *testing.T) {
 	assert.Equal(t, "status-offline", views[1].StatusClass)
 	assert.Equal(t, "status-warning", views[2].StatusClass)
 	assert.Equal(t, "", views[3].StatusClass)
+	// The dashboard shows which distribution an ISO was built for; the
+	// live-build repository is the worker's own config and chief never sees it.
+	assert.Equal(t, "verbeek", views[0].Dist)
+}
+
+func TestJoinDistComponent(t *testing.T) {
+	assert.Equal(t, "verbeek/main", joinDistComponent("verbeek", "main"))
+	// Rows recorded before either half existed keep the half they have.
+	assert.Equal(t, "verbeek", joinDistComponent("verbeek", ""))
+	assert.Equal(t, "main", joinDistComponent("", "main"))
+	assert.Equal(t, "", joinDistComponent("", ""))
 }

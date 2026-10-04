@@ -1,4 +1,7 @@
 ---
+# Each of chief/builder/repo/iso only requires this redis: block plus its own
+# section below (chief:, builder:, repo:, iso:) to start - the other sections
+# are optional and can be omitted from that component's own config file.
 redis: 'redis://localhost:6379'
 
 monitoring:
@@ -24,26 +27,56 @@ chief:
 
 builder:
   workdir: '/var/lib/irgsh/builder'
+  # The distribution this builder instance builds for. Also its Machinery
+  # queue identity (irgsh-<dist_codename>) - chief routes build tasks there.
+  dist_codename: 'verbeek'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
+  # Fallback resolvers appended to the build chroot's resolv.conf, after the
+  # resolvers the container already inherited. Defaults to 1.1.1.1, 8.8.8.8.
+  # Applied when the pbocker image is built (irgsh-builder init).
+  # dns:
+  #   - '1.1.1.1'
+  #   - '8.8.8.8'
+  # How many times a build whose log shows a transient network/DNS failure is
+  # retried inside the container. Defaults to 3.
+  # build_attempts: 3
 
 repo:
   workdir: '/var/lib/irgsh/repo'
   dist_name: 'BlankOn'
   dist_label: 'BlankOn'
+  # Also this repo instance's Machinery queue identity (irgsh-<dist_codename>)
+  # - chief and the matching builder route tasks there.
   dist_codename: 'verbeek'
   dist_components: 'main restricted extras restricted-firmware'
   dist_supported_architectures: 'amd64 source'
   dist_version: '12.0'
   dist_version_desc: 'BlankOn Linux 12.0 Verbeek'
-  dist_signing_key: 'DCE16C7A2805D4F8FCFF2C40FDF9557305CC097B'
+  dist_signing_key: '54495BCCA444849BD55A84ED5115CB575CE255A8'
   upstream_name: 'merge.sid'
   upstream_dist_codename: 'sid'
   upstream_dist_url: 'http://kartolo.sby.datautama.net.id/debian'
   upstream_dist_components: 'main non-free>restricted contrib>extras non-free-firmware>restricted-firmware'
+  # Where this repository is published for users. irgsh-cli checks an import
+  # against it, so that it validates against the repository the packages are
+  # really going into rather than whatever the maintainer's machine happens
+  # to have configured.
+  public_url: 'http://arsip-dev.blankonlinux.id/dev'
   gnupg_dir: '/var/lib/irgsh/gnupg'
 
 iso:
+  # The persistent live-build tree the build script runs in. chroot/, cache/,
+  # auto/ and local/ are reused between builds unless the job is submitted
+  # with --no-cache.
   workdir: '/var/lib/irgsh/iso'
   outputdir: '/tmp/jahitan'
   public_base_url: 'http://jahitan.blankonlinux.id'
+  # The distribution this ISO builder instance builds for. Also its
+  # Machinery queue identity (irgsh-<dist_codename>).
+  dist_codename: 'verbeek'
+  # The live-build repository this worker builds from. It belongs to the
+  # worker, not the submission: irgsh-cli only names the branch.
+  repo_url: 'https://github.com/BlankOn/blankon-live-build.git'
+  # Optional. When empty the build script skips its Telegram announcement.
+  telegram_bot_key: ''

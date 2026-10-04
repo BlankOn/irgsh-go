@@ -135,27 +135,40 @@ irgsh-cli package log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 
 Running `irgsh-cli package status` and `irgsh-cli package log` without argument will reference the latest submitted package build pipeline ID.
 
-#### ISO Build (livebuild)
+#### ISO Build
 
-Submit an ISO build job,
+Submit an ISO build job. The live-build repository is the ISO worker's own
+configuration (`iso.repo_url`), so you only name the distribution and branch,
 
 ```
-irgsh-cli livebuild submit --lb-url https://github.com/AcarKaan/blankon-live-build-config.git --lb-branch main
+irgsh-cli build-iso --dist verbeek --branch without-praya
+```
+
+The worker builds in a persistent live-build tree and reuses `cache/`,
+`chroot/`, `auto/` and `local/` between builds. Pass `--no-cache` to have it
+clear those first,
+
+```
+irgsh-cli build-iso --dist verbeek --branch without-praya --no-cache
 ```
 
 Check the status of an ISO build pipeline,
 
 ```
-irgsh-cli livebuild status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_iso
+irgsh-cli build-iso status 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_iso
 ```
 
 Inspect the log of an ISO build pipeline,
 
 ```
-irgsh-cli livebuild log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_iso
+irgsh-cli build-iso log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9_iso
 ```
 
-Running `irgsh-cli livebuild status` and `irgsh-cli livebuild log` without argument will reference the latest submitted ISO build pipeline ID.
+Running `irgsh-cli build-iso status` and `irgsh-cli build-iso log` without argument will reference the latest submitted ISO build pipeline ID.
+
+An ISO worker needs passwordless `sudo`, plus `git`, `live-build` and
+`zsyncmake`. The finished image is left on the worker under `iso.outputdir`,
+with `current/` pointing at the newest build.
 
 ## FAQ
 

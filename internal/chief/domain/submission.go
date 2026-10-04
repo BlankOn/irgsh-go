@@ -5,21 +5,97 @@ import "time"
 // Submission represents a package build submission from a maintainer.
 // The JSON tags must stay in sync with internal/cli/domain/submission.go.
 type Submission struct {
-	TaskUUID               string    `json:"taskUUID"`
-	Timestamp              time.Time `json:"timestamp"`
-	PackageName            string    `json:"packageName"`
-	PackageVersion         string    `json:"packageVersion"`
-	PackageExtendedVersion string    `json:"packageExtendedVersion"`
-	PackageURL             string    `json:"packageUrl"`
-	SourceURL              string    `json:"sourceUrl"`
-	Maintainer             string    `json:"maintainer"`
-	MaintainerFingerprint  string    `json:"maintainerFingerprint"`
-	Component              string    `json:"component"`
-	IsExperimental         bool      `json:"isExperimental"`
-	ForceVersion           bool      `json:"forceVersion"`
-	Tarball                string    `json:"tarball"`
-	PackageBranch          string    `json:"packageBranch"`
-	SourceBranch           string    `json:"sourceBranch"`
+	TaskUUID  string    `json:"taskUUID"`
+	Timestamp time.Time `json:"timestamp"`
+	// Dist is the target distribution to build for and publish into, e.g.
+	// "verbeek". It selects which builder/repo instances handle this job.
+	Dist                   string `json:"dist"`
+	PackageName            string `json:"packageName"`
+	PackageVersion         string `json:"packageVersion"`
+	PackageExtendedVersion string `json:"packageExtendedVersion"`
+	PackageURL             string `json:"packageUrl"`
+	SourceURL              string `json:"sourceUrl"`
+	Maintainer             string `json:"maintainer"`
+	MaintainerFingerprint  string `json:"maintainerFingerprint"`
+	Component              string `json:"component"`
+	IsExperimental         bool   `json:"isExperimental"`
+	ForceVersion           bool   `json:"forceVersion"`
+	Tarball                string `json:"tarball"`
+	PackageBranch          string `json:"packageBranch"`
+	SourceBranch           string `json:"sourceBranch"`
+}
+
+// ImportSubmission represents a request to import already built packages from
+// an external Debian repository into ours.
+// The JSON tags must stay in sync with internal/cli/domain/import.go.
+type ImportSubmission struct {
+	TaskUUID  string    `json:"taskUUID"`
+	Timestamp time.Time `json:"timestamp"`
+	// SourceURL is the base URL of the Debian repository to import from.
+	SourceURL string `json:"sourceUrl"`
+	// Dist is the distribution of ours to inject into, e.g. "verbeek", and so
+	// which repo worker's queue this job is routed to. It names the target
+	// here exactly as it does in Submission and ISOSubmission.
+	Dist string `json:"dist"`
+	// SourceDist is the suite in the source repository, e.g. "sid".
+	SourceDist string `json:"sourceDist"`
+	// TargetDist is how an irgsh-cli older than 2.2.0 named our distribution,
+	// back when Dist meant the source suite. Normalize folds it into the
+	// current fields; nothing else should read it.
+	TargetDist string `json:"targetDist,omitempty"`
+	// SourceComponent is the component to look in on the source side,
+	// defaulting to "main".
+	SourceComponent string `json:"sourceComponent"`
+	// PackageNames are the binary package names to import. Every binary built
+	// from the same source package is imported along with them.
+	PackageNames []string `json:"packageNames"`
+	// Component is the component to inject into on our side.
+	Component      string `json:"component"`
+	IsExperimental bool   `json:"isExperimental"`
+	ForceVersion   bool   `json:"forceVersion"`
+	// Insecure imports from a repository whose Release file cannot be
+	// verified against the worker's keyrings.
+	Insecure bool `json:"insecure"`
+	// KeyringPath is an optional keyring on the repo worker to verify the
+	// source repository against.
+	KeyringPath string `json:"keyringPath"`
+	// Maintainer is the identity of whoever triggered the import, taken from
+	// the CLI's configured signing key.
+	Maintainer string `json:"maintainer"`
+	// DryRun fetches and checks the packages without injecting them.
+	DryRun bool `json:"dryRun"`
+	// IgnoreDependencies injects the packages even when they are not
+	// installable on top of our repository.
+	IgnoreDependencies bool `json:"ignoreDependencies"`
+}
+
+// Normalize rewrites the payload of an older irgsh-cli into the current field
+// shape.
+//
+// Up to 2.1.0 an import named the source suite in "dist" and our distribution
+// in "targetDist", which read backwards against every other submission, where
+// "dist" is the target and is what the job is routed on. The flags were
+// swapped to match (--dist for ours, --source-dist for theirs) and the wire
+// format with them.
+//
+// An old payload is the one that carries "targetDist" and no "sourceDist";
+// its two fields are simply the wrong way round. Normalize leaves a current
+// payload untouched, and clears TargetDist either way so that what chief
+// forwards to the worker is always the current shape.
+func (s *ImportSubmission) Normalize() {
+	if s.SourceDist == "" && s.TargetDist != "" {
+		s.SourceDist = s.Dist
+		s.Dist = s.TargetDist
+	}
+	s.TargetDist = ""
+}
+
+// RepoInfo describes the repository packages are published to, so that a
+// client can check an import against the real target.
+type RepoInfo struct {
+	PublicURL      string `json:"publicUrl"`
+	DistCodename   string `json:"distCodename"`
+	DistComponents string `json:"distComponents"`
 }
 
 // ISOSubmission represents an ISO build request.
@@ -27,6 +103,13 @@ type Submission struct {
 type ISOSubmission struct {
 	TaskUUID  string    `json:"taskUUID"`
 	Timestamp time.Time `json:"timestamp"`
-	RepoURL   string    `json:"repoUrl"`
-	Branch    string    `json:"branch"`
+	// Dist is the target distribution this ISO is built for, e.g. "verbeek".
+	// It selects which ISO builder instance handles this job; that instance
+	// supplies the live-build repository URL from its own config, so chief
+	// never sees it.
+	Dist   string `json:"dist"`
+	Branch string `json:"branch"`
+	// NoCache asks the worker to clear the reusable live-build directories
+	// (cache, chroot, auto, local) before building.
+	NoCache bool `json:"noCache"`
 }

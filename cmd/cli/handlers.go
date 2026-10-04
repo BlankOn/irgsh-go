@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
+	"github.com/blankon/irgsh-go/internal/cli/usecase"
 	"github.com/urfave/cli"
 )
 
@@ -14,10 +15,14 @@ type CLIService interface {
 	SubmitPackage(ctx context.Context, params domain.SubmitParams) (domain.SubmitResponse, error)
 	PackageStatus(ctx context.Context, pipelineID string) (domain.PackageStatus, error)
 	PackageLog(ctx context.Context, pipelineID string) (buildLog, repoLog string, err error)
-	SubmitISO(ctx context.Context, repoURL, branch string) (domain.SubmitResponse, error)
+	SubmitISO(ctx context.Context, dist, branch string, noCache bool) (domain.SubmitResponse, error)
 	ISOStatus(ctx context.Context, pipelineID string) (domain.ISOStatus, error)
 	ISOLog(ctx context.Context, pipelineID string) (string, error)
+	SubmitImport(ctx context.Context, params domain.ImportParams) (domain.SubmitResponse, error)
+	ImportStatus(ctx context.Context, pipelineID string) (domain.ImportStatus, error)
+	ImportLog(ctx context.Context, pipelineID string) (string, error)
 	RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error)
+	CancelPipeline(ctx context.Context, pipelineID string) (domain.CancelResponse, error)
 	UpdateCLI(ctx context.Context) error
 }
 
@@ -50,6 +55,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			Usage: "Submit a package build job, or use subcommands (status, log)",
 			Flags: []cli.Flag{
 				cli.StringFlag{
+					Name:  "dist",
+					Usage: "Target distribution to build for and publish into, e.g. verbeek (required)",
+				},
+				cli.StringFlag{
 					Name:  "source",
 					Usage: "Source URL",
 				},
@@ -81,6 +90,10 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 					Name:  "force-version",
 					Usage: "Force overwrite existing package version in repository",
 				},
+				cli.BoolFlag{
+					Name:  "skip-local-build",
+					Usage: "Do not verify the package with a local binary build before submitting",
+				},
 			},
 			Action: packageSubmitAction(ctx, svc),
 			Subcommands: []cli.Command{
@@ -102,33 +115,115 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			Action: retryAction(ctx, svc),
 		},
 		{
-			Name:  "livebuild",
-			Usage: "ISO build commands (submit, status, log)",
-			Subcommands: []cli.Command{
-				{
-					Name:  "submit",
-					Usage: "Submit an ISO build job",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "lb-url",
-							Usage: "Live build git repository URL (required)",
-						},
-						cli.StringFlag{
-							Name:  "lb-branch",
-							Usage: "Live build git branch name (required)",
-						},
-					},
-					Action: livebuildSubmitAction(ctx, svc),
+			Name: "cancel",
+			Usage: "Cancel a queued or running job, e.g. irgsh-cli cancel <pipeline-id>. " +
+				"A package pipeline that has reached its repo stage cannot be cancelled: " +
+				"interrupting reprepro can corrupt the repository database",
+			Action: cancelAction(ctx, svc),
+		},
+		{
+			Name:  "build-iso",
+			Usage: "Submit an ISO build job, or use subcommands (status, log)",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "dist",
+					Usage: "Target distribution to build the ISO for, e.g. verbeek (required)",
 				},
+				cli.StringFlag{
+					Name:  "branch",
+					Usage: "Live build git branch name, e.g. without-praya (required)",
+				},
+				cli.BoolFlag{
+					Name:  "no-cache",
+					Usage: "Clear the reusable live-build directories (cache, chroot, auto, local) before building",
+				},
+			},
+			Action: isoSubmitAction(ctx, svc),
+			Subcommands: []cli.Command{
 				{
 					Name:   "status",
 					Usage:  "Check status of an ISO build pipeline",
-					Action: livebuildStatusAction(ctx, svc),
+					Action: isoStatusAction(ctx, svc),
 				},
 				{
 					Name:   "log",
 					Usage:  "Read the logs of an ISO build pipeline",
-					Action: livebuildLogAction(ctx, svc),
+					Action: isoLogAction(ctx, svc),
+				},
+			},
+		},
+		{
+			Name:  "import",
+			Usage: "Import already built packages from another Debian repository",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "source",
+					Usage: "Base URL of the Debian repository to import from",
+				},
+				cli.StringFlag{
+					Name:  "dist",
+					Usage: "Our distribution to import the packages into, e.g. verbeek (required)",
+				},
+				cli.StringFlag{
+					Name:  "source-dist",
+					Usage: "Suite to import from in the source repository, e.g. sid (required)",
+				},
+				cli.StringFlag{
+					Name:  "source-component",
+					Usage: "Component to look in on the source side (default: main)",
+				},
+				cli.StringFlag{
+					Name:  "package-name",
+					Usage: "Package name(s) to import, comma or space separated",
+				},
+				cli.StringFlag{
+					Name:  "component",
+					Usage: "Component to import into on our side (default: main)",
+				},
+				cli.BoolFlag{
+					Name:  "experimental",
+					Usage: "Import into the experimental repository",
+				},
+				cli.BoolFlag{
+					Name:  "force-version",
+					Usage: "Re-inject even the exact version our repository already has (a different version, older or newer, is always replaced)",
+				},
+				cli.StringFlag{
+					Name:  "keyring",
+					Usage: "Absolute path on the repo worker to a keyring verifying the source repository",
+				},
+				cli.BoolFlag{
+					Name:  "insecure",
+					Usage: "Import from a repository whose Release file cannot be verified",
+				},
+				cli.BoolFlag{
+					Name:  "dry-run",
+					Usage: "Fetch and dependency-check the packages without injecting them",
+				},
+				cli.BoolFlag{
+					Name:  "ignore-dependencies",
+					Usage: "Import even when the packages are not installable on top of our repository",
+				},
+				cli.BoolFlag{
+					Name:  "skip-check",
+					Usage: "Do not resolve or check the packages against the target repository before submitting",
+				},
+				cli.BoolFlag{
+					Name:  "yes, y",
+					Usage: "Accept the extra packages a dependency resolution pulls in, without prompting",
+				},
+			},
+			Action: importSubmitAction(ctx, svc),
+			Subcommands: []cli.Command{
+				{
+					Name:   "status",
+					Usage:  "Check status of an import pipeline",
+					Action: importStatusAction(ctx, svc),
+				},
+				{
+					Name:   "log",
+					Usage:  "Read the logs of an import pipeline",
+					Action: importLogAction(ctx, svc),
 				},
 			},
 		},
@@ -159,6 +254,7 @@ func configAction(svc CLIService) cli.ActionFunc {
 func packageSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		params := domain.SubmitParams{
+			Dist:           c.String("dist"),
 			PackageURL:     c.String("package"),
 			SourceURL:      c.String("source"),
 			Component:      c.String("component"),
@@ -167,6 +263,7 @@ func packageSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 			IsExperimental: c.Bool("experimental"),
 			IgnoreChecks:   c.Bool("ignore-checks"),
 			ForceVersion:   c.Bool("force-version"),
+			SkipLocalBuild: c.Bool("skip-local-build"),
 		}
 		_, err := svc.SubmitPackage(ctx, params)
 		return err
@@ -200,14 +297,14 @@ func packageLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	}
 }
 
-func livebuildSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func isoSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		_, err := svc.SubmitISO(ctx, c.String("lb-url"), c.String("lb-branch"))
+		_, err := svc.SubmitISO(ctx, c.String("dist"), c.String("branch"), c.Bool("no-cache"))
 		return err
 	}
 }
 
-func livebuildStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func isoStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		status, err := svc.ISOStatus(ctx, pipelineID)
@@ -220,10 +317,59 @@ func livebuildStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	}
 }
 
-func livebuildLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+func isoLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		logResult, err := svc.ISOLog(ctx, pipelineID)
+		if err != nil {
+			return err
+		}
+		fmt.Println(logResult)
+		return nil
+	}
+}
+
+func importSubmitAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		params := domain.ImportParams{
+			SourceURL:       c.String("source"),
+			Dist:            c.String("dist"),
+			SourceDist:      c.String("source-dist"),
+			SourceComponent: c.String("source-component"),
+			PackageNames:    usecase.SplitPackageNames(c.String("package-name")),
+			Component:       c.String("component"),
+			IsExperimental:  c.Bool("experimental"),
+			ForceVersion:    c.Bool("force-version"),
+			Insecure:        c.Bool("insecure"),
+			KeyringPath:     c.String("keyring"),
+			DryRun:          c.Bool("dry-run"),
+
+			IgnoreDependencies: c.Bool("ignore-dependencies"),
+			SkipCheck:          c.Bool("skip-check"),
+			AssumeYes:          c.Bool("yes"),
+		}
+		_, err := svc.SubmitImport(ctx, params)
+		return err
+	}
+}
+
+func importStatusAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		pipelineID := c.Args().First()
+		status, err := svc.ImportStatus(ctx, pipelineID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Job Status: %s\n", status.JobStatus)
+		fmt.Printf("Import Status: %s\n", status.ImportStatus)
+		return nil
+	}
+}
+
+func importLogAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		pipelineID := c.Args().First()
+		logResult, err := svc.ImportLog(ctx, pipelineID)
 		if err != nil {
 			return err
 		}
@@ -236,6 +382,13 @@ func retryAction(ctx context.Context, svc CLIService) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		pipelineID := c.Args().First()
 		_, err := svc.RetryPipeline(ctx, pipelineID)
+		return err
+	}
+}
+
+func cancelAction(ctx context.Context, svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		_, err := svc.CancelPipeline(ctx, c.Args().First())
 		return err
 	}
 }

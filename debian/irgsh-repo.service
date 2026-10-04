@@ -8,7 +8,11 @@ Type=simple
 User=irgsh
 Group=irgsh
 WorkingDirectory=/var/lib/irgsh
-ExecStart=/usr/bin/irgsh-repo
+Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
+# irgsh-repo requires an explicit config path; override ExecStart with a
+# drop-in (systemctl edit irgsh-repo) for a site-specific config, e.g. for
+# multi-arch/multi-instance repo setups.
+ExecStart=/usr/bin/irgsh-repo -c /etc/irgsh/config.yaml
 Restart=on-failure
 RestartSec=10s
 StandardOutput=append:/var/log/irgsh/repo.log

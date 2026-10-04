@@ -1,15 +1,25 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
+
+// errCanceled ends a job that was cancelled by a maintainer. Machinery
+// records it as a failure like any other error; chief reports the job as
+// CANCELED from its own record of the cancellation.
+var errCanceled = errors.New("job canceled on request")
 
 func uploadLog(logPath string, id string) {
 	// Upload the log to chief
@@ -45,12 +55,21 @@ func Build(payload string) (next string, err error) {
 	taskUUID := raw["taskUUID"].(string)
 	fmt.Println("Processing pipeline :" + taskUUID)
 
+	if dist, ok := raw["dist"].(string); ok && dist != "" && dist != irgshConfig.Builder.DistCodename {
+		return "", fmt.Errorf("build task targeted dist %q but this builder instance serves %q",
+			dist, irgshConfig.Builder.DistCodename)
+	}
+
 	// Extract job info for notifications
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:    raw["packageName"].(string),
 		PackageVersion: raw["packageVersion"].(string),
 		Maintainer:     raw["maintainer"].(string),
+		Dist:           irgshConfig.Builder.DistCodename,
 		IsExperimental: raw["isExperimental"].(bool),
+	}
+	if component, ok := raw["component"].(string); ok {
+		jobInfo.Component = component
 	}
 	if sourceURL, ok := raw["sourceUrl"].(string); ok {
 		jobInfo.SourceURL = sourceURL
@@ -66,37 +85,68 @@ func Build(payload string) (next string, err error) {
 	}
 
 	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + taskUUID + "/build.log"
-	go systemutil.StreamLog(logPath)
+	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
+		log.Printf("error: unable to prepare log file %s: %v\n", logPath, prepErr)
+	}
+	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "build", logPath)
+	defer stopLogStream()
+
+	// Cancelling the job cancels this context, which kills every command the
+	// build is running. The job may also already be cancelled here, having
+	// been stopped while it sat in the queue.
+	job := cancelWatcher.Guard(taskUUID)
+	defer job.Release()
+	ctx := job.Context()
+
+	// Set where the job actually stops, rather than read off job.Requested():
+	// a request arriving after the last step has finished changes nothing and
+	// should not be reported as a cancellation.
+	canceled := false
 
 	// Ensure notification is always sent on completion
 	defer func() {
-		if err != nil {
+		switch {
+		case canceled:
+			sendBuildNotification(taskUUID, "CANCELED", jobInfo)
+		case err != nil:
 			sendBuildNotification(taskUUID, "FAILED", jobInfo)
-		} else {
+		default:
 			sendBuildNotification(taskUUID, "SUCCESS", jobInfo)
 		}
 	}()
 
-	next, err = BuildPreparation(payload)
-	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Build preparation failed: "+err.Error())
+	// finish ends the job. A cancelled build has not failed: the commands it
+	// was running were killed on purpose, so whatever error they returned
+	// describes the killing rather than the package.
+	finish := func(stage string, cause error) (string, error) {
+		if job.Requested() {
+			canceled = true
+			systemutil.WriteLog(logPath, "[ BUILD CANCELED ] "+stage+" was stopped on request")
+			uploadLog(logPath, taskUUID)
+			return "", errCanceled
+		}
+		systemutil.WriteLog(logPath, "[ BUILD FAILED ] "+stage+" failed: "+systemutil.FailureSummary(cause))
 		uploadLog(logPath, taskUUID)
-		return
+		return "", cause
 	}
 
-	next, err = BuildPackage(payload)
-	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package build failed: "+err.Error())
-		uploadLog(logPath, taskUUID)
-		return
+	if job.Requested() {
+		return finish("The build", errCanceled)
 	}
 
-	next, err = StorePackage(payload)
-
+	next, err = BuildPreparation(ctx, payload)
 	if err != nil {
-		systemutil.WriteLog(logPath, "[ BUILD FAILED ] Package artifact upload failed: "+err.Error())
-		uploadLog(logPath, taskUUID)
-		return
+		return finish("Build preparation", err)
+	}
+
+	next, err = BuildPackage(ctx, payload)
+	if err != nil {
+		return finish("Package build", err)
+	}
+
+	next, err = StorePackage(ctx, payload)
+	if err != nil {
+		return finish("Package artifact upload", err)
 	}
 
 	systemutil.WriteLog(logPath, "[ BUILD DONE ]")
@@ -107,7 +157,7 @@ func Build(payload string) (next string, err error) {
 	return
 }
 
-func BuildPreparation(payload string) (next string, err error) {
+func BuildPreparation(ctx context.Context, payload string) (next string, err error) {
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
@@ -127,7 +177,8 @@ func BuildPreparation(payload string) (next string, err error) {
 	cmdStr := "curl -v -o " + target + " "
 	cmdStr += irgshConfig.Chief.Address + "/submissions/" + raw["taskUUID"].(string) + ".tar.gz"
 	log.Println(cmdStr)
-	_, err = systemutil.CmdExec(
+	_, err = systemutil.CmdExecContext(
+		ctx,
 		cmdStr,
 		"Fetching the submission tarball from chief",
 		logPath,
@@ -141,7 +192,8 @@ func BuildPreparation(payload string) (next string, err error) {
 	cmdStr = "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
 	cmdStr += " && tar -xvf debuild.tar.gz "
 	cmdStr += " && rm -rf debuild.tar.gz "
-	_, err = systemutil.CmdExec(
+	_, err = systemutil.CmdExecContext(
+		ctx,
 		cmdStr,
 		"Backup the maintainer tarball and its signature",
 		logPath,
@@ -155,7 +207,7 @@ func BuildPreparation(payload string) (next string, err error) {
 	return
 }
 
-func BuildPackage(payload string) (next string, err error) {
+func BuildPackage(ctx context.Context, payload string) (next string, err error) {
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
@@ -178,7 +230,8 @@ func BuildPackage(payload string) (next string, err error) {
 	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
 	cmdStr += " && cp signed/* ."
 	log.Println(cmdStr)
-	_, err = systemutil.CmdExec(
+	_, err = systemutil.CmdExecContext(
+		ctx,
 		cmdStr,
 		"Copy the maintainer's generated files from signed dir.",
 		logPath,
@@ -189,17 +242,34 @@ func BuildPackage(payload string) (next string, err error) {
 	}
 
 	// Cleanup pbuilder cache result
-	_, _ = systemutil.CmdExec(
+	_, _ = systemutil.CmdExecContext(
+		ctx,
 		"rm -rf /var/cache/pbuilder/result/*",
 		"",
 		"",
 	)
 
+	// Cancelling the job kills the docker client, which by itself leaves the
+	// container it started running: the build would carry on inside it with
+	// nothing left watching. The container id is written out so it can be
+	// removed either way.
+	cidPath := buildPath + "/container.cid"
+	// docker refuses to start when the cid file already exists, which a
+	// retried task would find left behind.
+	_ = os.Remove(cidPath)
+	defer removeBuildContainer(cidPath)
+
 	// Building the package
+	// BUILD_ATTEMPTS lets /build.sh retry a build that failed on a transient
+	// network/DNS error; see builder/init.go to modify that script.
 	cmdStr = "docker run -v " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
-	cmdStr += ":/tmp/build --privileged=true --user 0:0 -i pbocker bash -c /build.sh" // See builder/init.go to modify this script
+	cmdStr += ":/tmp/build --privileged=true --user 0:0"
+	cmdStr += " -e BUILD_ATTEMPTS=" + strconv.Itoa(irgshConfig.Builder.Attempts())
+	cmdStr += " --cidfile " + cidPath
+	cmdStr += " -i pbocker bash -c /build.sh"
 	fmt.Println(cmdStr)
-	_, err = systemutil.CmdExec(
+	_, err = systemutil.CmdExecContext(
+		ctx,
 		cmdStr,
 		"Building the package",
 		logPath,
@@ -224,7 +294,8 @@ func BuildPackage(payload string) (next string, err error) {
 		cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string)
 		cmdStr += " && cp signed/* . "
 		log.Println(cmdStr)
-		_, err = systemutil.CmdExec(
+		_, err = systemutil.CmdExecContext(
+			ctx,
 			cmdStr,
 			"Use the generated files from maintainer.",
 			logPath,
@@ -239,7 +310,24 @@ func BuildPackage(payload string) (next string, err error) {
 	return
 }
 
-func StorePackage(payload string) (next string, err error) {
+// removeBuildContainer removes the container named by a cid file, and the file
+// with it. A build that ran to its end has already exited, so this is really
+// for a cancelled one, whose container outlives the docker client that was
+// killed. It deliberately runs outside the job's context, which is exactly the
+// one that has just been cancelled.
+func removeBuildContainer(cidPath string) {
+	cid, err := os.ReadFile(cidPath)
+	if err == nil {
+		if id := string(bytes.TrimSpace(cid)); id != "" {
+			if _, rmErr := systemutil.CmdExec("docker rm -f "+id, "", ""); rmErr != nil {
+				log.Printf("error: unable to remove build container %s: %v\n", id, rmErr)
+			}
+		}
+	}
+	_ = os.Remove(cidPath)
+}
+
+func StorePackage(ctx context.Context, payload string) (next string, err error) {
 	in := []byte(payload)
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
@@ -247,12 +335,17 @@ func StorePackage(payload string) (next string, err error) {
 	logPath := irgshConfig.Builder.Workdir + "/artifacts/" + raw["taskUUID"].(string) + "/build.log"
 
 	cmdStr := "cd " + irgshConfig.Builder.Workdir + "/artifacts/ && "
-	cmdStr += "tar -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string)
+	// build.log is excluded because tar's own verbose output is being appended
+	// to it while tar reads it, which makes tar exit non-zero with "file
+	// changed as we read it" and masks the real build result. Chief receives
+	// the log through the separate log-upload endpoint anyway.
+	cmdStr += "tar --exclude=build.log -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string)
 	cmdStr += " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir
 	cmdStr += "/artifacts/" + raw["taskUUID"].(string) + ".tar.gz' "
 	cmdStr += irgshConfig.Chief.Address + "/api/v1/artifact-upload?id="
 	cmdStr += raw["taskUUID"].(string)
-	_, err = systemutil.CmdExec(
+	_, err = systemutil.CmdExecContext(
+		ctx,
 		cmdStr,
 		"",
 		logPath,

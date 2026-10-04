@@ -2,10 +2,13 @@ package usecase
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,13 +20,19 @@ import (
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 )
 
-// SubmissionService handles package submission, retry, and ISO build workflows.
+// safeKeyringPath matches an absolute path to a keyring file, with no shell
+// metacharacters: the worker interpolates it into a command.
+var safeKeyringPath = regexp.MustCompile(`^[a-zA-Z0-9._/-]+\.(gpg|asc)$`)
+
+// SubmissionService handles package submission, retry, ISO build and package
+// import workflows.
 type SubmissionService struct {
-	taskQueue TaskQueue
-	storage   FileStorage
-	gpg       GPGVerifier
-	jobStore  JobStore
-	isoStore  ISOJobStore
+	taskQueue   TaskQueue
+	storage     FileStorage
+	gpg         GPGVerifier
+	jobStore    JobStore
+	isoStore    ISOJobStore
+	importStore ImportJobStore
 }
 
 func NewSubmissionService(
@@ -32,17 +41,25 @@ func NewSubmissionService(
 	gpg GPGVerifier,
 	jobStore JobStore,
 	isoStore ISOJobStore,
+	importStore ImportJobStore,
 ) *SubmissionService {
 	return &SubmissionService{
-		taskQueue: taskQueue,
-		storage:   storage,
-		gpg:       gpg,
-		jobStore:  jobStore,
-		isoStore:  isoStore,
+		taskQueue:   taskQueue,
+		storage:     storage,
+		gpg:         gpg,
+		jobStore:    jobStore,
+		isoStore:    isoStore,
+		importStore: importStore,
 	}
 }
 
 func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain.SubmitPayloadResponse, error) {
+	if submission.Dist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.Dist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
+	}
 	if !domain.SafeIDPattern.MatchString(submission.MaintainerFingerprint) {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "invalid maintainer fingerprint")
 	}
@@ -91,7 +108,7 @@ func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
@@ -99,6 +116,7 @@ func (ss *SubmissionService) SubmitPackage(submission domain.Submission) (domain
 	if ss.jobStore != nil {
 		job := monitoring.JobInfo{
 			TaskUUID:       submission.TaskUUID,
+			Dist:           submission.Dist,
 			PackageName:    submission.PackageName,
 			PackageVersion: submission.PackageVersion,
 			Maintainer:     submission.Maintainer,
@@ -180,6 +198,7 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 	submission := domain.Submission{
 		TaskUUID:              newTaskUUID,
 		Timestamp:             newTimestamp,
+		Dist:                  job.Dist,
 		PackageName:           job.PackageName,
 		PackageVersion:        job.PackageVersion,
 		PackageURL:            job.PackageURL,
@@ -198,13 +217,14 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to marshal submission"}`)
 	}
 
-	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendBuildChain(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send retry build chain: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, `{"error": "failed to queue retry task"}`)
 	}
 
 	newJob := monitoring.JobInfo{
 		TaskUUID:       newTaskUUID,
+		Dist:           job.Dist,
 		PackageName:    job.PackageName,
 		PackageVersion: job.PackageVersion,
 		Maintainer:     job.Maintainer,
@@ -227,8 +247,11 @@ func (ss *SubmissionService) RetryPipeline(oldTaskUUID string) (domain.SubmitPay
 }
 
 func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.SubmitPayloadResponse, error) {
-	if submission.RepoURL == "" {
-		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "repoUrl is required")
+	if submission.Dist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.Dist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
 	}
 	if submission.Branch == "" {
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "branch is required")
@@ -243,21 +266,118 @@ func (ss *SubmissionService) BuildISO(submission domain.ISOSubmission) (domain.S
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
 	}
 
-	if err := ss.taskQueue.SendISOTask(submission.TaskUUID, jsonStr); err != nil {
+	if err := ss.taskQueue.SendISOTask(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
 		log.Printf("Could not send ISO task: %v\n", err)
 		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
 	}
 
 	if ss.isoStore != nil {
 		isoJob := monitoring.ISOJobInfo{
-			TaskUUID:    submission.TaskUUID,
-			RepoURL:     submission.RepoURL,
+			TaskUUID: submission.TaskUUID,
+			Dist:     submission.Dist,
+			// RepoURL is left empty: the live-build repository is the ISO
+			// worker's own config now, so chief never learns it. The column
+			// stays for existing databases.
 			Branch:      submission.Branch,
 			SubmittedAt: submission.Timestamp,
 			State:       "PENDING",
 		}
 		if err := ss.isoStore.RecordISOJob(isoJob); err != nil {
 			log.Printf("Failed to record ISO job: %v\n", err)
+		}
+	}
+
+	return domain.SubmitPayloadResponse{PipelineID: submission.TaskUUID}, nil
+}
+
+// ImportPackages queues a job that pulls already built packages out of an
+// external Debian repository and injects them into ours.
+func (ss *SubmissionService) ImportPackages(submission domain.ImportSubmission) (domain.SubmitPayloadResponse, error) {
+	// An irgsh-cli older than 2.2.0 sends the two distributions the other way
+	// round; fold it into the current shape before anything reads them.
+	submission.Normalize()
+
+	if submission.SourceURL == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceUrl is required")
+	}
+	if _, err := url.ParseRequestURI(submission.SourceURL); err != nil {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceUrl is not a valid URL")
+	}
+	if submission.Dist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.Dist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "dist contains unsupported characters")
+	}
+	if submission.SourceDist == "" {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceDist is required")
+	}
+	if !domain.SafeIDPattern.MatchString(submission.SourceDist) {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "sourceDist contains unsupported characters")
+	}
+	if len(submission.PackageNames) == 0 {
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "packageNames is required")
+	}
+
+	// Everything below is interpolated into shell commands on the worker.
+	for _, name := range submission.PackageNames {
+		if !domain.SafeDebianNamePattern.MatchString(name) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("invalid package name: %q", name))
+		}
+	}
+	if submission.SourceComponent == "" {
+		submission.SourceComponent = "main"
+	}
+	if submission.Component == "" {
+		submission.Component = "main"
+	}
+	for _, component := range []string{submission.SourceComponent, submission.Component} {
+		if !domain.SafeIDPattern.MatchString(component) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("invalid component: %q", component))
+		}
+	}
+
+	if submission.KeyringPath != "" {
+		if !filepath.IsAbs(submission.KeyringPath) || !safeKeyringPath.MatchString(submission.KeyringPath) {
+			return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest,
+				"keyringPath must be an absolute path to a .gpg or .asc keyring on the repo worker")
+		}
+	}
+
+	submission.Timestamp = time.Now()
+	submission.TaskUUID = submission.Timestamp.Format("2006-01-02-150405") + "_" + uuid.New().String() + "_import"
+
+	jsonStr, err := json.Marshal(submission)
+	if err != nil {
+		log.Println(err.Error())
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusBadRequest, "400")
+	}
+
+	if err := ss.taskQueue.SendImportTask(submission.TaskUUID, submission.Dist, jsonStr); err != nil {
+		log.Printf("Could not send import task: %v\n", err)
+		return domain.SubmitPayloadResponse{}, httputil.NewHTTPError(http.StatusInternalServerError, "500")
+	}
+
+	if ss.importStore != nil {
+		// The stored columns keep the meaning they were created with - dist
+		// is the suite imported from, target_dist ours - so that rows written
+		// before the fields were swapped still read correctly.
+		importJob := monitoring.ImportJobInfo{
+			TaskUUID:       submission.TaskUUID,
+			SourceURL:      submission.SourceURL,
+			Dist:           submission.SourceDist,
+			TargetDist:     submission.Dist,
+			Packages:       strings.Join(submission.PackageNames, ", "),
+			Component:      submission.Component,
+			Maintainer:     submission.Maintainer,
+			IsExperimental: submission.IsExperimental,
+			SubmittedAt:    submission.Timestamp,
+			State:          "PENDING",
+		}
+		if err := ss.importStore.RecordImportJob(importJob); err != nil {
+			log.Printf("Failed to record import job: %v\n", err)
 		}
 	}
 

@@ -37,7 +37,7 @@ func TestStatusService_BuildStatus(t *testing.T) {
 				},
 			}
 
-			svc := NewStatusService(tq)
+			svc := NewStatusService(tq, nil)
 			resp, err := svc.BuildStatus("test-uuid")
 			require.NoError(t, err)
 			assert.Equal(t, "test-uuid", resp.PipelineID)
@@ -71,7 +71,7 @@ func TestStatusService_ISOStatus(t *testing.T) {
 				},
 			}
 
-			svc := NewStatusService(tq)
+			svc := NewStatusService(tq, nil)
 			jobStatus, rawState, err := svc.ISOStatus("iso-uuid")
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantJobStatus, jobStatus)

@@ -18,6 +18,14 @@ type RetryResponse struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// CancelResponse is chief's answer to a cancellation request.
+type CancelResponse struct {
+	PipelineID string `json:"pipelineId"`
+	State      string `json:"state"`
+	Message    string `json:"message,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
 type PackageStatus struct {
 	PipelineID  string `json:"pipelineId"`
 	JobStatus   string `json:"jobStatus"`

@@ -2,18 +2,31 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/notification"
 	"github.com/blankon/irgsh-go/pkg/systemutil"
 	"github.com/manifoldco/promptui"
 )
 
+// errCanceled ends a job that was cancelled by a maintainer. Machinery records
+// it as a failure like any other error; chief reports the job as CANCELED from
+// its own record of the cancellation.
+var errCanceled = errors.New("job canceled on request")
+
 func uploadLog(logPath string, id string) {
 	// Upload the log to chief
+	if info, err := os.Stat(logPath); err != nil {
+		fmt.Printf("error: log file %s is not uploadable: %v\n", logPath, err)
+		return
+	} else {
+		fmt.Printf("Uploading log file %s (%d bytes) to %s\n", logPath, info.Size(), irgshConfig.Chief.Address)
+	}
 	cmdStr := "curl -v -F 'uploadFile=@" + logPath + "' '" + irgshConfig.Chief.Address + "/api/v1/log-upload?id=" + id + "&type=repo'"
 	fmt.Println(cmdStr)
 	_, err := systemutil.CmdExec(
@@ -22,8 +35,41 @@ func uploadLog(logPath string, id string) {
 		"",
 	)
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Printf("error: failed to upload log file %s: %v\n", logPath, err)
 	}
+}
+
+// describeArtifactDir reports what is actually present on disk for a task, so a
+// failing download or injection step leaves a trace of what the repo worker saw.
+func describeArtifactDir(artifactDir string, taskUUID string) string {
+	target := artifactDir + "/" + taskUUID
+	var b strings.Builder
+	b.WriteString("##### Artifact directory listing: " + target + "\n")
+
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		b.WriteString("  unable to read " + target + ": " + err.Error() + "\n")
+		tarball := target + ".tar.gz"
+		if info, statErr := os.Stat(tarball); statErr == nil {
+			b.WriteString(fmt.Sprintf("  tarball %s exists (%d bytes)\n", tarball, info.Size()))
+		} else {
+			b.WriteString("  tarball " + tarball + " is missing: " + statErr.Error() + "\n")
+		}
+		return b.String()
+	}
+	if len(entries) == 0 {
+		b.WriteString("  (empty)\n")
+		return b.String()
+	}
+	for _, entry := range entries {
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			b.WriteString("  " + entry.Name() + " (unable to stat: " + infoErr.Error() + ")\n")
+			continue
+		}
+		b.WriteString(fmt.Sprintf("  %s\t%d bytes\n", entry.Name(), info.Size()))
+	}
+	return b.String()
 }
 
 func sendRepoNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
@@ -44,19 +90,68 @@ func Repo(payload string) (err error) {
 	var raw map[string]interface{}
 	json.Unmarshal(in, &raw)
 
-	taskUUID := raw["taskUUID"].(string)
+	taskUUID, _ := raw["taskUUID"].(string)
 
-	experimentalSuffix := "-experimental"
-	if !raw["isExperimental"].(bool) {
-		experimentalSuffix = ""
+	// Registered before anything that can fail, so a task rejected for a dist
+	// mismatch, or one whose log file cannot be prepared, still reports itself
+	// instead of failing silently. jobInfo is filled in below - the closure
+	// reads it when it runs, not now.
+	// A repo job can be cancelled while it waits in the queue, and not after:
+	// it drives reprepro, and interrupting reprepro - during an export above
+	// all - can leave the repository database corrupted. Marking the job
+	// uninterruptible right here is what makes that true on this side; chief
+	// refuses the request on its side once the repo stage is running.
+	job := cancelWatcher.Guard(taskUUID)
+	job.Uninterruptible()
+	defer job.Release()
+
+	// Set only where the job actually stops. A cancellation that arrives
+	// after the checkpoint below is deliberately ignored, and reporting it as
+	// a cancellation would misdescribe a job that went on to publish.
+	canceled := false
+
+	var jobInfo notification.JobNotificationInfo
+	defer func() {
+		switch {
+		case canceled:
+			sendRepoNotification(taskUUID, "CANCELED", jobInfo)
+		case err != nil:
+			sendRepoNotification(taskUUID, "FAILED", jobInfo)
+		default:
+			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
+		}
+	}()
+
+	if taskUUID == "" {
+		err = fmt.Errorf("repo task payload carries no taskUUID")
+		return
 	}
 
-	// Extract job info for notifications
-	jobInfo := notification.JobNotificationInfo{
-		PackageName:    raw["packageName"].(string),
-		PackageVersion: raw["packageVersion"].(string),
-		Maintainer:     raw["maintainer"].(string),
-		IsExperimental: raw["isExperimental"].(bool),
+	// Filled in before the checks below so a rejected task still names the
+	// package it was carrying.
+	isExperimental, _ := raw["isExperimental"].(bool)
+	packageName, _ := raw["packageName"].(string)
+	packageVersion, _ := raw["packageVersion"].(string)
+	maintainer, _ := raw["maintainer"].(string)
+	component, _ := raw["component"].(string)
+	jobInfo = notification.JobNotificationInfo{
+		PackageName:    packageName,
+		PackageVersion: packageVersion,
+		Maintainer:     maintainer,
+		Dist:           irgshConfig.Repo.DistCodename,
+		Component:      component,
+		IsExperimental: isExperimental,
+	}
+
+	if dist, ok := raw["dist"].(string); ok && dist != "" && dist != irgshConfig.Repo.DistCodename {
+		err = fmt.Errorf("repo task targeted dist %q but this repo instance serves %q",
+			dist, irgshConfig.Repo.DistCodename)
+		return
+	}
+
+	experimentalSuffix := "-experimental"
+	if !isExperimental {
+		experimentalSuffix = ""
 	}
 	if sourceURL, ok := raw["sourceUrl"].(string); ok {
 		jobInfo.SourceURL = sourceURL
@@ -73,34 +168,53 @@ func Repo(payload string) (err error) {
 
 	logPath := irgshConfig.Repo.Workdir + "/artifacts/"
 	logPath += taskUUID + "/repo.log"
-	go systemutil.StreamLog(logPath)
 
-	// Ensure notification is always sent on completion
-	defer func() {
-		if err != nil {
-			sendRepoNotification(taskUUID, "FAILED", jobInfo)
-		} else {
-			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
-		}
-	}()
+	// Create the log file up front so that the tailer has something to follow and
+	// so early failures still end up in an uploadable log instead of being lost.
+	if prepErr := systemutil.PrepareLogFile(logPath); prepErr != nil {
+		fmt.Printf("error: unable to prepare log file %s: %v\n", logPath, prepErr)
+		err = fmt.Errorf("unable to prepare log file %s: %w", logPath, prepErr)
+		return
+	}
+	stopLogStream := logstream.Mirror(logPublisher, taskUUID, "repo", logPath)
+	defer stopLogStream()
 
-	cmdStr := fmt.Sprintf(`mkdir -p %s/artifacts && \
-	cd %s/artifacts/ && \
-	wget %s/artifacts/%s.tar.gz && \
+	// The last point at which this job can still be dropped without reprepro
+	// having been touched.
+	if job.Requested() {
+		canceled = true
+		systemutil.WriteLog(logPath, "[ REPO CANCELED ] The job was cancelled before the repository was touched")
+		uploadLog(logPath, taskUUID)
+		err = errCanceled
+		return
+	}
+
+	artifactURL := fmt.Sprintf("%s/artifacts/%s.tar.gz", irgshConfig.Chief.Address, taskUUID)
+	artifactDir := fmt.Sprintf("%s/artifacts", irgshConfig.Repo.Workdir)
+	cmdStr := fmt.Sprintf(`mkdir -p %s && \
+	cd %s/ && \
+	wget --verbose --tries=3 --timeout=60 %s && \
 	tar -xvf %s.tar.gz`,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Repo.Workdir,
-		irgshConfig.Chief.Address,
-		taskUUID,
+		artifactDir,
+		artifactDir,
+		artifactURL,
 		taskUUID,
 	)
-	_, err = systemutil.CmdExec(cmdStr, "Downloading the artifact", logPath)
+	_, err = systemutil.CmdExec(
+		cmdStr,
+		fmt.Sprintf("Downloading the artifact\nSource: %s\nDestination: %s/%s.tar.gz\nExtracting into: %s/%s",
+			artifactURL, artifactDir, taskUUID, artifactDir, taskUUID),
+		logPath,
+	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to download artifact from "+artifactURL+": "+systemutil.FailureSummary(err))
+		systemutil.WriteLog(logPath, describeArtifactDir(artifactDir, taskUUID))
 		uploadLog(logPath, taskUUID)
 		return
 	}
+	systemutil.WriteLog(logPath, "##### Artifact downloaded and extracted successfully")
+	systemutil.WriteLog(logPath, describeArtifactDir(artifactDir, taskUUID))
 
 	gnupgDir := "GNUPGHOME=" + irgshConfig.Repo.GnupgDir
 	if irgshConfig.IsDev {
@@ -208,7 +322,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject deb files: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -241,7 +355,7 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject dsc file: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to inject dsc file: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
 	}
@@ -260,9 +374,17 @@ func Repo(payload string) (err error) {
 	)
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
-		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+err.Error())
+		systemutil.WriteLog(logPath, "[ REPO FAILED ] Failed to export repository: "+systemutil.FailureSummary(err))
 		uploadLog(logPath, taskUUID)
 		return
+	}
+
+	// A cancellation that arrived after the checkpoint at the top was ignored
+	// on purpose. Say so, rather than leaving a maintainer to wonder why the
+	// package they cancelled is in the repository.
+	if job.Requested() {
+		systemutil.WriteLog(logPath, "##### The cancellation arrived after the repository injection had started "+
+			"and was ignored: interrupting reprepro can corrupt the repository database")
 	}
 
 	systemutil.WriteLog(logPath, "[ REPO DONE ]")

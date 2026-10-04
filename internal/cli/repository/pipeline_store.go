@@ -31,6 +31,14 @@ func (s *FilePipelineStore) LoadISOID() (string, error) {
 	return systemutil.ReadFileTrimmed(filepath.Join(s.basePath, "LAST_ISO_PIPELINE_ID"))
 }
 
+func (s *FilePipelineStore) SaveImportID(id string) error {
+	return systemutil.WriteFile(filepath.Join(s.basePath, "LAST_IMPORT_PIPELINE_ID"), id)
+}
+
+func (s *FilePipelineStore) LoadImportID() (string, error) {
+	return systemutil.ReadFileTrimmed(filepath.Join(s.basePath, "LAST_IMPORT_PIPELINE_ID"))
+}
+
 func (s *FilePipelineStore) SaveRetryID(id string) error {
 	return systemutil.WriteFile(filepath.Join(s.basePath, "LAST_PIPELINE_ID"), id)
 }

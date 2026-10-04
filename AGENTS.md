@@ -1,255 +1,143 @@
-# CLAUDE.md - IRGSH-GO Project Guide
+# AI Contribution Contract
 
-This document provides essential context for AI assistants working on the IRGSH-GO codebase.
+This file is the canonical contract for AI-assisted work in IRGSH. `CLAUDE.md`
+imports it; do not duplicate these rules there. Read [DESIGN.md](DESIGN.md) for
+architecture, [CONTRIBUTING.md](CONTRIBUTING.md) for engineering guidance, and
+[HACKING.md](HACKING.md) before running development or initialization commands.
 
-## Project Overview
+## Descriptions and scope
 
-IRGSH-GO is a distributed Debian package building and repository management system written in Go. It automates the process of building, signing, and distributing Debian packages for the BlankOn Linux distribution.
+- Treat the active issue or pull request as the sole task scope. Read its complete
+  description, discussion, linked work, and affected review threads before editing.
+- Keep issue and pull request descriptions current. They are the single source
+  of truth for accepted scope, decisions, status, implementation summary, and
+  verification, not append-only journals.
+- Re-read a description immediately before updating it. Preserve concurrent
+  human edits and relevant attribution. Never rewrite or delete human discussion.
+- Update descriptions only. Never post issue comments, pull request conversation
+  comments, inline review comments, administrative replies, progress notes, test
+  receipts, completion reports, or merge receipts.
+- Read the full affected flow before editing: callers, inputs, validation, state
+  changes, persistence, outputs, errors, cancellation, and tests.
+- Do not implement unrelated findings or silently enlarge scope. Agree on a
+  revised active issue before materially expanding the change.
+- Use fully qualified references such as `BlankOn/irgsh-go#230`. Use existing
+  labels only. Do not reassign work, create labels, or rewrite shared history.
 
-## Architecture
+## Engineering
 
-The system follows a microservices architecture with Redis as the central message broker:
+- Prefer deletion, existing code, the standard library, native platform
+  features, and existing dependencies, in that order.
+- Do not add speculative abstractions, an ORM, a generic storage interface, a
+  queue, a frontend, deployment machinery, compatibility layers, or configuration
+  without a concrete requirement in the active issue.
+- Do not edit generated files directly.
+- Add no code comments by default. Preserve required legal text, shebangs,
+  build/embed/generate and linter directives, generated script content, runtime
+  logs, and test fixtures. Justify any exceptional explanatory comment in the
+  pull request description.
+- Validate trust boundaries. Preserve authoritative sources and revisions, Git
+  ancestry, exact identifiers, versions and checksums, atomicity at the affected
+  storage boundary, error handling, and bounded filtering, ordering, limits, and
+  pagination. Apply only the terms relevant to the affected IRGSH flow.
+- Keep repository prose concise and in normal English. Maintain one architecture
+  document at the two-to-four-page convention stated in `DESIGN.md`; do not create
+  an architecture document for each task.
+- Ship focused runnable tests with non-trivial behavior. Cover meaningful
+  outcomes and relevant negative or boundary cases. Do not weaken assertions,
+  remove useful regressions, add unconditional skips to make a check green, or
+  defer component coverage to an umbrella integration issue.
+- Report failed, skipped, unavailable, and unrun checks honestly. None counts as
+  a pass.
+- Never put credentials, tokens, private keys, decrypted secrets, or production
+  data in prompts, logs, commits, screenshots, fixtures, or evidence. Use
+  isolated state and test-only credentials. Record sanitized commands, results,
+  and the tested revision.
 
-```mermaid
-graph LR
-    CLI[irgsh-cli] -->|HTTP API| Chief[irgsh-chief]
-    Chief -->|Machinery| Redis[(Redis)]
-    Redis -->|build task| Builder[irgsh-builder]
-    Redis -->|repo task| Repo[irgsh-repo]
-    Redis -->|iso task| ISO[irgsh-iso]
-    Builder -->|upload artifacts/logs| Chief
-    Repo -->|upload logs| Chief
-```
+## Git and pull requests
 
-### Components
+- Start an issue branch from the default branch and name it `<issue>-<slug>`.
+- Keep each commit and pull request self-contained. Use a short imperative commit
+  subject. Do not impose an arbitrary line-count target at the cost of correctness.
+- A pull request description must contain `## Summary`, a standalone fully
+  qualified `Closes`, `Fixes`, or `Resolves` reference, and `## Test plan`.
+- Use a closing reference only when the pull request completes that issue. Use a
+  non-closing `Related:` reference for partial tracking work, and agree on its
+  properly scoped active issue before implementation. Repeat the closing keyword
+  for every issue genuinely completed.
+- Record actual results, the tested commit, and necessary exceptions in those
+  sections. Never present intended commands as completed evidence.
+- Put closing references in the pull request body, not only in commit messages.
+- Do not force-push the default branch. Do not use rebase merge. Do not merge a
+  whole stack or adopt automatic assignment behavior without authorization.
 
-| Component | Port | Purpose |
-|-----------|------|---------|
-| **irgsh-chief** | 8080 | Central coordinator, API server, job scheduler |
-| **irgsh-builder** | 8081 | Package build worker using pbuilder/Docker |
-| **irgsh-repo** | 8082 | Repository manager using reprepro |
-| **irgsh-iso** | 8083 | ISO image builder (minimal implementation) |
-| **irgsh-cli** | N/A | Client tool for package maintainers |
+This contract supersedes any external workflow that requires comments,
+administrative replies, automatic assignment, arbitrary pull request sizing, or
+whole-stack merging. Those behaviors are not part of this repository's process.
 
-## Directory Structure
+## Routine merge gates
 
-```mermaid
-graph LR
-    root["irgsh-go/"] --- cmd["cmd/"]
-    root --- internal["internal/"]
-    root --- pkg["pkg/"]
-    root --- utils["utils/"]
+A routine merge is authorized only when every applicable gate passes. An unknown
+required result blocks the merge. Explain why a check is inapplicable; never
+invent a pass.
 
-    cmd --- cmd_chief["chief/"]
-    cmd --- cmd_builder["builder/"]
-    cmd --- cmd_repo["repo/"]
-    cmd --- cmd_iso["iso/"]
-    cmd --- cmd_cli["cli/"]
+1. **Scope:** The affected flow is understood, the diff is limited to the active
+   issue, and every claimed acceptance criterion is satisfied.
+2. **Correctness and security:** Relevant validation, exact-value preservation,
+   ancestry or provenance, atomicity, error paths, query bounds, and credential
+   handling are verified. No speculative infrastructure or unjustified comment
+   exception is present.
+3. **Tests:** Changed non-trivial behavior has focused tests and runnable
+   evidence. Required integration checks pass. A skipped test is not evidence.
+4. **CI and review:** Required checks pass for the revision being merged,
+   repository review requirements are met, and no blocking feedback remains.
+   Read the latest review verdict against current HEAD. Fix P1 and P2 findings in
+   code, summarize review outcomes in the pull request description without
+   replies or fabricated approval, and re-request review after substantive
+   changes invalidate an earlier verdict.
+5. **Description:** The pull request has a current summary, complete closing
+   reference, actual test results, tested commit, and justified exceptions. The
+   issue description reflects the latest accepted scope and status.
+6. **Merge and verification:** Recheck HEAD, base, and merge conditions immediately
+   before merging. Use an expected-head guard when available, an approved merge
+   method, and no administrative bypass.
 
-    internal --- chief["chief/"]
-    internal --- cli["cli/"]
-    internal --- config["config/"]
-    internal --- monitoring["monitoring/"]
-    internal --- notification["notification/"]
-    internal --- artifact["artifact/"]
-    internal --- storage["storage/"]
+After merge, verify the landed revision and issue state. Update descriptions
+without comments. Remove only branches owned by the completed work and no longer
+needed.
 
-    chief --- chief_domain["domain/"]
-    chief --- chief_usecase["usecase/"]
-    chief --- chief_repo["repository/"]
+Merge authorization does not authorize deployment, publication, credential or
+permission changes, data resets, unrelated pull requests, or weaker gates. A
+policy-changing pull request needs maintainer approval under the policy already
+in force; an AI must not use its proposed rules to approve itself.
 
-    chief_usecase --- chief_templates["templates/"]
+## Current enforcement map
 
-    cli --- cli_domain["domain/"]
-    cli --- cli_usecase["usecase/"]
-    cli --- cli_repo["repository/"]
+Recheck mutable GitHub settings before each merge. At the 2026-09-23 audit:
 
-    pkg --- httputil["httputil/"]
-    pkg --- systemutil["systemutil/"]
+| Gate | Existing evidence or enforcement | Gap requiring explicit verification |
+| --- | --- | --- |
+| Scope | Pull request summary, closing reference, and human review | No automated scope check |
+| Correctness and security | Focused tests and review evidence | No general automated trust-boundary check |
+| Tests | Pull request workflow runs `go vet ./...` and `go test -race ./...`; `build-devel` builds after `test` | Required component or integration checks must be recorded separately |
+| CI and review | GitHub Actions reports checks and review state | `main guard` does not require checks, approvals, or resolved threads |
+| Description | Pull request template and manual review | GitHub does not enforce body completeness |
+| Merge and verification | `main guard` requires a pull request and blocks deletion and force-push | Current HEAD, allowed merge method, landed revision, and issue closure remain manual |
 
-    utils --- config_yaml["config.yaml"]
-    utils --- assets["assets/"]
-    utils --- scripts["scripts/"]
-    utils --- systemctl["systemctl/"]
-    utils --- reprepro["reprepro-template/"]
-    utils --- docker["docker/"]
-    utils --- containers["containers/"]
-    utils --- quadlets["quadlets/"]
-    utils --- init_dir["init/"]
-```
+Do not change rulesets or other repository settings unless that operation is
+separately authorized. Broad CI/CD modernization belongs to
+`BlankOn/irgsh-go#229`.
 
-| Path | Description |
-|------|-------------|
-| `cmd/chief/` | Central coordinator, API server, job scheduler (port 8080) |
-| `cmd/builder/` | Package build worker using pbuilder/Docker (port 8081) |
-| `cmd/repo/` | Repository manager using reprepro (port 8082) |
-| `cmd/iso/` | ISO image builder (port 8083) |
-| `cmd/cli/` | Client CLI tool for package maintainers |
-| `internal/chief/domain/` | Chief domain types: `Submission`, `ISOSubmission`, `Maintainer`, `SubmitPayloadResponse`, `BuildStatusResponse`, status derivation, ID validation |
-| `internal/chief/usecase/` | Chief business logic split into services (`ChiefUsecase`, `MaintainerService`, `StatusService`, `SubmissionService`, `UploadService`, `DashboardService`), port interfaces (`TaskQueue`, `GPGVerifier`, `FileStorage`, `JobStore`, `ISOJobStore`, `InstanceRegistry`), and embedded dashboard template |
-| `internal/chief/repository/` | Chief repository adapters: `GPG` (signature verification), `Storage` (on-disk file management), `Machinery` (task queue) |
-| `internal/cli/domain/` | CLI domain types: `Config`, `Submission`, `SubmitParams`, `ISOSubmission`, API response structs (`PackageStatus`, `ISOStatus`, `SubmitResponse`, etc.) |
-| `internal/cli/usecase/` | CLI business logic (`CLIUsecase`): config, package submit/status/log, ISO submit/status/log, retry, update; port interfaces (`ConfigStore`, `PipelineStore`, `ChiefAPI`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, etc.) |
-| `internal/cli/repository/` | CLI repository adapters: `HTTPChiefClient`, `ConfigStore`, `PipelineStore`, `RepoSync`, `ShellRunner`, `DebianPackager`, `GPGSigner`, `ReleaseFetcher`, `UpdateApplier`, `Prompter` |
-| `internal/config/` | Configuration loading and validation from YAML |
-| `internal/monitoring/` | Worker health tracking, heartbeats, job history, instance registry |
-| `internal/notification/` | Webhook POST notifications on job completion |
-| `internal/artifact/` | Artifact storage using repo/service/endpoint pattern |
-| `internal/storage/` | SQLite database for persistent job and ISO job data |
-| `pkg/httputil/` | JSON response helpers, `HTTPError`, `HTTPStatusError`, retry utilities |
-| `pkg/systemutil/` | Shell command execution and log streaming |
-| `utils/` | Config template, init scripts, systemd units, reprepro templates, Dockerfile, Containerfiles (`containers/`), Podman Quadlet units (`quadlets/`) |
+## Verification commands
 
-## Build Commands
+Use the smallest relevant set, then run the repository gates before completion:
 
 ```bash
-# Build all binaries
+go vet ./...
+go test -race ./...
 make build
-
-# Build and run in development mode
-make chief    # Runs with DEV=1
-make builder
-make repo
-
-# Run tests with coverage
-make test
-
-# Build Debian package
-make deb
-
-# Initialize components
-make builder-init
-make repo-init
 ```
 
-## Configuration
-
-Configuration file: `/etc/irgsh/config.yaml` (or `./utils/config.yaml` for development)
-
-Key sections:
-- `redis`: Connection string for Redis broker
-- `storage`: SQLite database path for persistent job data
-- `monitoring`: Worker heartbeat and cleanup settings
-- `notification`: Webhook URL for job notifications
-- `chief/builder/repo/iso`: Component-specific settings
-
-**Special: irgsh-repo requires explicit config path:**
-```bash
-irgsh-repo -c /path/to/config.yaml
-```
-
-## Key Patterns
-
-### Task Queue (Machinery)
-Jobs are distributed via Redis using the machinery library:
-- Tasks: `build`, `repo`
-- Queue: `irgsh`
-- Workers register handlers and process jobs asynchronously
-
-### Monitoring
-- Workers send heartbeats every 30 seconds
-- Instances marked offline after 90 seconds without heartbeat
-- Job history retained for 7 days
-- Redis keys: `irgsh:instances:*`, `irgsh:jobs:*`
-
-### Notifications
-When `notification.webhook_url` is configured, POST requests are sent on job completion:
-```json
-{"title": "IRGSH Build Job SUCCESS", "message": "Job ID: xxx\nStatus: SUCCESS\n..."}
-```
-
-### Pipeline Flow
-1. CLI validates and submits package (GPG signed)
-2. Chief queues build task to Redis
-3. Builder downloads, builds with pbuilder, uploads artifacts
-4. Chief queues repo task
-5. Repo downloads artifacts, injects into reprepro repository
-
-### Wire Format Coupling
-The CLI and chief define parallel `Submission`/`ISOSubmission` structs with matching
-`json:"..."` tags but no shared Go type. The CLI types are strict subsets of the chief
-types (chief adds server-assigned `TaskUUID` and `Timestamp` fields). Response types
-(`PackageStatus`, `SubmitResponse`, etc.) are also independently defined in each domain
-package.
-
-Builder and repo receive serialized submissions via the machinery task queue and unmarshal
-into `map[string]interface{}`, accessing fields by string key with no compile-time safety.
-
-Changes to the wire format must be coordinated manually across all four components:
-- `internal/cli/domain/submission.go` (CLI sends)
-- `internal/chief/domain/submission.go` (chief receives)
-- `cmd/builder/builder.go` (builder consumes via map)
-- `cmd/repo/repo.go` (repo consumes via map)
-
-## Testing
-
-```bash
-# Run all tests
-make test
-
-# Generate coverage report
-make coverage
-
-# Test files are co-located with source throughout the codebase:
-cmd/builder/builder_test.go          # integration (requires -tags integration)
-cmd/builder/init_test.go             # integration (requires -tags integration)
-cmd/repo/repo_test.go                # integration (requires -tags integration)
-internal/artifact/repo/file_impl_test.go
-internal/artifact/service/artifact_test.go
-internal/cli/repository/config_store_test.go
-internal/cli/repository/pipeline_store_test.go
-internal/cli/usecase/config_test.go
-internal/cli/usecase/iso_test.go
-internal/cli/usecase/mocks_test.go
-internal/cli/usecase/package_test.go
-internal/cli/usecase/retry_test.go
-internal/storage/iso_jobs_test.go
-internal/storage/jobs_test.go
-pkg/httputil/response_test.go
-```
-
-## Common Development Tasks
-
-### Adding a New Config Field
-1. Add struct field to appropriate config type in `internal/config/config.go`
-2. Add to `IrgshConfig` struct if new section
-3. Update `utils/config.yaml` with example
-4. Access via `irgshConfig.Section.Field`
-
-### Adding a New API Endpoint (Chief)
-1. Add method to the appropriate service in `internal/chief/usecase/`
-2. Add method to `ChiefService` interface in `cmd/chief/handler.go`
-3. Add handler function in `cmd/chief/handler.go`
-4. Register route in `serve()` function in `cmd/chief/main.go`
-5. Use `httputil.ResponseJSON()` for responses
-
-### Adding Worker Functionality
-1. Implement function in component's main package (e.g., `cmd/builder/builder.go`)
-2. Register with machinery if it's a distributed task
-3. Add notification call for job completion if needed
-
-## Dependencies
-
-Key libraries:
-- `github.com/RichardKnop/machinery/v1` - Distributed task queue
-- `github.com/go-redis/redis/v8` - Redis client
-- `github.com/urfave/cli` - CLI framework
-- `github.com/ghodss/yaml` - YAML parsing
-- `gopkg.in/go-playground/validator.v9` - Struct validation
-- `gopkg.in/src-d/go-git.v4` - Git operations
-
-## Version Management
-
-- Version stored in `/VERSION` file
-- Injected at build time via `LDFLAGS`
-- Debian changelog in `/debian/changelog`
-- Bump both files when releasing
-
-## Important Notes
-
-1. **DEV mode**: Set `DEV=1` to redirect workdirs from `/var/lib/` to `./tmp/`
-2. **Config validation**: All required fields must be present or startup fails
-3. **GPG keys**: Chief and Repo require GPG keys for signing
-4. **Redis required**: All components depend on Redis being available
-5. **irgsh-repo isolation**: Each instance needs its own config for multi-arch support
-6. **SQLite storage**: Chief uses SQLite at `/var/lib/irgsh/chief/irgsh.db` (or `./tmp/irgsh/chief/irgsh.db` in DEV mode) for persistent job data
+Run destructive, privileged, integration, or production checks only in the
+isolated environment documented in [HACKING.md](HACKING.md). Never treat an
+unavailable environment as a passing result.

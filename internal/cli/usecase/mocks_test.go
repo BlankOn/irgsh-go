@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
+	"github.com/blankon/irgsh-go/internal/cli/usecase"
 )
 
 // mockConfigStore implements usecase.ConfigStore for testing.
@@ -27,6 +28,7 @@ func (m *mockConfigStore) Save(cfg domain.Config) error {
 type mockPipelineStore struct {
 	packageID string
 	isoID     string
+	importID  string
 	retryID   string
 	saveErr   error
 	loadErr   error
@@ -50,6 +52,15 @@ func (m *mockPipelineStore) LoadISOID() (string, error) {
 	return m.isoID, m.loadErr
 }
 
+func (m *mockPipelineStore) SaveImportID(id string) error {
+	m.importID = id
+	return m.saveErr
+}
+
+func (m *mockPipelineStore) LoadImportID() (string, error) {
+	return m.importID, m.loadErr
+}
+
 func (m *mockPipelineStore) SaveRetryID(id string) error {
 	m.retryID = id
 	return m.saveErr
@@ -61,22 +72,32 @@ func (m *mockPipelineStore) LoadRetryID() (string, error) {
 
 // mockChiefAPI implements usecase.ChiefAPI for testing.
 type mockChiefAPI struct {
-	version      domain.VersionResponse
-	versionErr   error
-	uploadResp   domain.UploadResponse
-	uploadErr    error
-	submitResp   domain.SubmitResponse
-	submitErr    error
-	isoResp      domain.SubmitResponse
-	isoErr       error
-	pkgStatus    domain.PackageStatus
-	pkgStatusErr error
-	isoStatus    domain.ISOStatus
-	isoStatusErr error
-	retryResp    domain.RetryResponse
-	retryErr     error
-	fetchLogResp string
-	fetchLogErr  error
+	version         domain.VersionResponse
+	versionErr      error
+	uploadResp      domain.UploadResponse
+	uploadErr       error
+	submitResp      domain.SubmitResponse
+	submitErr       error
+	isoResp         domain.SubmitResponse
+	isoErr          error
+	isoSubmitted    domain.ISOSubmission
+	pkgStatus       domain.PackageStatus
+	pkgStatusErr    error
+	isoStatus       domain.ISOStatus
+	isoStatusErr    error
+	importResp      domain.SubmitResponse
+	importErr       error
+	importStatus    domain.ImportStatus
+	importStatusErr error
+	repoInfo        domain.RepoInfo
+	repoInfoErr     error
+	importSubmitted domain.ImportSubmission
+	retryResp       domain.RetryResponse
+	cancelResp      domain.CancelResponse
+	cancelErr       error
+	retryErr        error
+	fetchLogResp    string
+	fetchLogErr     error
 }
 
 func (m *mockChiefAPI) GetVersion(_ context.Context) (domain.VersionResponse, error) {
@@ -87,11 +108,25 @@ func (m *mockChiefAPI) UploadSubmission(_ context.Context, _, _ string, _ func(i
 	return m.uploadResp, m.uploadErr
 }
 
+func (m *mockChiefAPI) SubmitImport(_ context.Context, submission domain.ImportSubmission) (domain.SubmitResponse, error) {
+	m.importSubmitted = submission
+	return m.importResp, m.importErr
+}
+
+func (m *mockChiefAPI) GetImportStatus(_ context.Context, _ string) (domain.ImportStatus, error) {
+	return m.importStatus, m.importStatusErr
+}
+
+func (m *mockChiefAPI) GetRepoInfo(_ context.Context, _ string) (domain.RepoInfo, error) {
+	return m.repoInfo, m.repoInfoErr
+}
+
 func (m *mockChiefAPI) SubmitPackage(_ context.Context, _ domain.Submission) (domain.SubmitResponse, error) {
 	return m.submitResp, m.submitErr
 }
 
-func (m *mockChiefAPI) SubmitISO(_ context.Context, _ domain.ISOSubmission) (domain.SubmitResponse, error) {
+func (m *mockChiefAPI) SubmitISO(_ context.Context, submission domain.ISOSubmission) (domain.SubmitResponse, error) {
+	m.isoSubmitted = submission
 	return m.isoResp, m.isoErr
 }
 
@@ -105,6 +140,10 @@ func (m *mockChiefAPI) GetISOStatus(_ context.Context, _ string) (domain.ISOStat
 
 func (m *mockChiefAPI) Retry(_ context.Context, _ string) (domain.RetryResponse, error) {
 	return m.retryResp, m.retryErr
+}
+
+func (m *mockChiefAPI) Cancel(_ context.Context, _ string) (domain.CancelResponse, error) {
+	return m.cancelResp, m.cancelErr
 }
 
 func (m *mockChiefAPI) FetchLog(_ context.Context, _ string) (string, error) {
@@ -139,13 +178,16 @@ func (m *mockRepoSync) Sync(_, _, _ string) error {
 }
 
 // mockDebianPackager implements usecase.DebianPackager for testing.
+var _ usecase.DebianPackager = (*mockDebianPackager)(nil)
+
 type mockDebianPackager struct {
-	packageName     string
-	version         string
-	extendedVersion string
-	maintainer      string
-	uploaders       string
-	err             error
+	packageName      string
+	missingBuildDeps string
+	version          string
+	extendedVersion  string
+	maintainer       string
+	uploaders        string
+	err              error
 }
 
 func (m *mockDebianPackager) ExtractPackageName(_ string) (string, error) {
@@ -176,7 +218,11 @@ func (m *mockDebianPackager) Sign(_, _ string) error {
 	return m.err
 }
 
-func (m *mockDebianPackager) GenBuildInfo(_ string) error {
+func (m *mockDebianPackager) CheckBuildDeps(_ string) (string, error) {
+	return m.missingBuildDeps, m.err
+}
+
+func (m *mockDebianPackager) BuildBinary(_ string) error {
 	return m.err
 }
 

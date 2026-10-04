@@ -13,7 +13,9 @@ import (
 	machineryConfig "github.com/RichardKnop/machinery/v1/config"
 	"github.com/urfave/cli"
 
+	"github.com/blankon/irgsh-go/internal/cancel"
 	"github.com/blankon/irgsh-go/internal/config"
+	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
 )
 
@@ -26,20 +28,21 @@ var (
 	irgshConfig = config.IrgshConfig{}
 
 	activeTasks atomic.Int32
+
+	// logPublisher mirrors job logs to chief while a job is running. It stays
+	// nil when Redis is unreachable: live streaming is an addition to the log
+	// file, never a reason to fail a build.
+	logPublisher *logstream.Publisher
+
+	// cancelWatcher listens for the cancellation of a job this builder is
+	// running or is about to start. A nil watcher hands out jobs that are
+	// simply never cancelled, so an unreachable Redis costs cancellation
+	// rather than the worker.
+	cancelWatcher *cancel.Watcher
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	var err error
-	irgshConfig, err = config.LoadConfig()
-	if err != nil {
-		log.Fatalln("couldn't load config : ", err)
-	}
-	// Prepare workdir
-	err = os.MkdirAll(irgshConfig.Builder.Workdir, 0755)
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	app = cli.NewApp()
 	app.Name = "irgsh-go"
@@ -47,6 +50,54 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = version
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:        "config, c",
+			Usage:       "Path to config file. Defaults to the usual search path, starting with /etc/irgsh/config.yaml",
+			Destination: &configPath,
+		},
+	}
+
+	app.Before = func(c *cli.Context) error {
+		var err error
+		// Without -c we keep the historical search path
+		// (/etc/irgsh/config.yaml first); with it, that one file is the
+		// config, so several builders can run side by side on one machine.
+		if configPath == "" {
+			irgshConfig, err = config.LoadConfig(config.ComponentBuilder)
+		} else {
+			irgshConfig, err = config.LoadConfigFromPath(configPath, config.ComponentBuilder)
+		}
+		if err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't load config: %v", err), 1)
+		}
+
+		// Config validation is scoped to this component's own section, so the
+		// chief address is not covered by it - but logs and artifacts go there.
+		if irgshConfig.Chief.Address == "" {
+			return cli.NewExitError("Error: chief.address is required so the worker can upload logs and artifacts to chief", 1)
+		}
+
+		// Prepare workdir
+		if err = os.MkdirAll(irgshConfig.Builder.Workdir, 0755); err != nil {
+			return cli.NewExitError(fmt.Sprintf("Error: couldn't create workdir: %v", err), 1)
+		}
+
+		logPublisher, err = logstream.NewPublisher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("live log streaming disabled: %v\n", err)
+			logPublisher = nil
+		}
+
+		cancelWatcher, err = cancel.NewWatcher(irgshConfig.Redis)
+		if err != nil {
+			log.Printf("job cancellation disabled: %v\n", err)
+			cancelWatcher = nil
+		}
+
+		return nil
+	}
 
 	app.Commands = []cli.Command{
 		{
@@ -79,6 +130,7 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
+		var err error
 
 		go serve()
 
@@ -91,7 +143,7 @@ func main() {
 			&machineryConfig.Config{
 				Broker:        irgshConfig.Redis,
 				ResultBackend: irgshConfig.Redis,
-				DefaultQueue:  "irgsh",
+				DefaultQueue:  config.DistQueue(irgshConfig.Builder.DistCodename),
 			},
 		)
 		if err != nil {
@@ -128,6 +180,7 @@ func startMonitoringHeartbeat() {
 		context.Background(),
 		irgshConfig.Redis, ttl,
 		monitoring.InstanceTypeBuilder, irgshConfig.Builder.Workdir,
+		irgshConfig.Builder.DistCodename, monitoring.RepoHeartbeatInfo{},
 		interval, func() int { return int(activeTasks.Load()) },
 	)
 }

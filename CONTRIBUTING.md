@@ -1,107 +1,81 @@
 # Contributing to IRGSH-GO
 
-Thank you for your interest in contributing to IRGSH-GO. This document provides guidelines and explains key design decisions to help you understand the project's philosophy.
+IRGSH uses standard Debian and Unix tools because their output is useful to
+package maintainers, operators, and contributors. Keep that observability without
+treating shell text as a safe execution interface.
 
-## Design Philosophy: Shell Execution Over Native Implementation
+Read [AGENTS.md](AGENTS.md) for contribution scope and merge gates,
+[DESIGN.md](DESIGN.md) for architecture, and [HACKING.md](HACKING.md) before
+running local services or initialization commands.
 
-One of the most notable design choices in IRGSH-GO is the extensive use of shell command execution (`exec.Command`) rather than implementing functionality natively in Go. This is an intentional architectural decision aligned with BlankOn's core mission.
+## Command execution
 
-### Why Shell Execution?
-
-**Educational Transparency**
-
-BlankOn Linux's primary mission is to leverage and develop people's technical capabilities. IRGSH-GO serves not only as a build system but also as an educational platform. By executing standard Unix/Linux commands explicitly, we create comprehensive logs that serve as learning materials for:
-
-- New contributors learning the Debian packaging process
-- System administrators understanding the build pipeline
-- Developers troubleshooting build failures
-- Anyone curious about what happens behind the scenes
-
-**Readable and Reproducible Logs**
-
-Every shell command executed by IRGSH workers is logged with an accompanying explanation prefixed with `###`. For example:
-
-```
-### Fetching the submission tarball from chief
-curl -v -o /var/lib/irgsh/builder/artifacts/job-id/debuild.tar.gz https://chief/submissions/job-id.tar.gz
-
-### Building the package
-docker run -v /var/lib/irgsh/builder/artifacts/job-id:/tmp/build --privileged=true pbocker bash -c /build.sh
-
-### Injecting the deb files from artifact to the repository
-reprepro -v -v -v --nothingiserror --component main includedeb peyem /var/lib/irgsh/repo/artifacts/job-id/*.deb
-```
-
-This approach allows users to:
-
-1. **Learn by observation**: Understand each step of the packaging process
-2. **Reproduce manually**: Copy and run commands locally for debugging
-3. **Diagnose failures**: Identify exactly which command failed and why
-4. **Build expertise**: Gain practical knowledge of tools like `reprepro`, `pbuilder`, `dpkg`, and `gpg`
-
-**Standard Tooling**
-
-The commands used (`curl`, `tar`, `gpg`, `reprepro`, `docker`) are industry-standard tools that packagers will encounter throughout their careers. Exposing these commands directly helps contributors develop transferable skills.
-
-### When Native Go Implementation is Preferred
-
-There are specific cases where native Go implementation is more appropriate:
-
-**Progress Indicators for Long-Running Operations**
-
-For operations where user feedback is critical, such as uploading large tarballs in `irgsh-cli`, we implement functionality natively in Go. This allows us to provide real-time progress indicators that keep packagers informed about upload state, which would not be possible with a simple `curl` shell execution.
-
-**Performance-Critical Operations**
-
-When processing large files in memory-constrained environments (e.g., streaming file uploads to prevent OOM), native Go implementations with proper streaming support are preferred.
-
-**Complex Error Handling**
-
-Operations requiring sophisticated error handling, retries, or state management may benefit from native implementation.
-
-## Code Style Guidelines
-
-### Shell Commands
-
-When adding new shell command executions:
-
-1. Always provide a descriptive explanation for logging
-2. Use `systemutil.CmdExec()` which handles logging automatically
-3. Keep commands readable and avoid overly complex one-liners
-4. Quote paths properly to handle spaces
+Prefer direct process arguments for dynamic values:
 
 ```go
-cmdStr := fmt.Sprintf("reprepro -v include %s %s/*.changes",
-    distCodename,
-    artifactPath,
-)
-_, err = systemutil.CmdExec(
-    cmdStr,
-    "Injecting the changes file from artifact to the repository",
-    logPath,
+cmd := exec.CommandContext(
+	ctx,
+	"reprepro",
+	"-V",
+	"--component", component,
+	"includedeb", suite, debPath,
 )
 ```
 
-### Error Handling
+Validate enumerated values such as suites, components, branches, architectures,
+and job identifiers before any filesystem or process operation. Use option
+separators where the command supports them. A value from an HTTP request, task
+payload, repository, archive, configuration file, or environment remains
+untrusted until the affected boundary validates it.
 
-- Always check and handle errors appropriately
-- Log errors with sufficient context for debugging
-- Send notifications on job completion (success or failure)
+Use a shell only when its syntax is required for a pipeline, redirection, glob,
+or compound operation. Quote every dynamic value with the established helper,
+and never concatenate unvalidated input into shell text.
 
-### Configuration
+`systemutil.CmdExec` and `systemutil.CmdExecContext` execute a complete string
+through Bash and log that string when a log path is supplied. Use them only when
+shell semantics are necessary and all dynamic values are validated and quoted.
+They are not mandatory for every external command.
 
-- Add new configuration fields to `internal/config/config.go`
-- Update `utils/config.yaml` with examples and comments
-- Document required vs optional fields
+Keep useful command-level logs:
 
-## Getting Started
+- Describe the operation in IRGSH terms.
+- Record the executable and safe arguments needed to reproduce it.
+- Preserve exit status and relevant standard output and error output.
+- Never log credentials, authorization headers, signing material, bot tokens, or
+  secret-bearing URLs. Pass secrets through a protected file, standard input, or
+  environment as supported by the tool, while logging a redacted invocation.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the guidelines above
-4. Run tests with `make test`
-5. Submit a pull request
+Prefer native Go when it gives a smaller or safer implementation, including
+streaming large data, atomic file replacement, structured parsing, bounded
+queries, or error handling that shell composition would obscure.
 
-## Questions?
+## Error handling and state
 
-If you have questions about contributing, please open an issue or reach out to the BlankOn developer community at blankon-dev@googlegroups.com.
+- Return errors with the failed operation and enough sanitized context to act on
+  them.
+- Preserve the original error for inspection when practical.
+- Do not report success after a required command, upload, publication, or state
+  transition fails.
+- Do not publish partial or stale artifacts.
+- Keep cancellation and cleanup within the job's owned workspace. Never interrupt
+  an active reprepro transaction as generic cleanup.
+- Send completion notifications only after the authoritative result is known.
+
+## Tests
+
+- Add the smallest focused test that proves changed non-trivial behavior.
+- Test meaningful outcomes, relevant invalid input, boundaries, and failure paths.
+- Use temporary directories, isolated services, and test-only keys.
+- Do not add unconditional skips or weaken assertions.
+- Keep privileged and destructive integration checks opt-in and document their
+  environment and exact result.
+- Run `go vet ./...`, `go test -race ./...`, and `make build` before requesting a
+  routine merge. Record the tested commit and actual results in the pull request.
+
+## Pull requests
+
+Use `.github/pull_request_template.md`. Keep `## Summary` current, include a
+standalone fully qualified closing reference only for work the pull request
+finishes, and put actual verification under `## Test plan`. Follow every gate in
+[AGENTS.md](AGENTS.md); a mergeable pull request is not necessarily ready.
