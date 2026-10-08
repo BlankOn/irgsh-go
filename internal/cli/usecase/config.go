@@ -2,10 +2,19 @@ package usecase
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 
 	"github.com/blankon/irgsh-go/internal/cli/domain"
 )
+
+func (u *CLIUsecase) LoadConfig() (domain.Config, error) {
+	cfg, err := u.config.Load()
+	if err != nil {
+		return domain.Config{}, fmt.Errorf("%w: %w", ErrConfigMissing, err)
+	}
+	return cfg, nil
+}
 
 func (u *CLIUsecase) SaveConfig(cfg domain.Config) error {
 	if cfg.ChiefAddress == "" {

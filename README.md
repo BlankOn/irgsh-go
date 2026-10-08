@@ -75,8 +75,25 @@ irgsh-init
 This CLI tool intended to be used on maintainer's local system. It need to be configured first to define the `irgsh-chief` instance address and your GPG key as package mantainer,
 
 ```
-irgsh-cli config --chief http://irgsh.blankonlinux.or.id:8080 --key B113D905C417D9C31DAD9F0E509A356412B6E77F
+irgsh-cli config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
 ```
+
+The CLI uses the `dev` target by default. Select a target before the command:
+
+```
+irgsh-cli --target dev config --chief http://localhost:8080 --key YOUR_GPG_KEY_ID
+irgsh-cli --target prod config --chief https://chief.example.org --key YOUR_GPG_KEY_ID
+```
+
+Configuration and last pipeline IDs are stored separately under
+`~/.irgsh/targets/dev/` and `~/.irgsh/targets/prod/`. The CLI shows the selected
+target and chief URL before a target operation. Until
+[server authorization](https://github.com/BlankOn/irgsh-go/issues/12) is
+available, `prod` accepts only local `config`; submissions, status, logs, retry,
+cancel, and update are blocked. Existing files directly under `~/.irgsh/` are
+not used or copied because their target is unknown. Classify them manually and
+reconfigure each target with `config`; keep old pipeline IDs only after checking
+which chief issued them.
 
 #### Registering a maintainer
 
