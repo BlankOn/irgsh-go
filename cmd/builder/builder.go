@@ -339,7 +339,7 @@ func StorePackage(ctx context.Context, payload string) (next string, err error) 
 	// changed as we read it" and masks the real build result. Chief receives
 	// the log through the separate log-upload endpoint anyway.
 	cmdStr += "tar --exclude=build.log -zcvf " + raw["taskUUID"].(string) + ".tar.gz " + raw["taskUUID"].(string)
-	cmdStr += " && curl -v -F 'uploadFile=@" + irgshConfig.Builder.Workdir
+	cmdStr += " && curl -v --fail-with-body -F 'uploadFile=@" + irgshConfig.Builder.Workdir
 	cmdStr += "/artifacts/" + raw["taskUUID"].(string) + ".tar.gz' "
 	cmdStr += irgshConfig.Chief.Address + "/api/v1/artifact-upload?id="
 	cmdStr += raw["taskUUID"].(string)
