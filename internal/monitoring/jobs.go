@@ -159,6 +159,14 @@ func (r *Registry) UpdateImportJobState(taskUUID string, state string) error {
 	return r.importJobStore.UpdateImportJobState(taskUUID, state)
 }
 
+// GetImportJob retrieves an import job by UUID from SQLite
+func (r *Registry) GetImportJob(taskUUID string) (*ImportJobInfo, error) {
+	if r.importJobStore == nil {
+		return nil, fmt.Errorf("import job store not initialized")
+	}
+	return r.importJobStore.GetImportJob(taskUUID)
+}
+
 // GetISOJob retrieves an ISO job by UUID from SQLite
 func (r *Registry) GetISOJob(taskUUID string) (*ISOJobInfo, error) {
 	if r.isoJobStore == nil {

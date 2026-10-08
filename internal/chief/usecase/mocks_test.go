@@ -210,7 +210,16 @@ func (m *mockJobStore) UpdateJobStages(taskUUID, buildState, repoState, currentS
 type mockISOJobStore struct {
 	recordISOJobFn     func(job monitoring.ISOJobInfo) error
 	getRecentISOJobsFn func(limit int) ([]*monitoring.ISOJobInfo, error)
+	stored             map[string]string
 	updatedStates      map[string]string
+}
+
+func (m *mockISOJobStore) GetISOJob(taskUUID string) (*monitoring.ISOJobInfo, error) {
+	state, ok := m.stored[taskUUID]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return &monitoring.ISOJobInfo{TaskUUID: taskUUID, State: state}, nil
 }
 
 func (m *mockISOJobStore) RecordISOJob(job monitoring.ISOJobInfo) error {

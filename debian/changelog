@@ -1,3 +1,17 @@
+irgsh (2.3.2-1) unstable; urgency=medium
+
+  * irgsh-cli cancel now clears a job the dashboard shows as running forever.
+    Machinery expires task states, so a job whose worker died, or that sat in
+    the queue past the expiry, was unknown to the queue and chief answered
+    "no such job" while the job store still had it in flight. Chief now
+    consults the job store: a job still in flight there is marked cancelled
+    and recorded as CANCELED, for package, ISO and import jobs alike
+  * Cancelling a job whose cancellation mark is already set records CANCELED
+    and succeeds instead of answering "already being cancelled", so a mark
+    set without going through chief no longer leaves the stored state behind
+
+ -- BlankOn Developers <blankon-dev@googlegroups.com>  Thu, 08 Oct 2026 12:00:00 +0700
+
 irgsh (2.3.1-1) unstable; urgency=medium
 
   * An import now replaces the version our repository carries, older or

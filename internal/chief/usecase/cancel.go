@@ -58,26 +58,25 @@ func (cs *CancelService) CancelJob(taskUUID string) (domain.CancelResponse, erro
 
 	switch domain.JobKindOf(taskUUID) {
 	case domain.KindISO:
-		return cs.cancelSingleTask(taskUUID, "iso", cs.updateISOState)
+		return cs.cancelSingleTask(taskUUID, "iso", cs.storedISOState, cs.updateISOState)
 	case domain.KindImport:
-		return cs.cancelSingleTask(taskUUID, "import", cs.updateImportState)
+		return cs.cancelSingleTask(taskUUID, "import", cs.storedImportState, cs.updateImportState)
 	default:
 		return cs.cancelPackage(taskUUID)
 	}
 }
 
-func (cs *CancelService) cancelSingleTask(taskUUID, taskName string, persist func(string)) (domain.CancelResponse, error) {
+func (cs *CancelService) cancelSingleTask(taskUUID, taskName string, stored func(string) string, persist func(string)) (domain.CancelResponse, error) {
 	state := cs.taskQueue.GetTaskState(taskName, taskUUID)
 	if state == "" {
-		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusNotFound, "no such job: "+taskUUID)
+		return cs.cancelUntracked(taskUUID, stored, persist)
 	}
 	if domain.IsFinishedState(state) {
 		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusConflict,
 			"job "+taskUUID+" has already finished ("+state+")")
 	}
 	if cs.IsCanceled(taskUUID) {
-		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusConflict,
-			"job "+taskUUID+" is already being cancelled")
+		return cs.alreadyCanceled(taskUUID, persist), nil
 	}
 
 	return cs.request(taskUUID, state, persist)
@@ -87,7 +86,7 @@ func (cs *CancelService) cancelPackage(taskUUID string) (domain.CancelResponse, 
 	buildState := cs.taskQueue.GetTaskState("build", taskUUID)
 	repoState := cs.taskQueue.GetTaskState("repo", taskUUID)
 	if buildState == "" && repoState == "" {
-		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusNotFound, "no such job: "+taskUUID)
+		return cs.cancelUntracked(taskUUID, cs.storedPackageState, cs.updatePackageState)
 	}
 
 	pipelineState := domain.DeriveBuildPipelineState(buildState, repoState)
@@ -105,11 +104,48 @@ func (cs *CancelService) cancelPackage(taskUUID string) (domain.CancelResponse, 
 				"interrupting reprepro can corrupt the repository database")
 	}
 	if cs.IsCanceled(taskUUID) {
-		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusConflict,
-			"job "+taskUUID+" is already being cancelled")
+		return cs.alreadyCanceled(taskUUID, cs.updatePackageState), nil
 	}
 
 	return cs.request(taskUUID, pipelineState, cs.updatePackageState)
+}
+
+// cancelUntracked handles a job the task queue has no state for. Machinery
+// expires task states, so that is not the same as the job never having
+// existed: a job whose worker died, or that sat in the queue longer than the
+// expiry, is still recorded as running in the job store and the dashboard
+// shows it that way forever. The store decides - a row that is still in
+// flight is cancelled like any other job, mark included, in case the task is
+// in fact still queued.
+func (cs *CancelService) cancelUntracked(taskUUID string, stored func(string) string, persist func(string)) (domain.CancelResponse, error) {
+	state := stored(taskUUID)
+	if state == "" {
+		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusNotFound, "no such job: "+taskUUID)
+	}
+	if domain.IsFinishedState(state) {
+		return domain.CancelResponse{}, httputil.NewHTTPError(http.StatusConflict,
+			"job "+taskUUID+" has already finished ("+state+")")
+	}
+
+	resp, err := cs.request(taskUUID, state, persist)
+	if err != nil {
+		return resp, err
+	}
+	resp.Message = "the task queue no longer tracks this job, it has been marked cancelled"
+	return resp, nil
+}
+
+// alreadyCanceled answers a repeated cancellation. The mark is there, but the
+// stored state may not have followed - the mark can be set without going
+// through chief - so it is written again rather than refusing the request.
+// A job that has reached a terminal state in the store keeps it.
+func (cs *CancelService) alreadyCanceled(taskUUID string, persist func(string)) domain.CancelResponse {
+	persist(taskUUID)
+	return domain.CancelResponse{
+		PipelineID: taskUUID,
+		State:      domain.StateCanceled,
+		Message:    "job was already cancelled",
+	}
 }
 
 // request marks the job cancelled and records the new state, so the dashboard
@@ -158,4 +194,37 @@ func (cs *CancelService) updateImportState(taskUUID string) {
 	if err := cs.importStore.UpdateImportJobState(taskUUID, domain.StateCanceled); err != nil {
 		log.Printf("Failed to mark import job %s cancelled: %v\n", taskUUID, err)
 	}
+}
+
+func (cs *CancelService) storedPackageState(taskUUID string) string {
+	if cs.jobStore == nil {
+		return ""
+	}
+	job, err := cs.jobStore.GetJob(taskUUID)
+	if err != nil || job == nil {
+		return ""
+	}
+	return job.State
+}
+
+func (cs *CancelService) storedISOState(taskUUID string) string {
+	if cs.isoStore == nil {
+		return ""
+	}
+	job, err := cs.isoStore.GetISOJob(taskUUID)
+	if err != nil || job == nil {
+		return ""
+	}
+	return job.State
+}
+
+func (cs *CancelService) storedImportState(taskUUID string) string {
+	if cs.importStore == nil {
+		return ""
+	}
+	job, err := cs.importStore.GetImportJob(taskUUID)
+	if err != nil || job == nil {
+		return ""
+	}
+	return job.State
 }

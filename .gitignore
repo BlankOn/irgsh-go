@@ -23,3 +23,7 @@ utils/reprepro-template/conf/options.orig
 utils/reprepro-template/conf/updates.orig
 notes
 .planning/
+debian/.debhelper/generated/irgsh-cli/
+debian/irgsh-cli/
+debian/irgsh-cli.debhelper.log
+debian/irgsh-cli.substvars
