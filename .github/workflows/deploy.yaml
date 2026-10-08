@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment to deploy
+        type: environment
+        required: true
+      component:
+        description: Service component
+        type: choice
+        options:
+          - chief
+          - builder
+          - repo
+          - iso
+        required: true
+      version:
+        description: Stable release tag
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}-${{ inputs.component }}
+      cancel-in-progress: false
+    env:
+      COMPONENT: ${{ inputs.component }}
+      VERSION: ${{ inputs.version }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+    steps:
+      - name: Request verified deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMPONENT" =~ ^(chief|builder|repo|iso)$ ]]
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ -n "$DEPLOY_HOST" && ${#DEPLOY_HOST} -le 253 ]]
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]]
+          [[ -n "$DEPLOY_USER" && ${#DEPLOY_USER} -le 32 ]]
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ -n "$DEPLOY_SSH_KEY" ]]
+          [[ -n "$DEPLOY_KNOWN_HOSTS" ]]
+          workspace=$(mktemp -d "$RUNNER_TEMP/irgsh-deploy.XXXXXX")
+          trap 'rm -rf -- "$workspace"' EXIT
+          key="$workspace/key"
+          known_hosts="$workspace/known_hosts"
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$known_hosts"
+          chmod 0600 "$key" "$known_hosts"
+          ssh -F /dev/null \
+            -i "$key" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectionAttempts=1 \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            -l "$DEPLOY_USER" \
+            -- "$DEPLOY_HOST" "deploy $COMPONENT $VERSION"

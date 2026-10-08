@@ -234,3 +234,70 @@ diff -u /tmp/irgsh-state.before /tmp/irgsh-state.after
 
 Normal live jobs can update `/var/lib/irgsh`, so collect this evidence only in
 the controlled idle window used for the deployment drill.
+
+## GitHub Environments
+
+Create `staging` and `production` Environments in the repository. Store these
+secrets in each Environment, never as repository-level secrets:
+
+| Secret | Value |
+| --- | --- |
+| `DEPLOY_HOST` | One trusted DNS name or IP address |
+| `DEPLOY_USER` | `irgsh-deploy` |
+| `DEPLOY_SSH_KEY` | The Environment's private key |
+| `DEPLOY_KNOWN_HOSTS` | Host-key lines obtained and verified out of band |
+
+Use different SSH key pairs for staging and production and install each public
+key only on its corresponding host. Pin the complete host-key material in
+`DEPLOY_KNOWN_HOSTS`; do not discover it with `ssh-keyscan` during a workflow.
+
+Protect the production Environment with required reviewers, prevent a person
+who started the run from approving it, and restrict deployment refs to the
+protected `main` branch and stable `v*` release tags. Apply the same ref
+restriction to staging; staging reviewers may be less restrictive. Keep all
+four deployment secrets at Environment scope so pull request workflows cannot
+read them.
+
+The workflow has no repository permissions, checkout, or general remote shell.
+It sends only the validated component and stable version to the host's forced
+command. Start a deployment from the Actions UI or with:
+
+```sh
+gh workflow run deploy.yaml --ref main -f environment=staging -f component=repo -f version=v2.3.2
+```
+
+Use the same workflow for production after staging evidence is approved:
+
+```sh
+gh workflow run deploy.yaml --ref main -f environment=production -f component=repo -f version=v2.3.2
+```
+
+## Staging deployment record
+
+Copy this template into the change record for every candidate release. Link
+logs instead of pasting private keys, tokens, hostnames, or other secrets.
+
+```text
+Release version:
+Source commit:
+Workflow run URL and ID:
+Component:
+Old endpoint versions:
+New endpoint versions:
+/etc/irgsh checksum before:
+/etc/irgsh checksum after:
+/var/lib/irgsh checksum before:
+/var/lib/irgsh checksum after:
+Corrupt artifact rejection:
+Concurrent request rejection:
+Drain-timeout result:
+Health-failure injection:
+Automatic rollback result:
+Explicit previous-version deployment result:
+Approver:
+Approval time:
+```
+
+Do not approve production until the record shows a successful upgrade, all
+requested failure cases, healthy automatic rollback, a successful explicit
+deployment of the previous version, and unchanged configuration and state.
