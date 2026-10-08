@@ -12,6 +12,7 @@ Environment="GNUPGHOME=/var/lib/irgsh/gnupg"
 ExecStart=/usr/bin/irgsh-chief
 Restart=on-failure
 RestartSec=10s
+TimeoutStopSec=45s
 StandardOutput=append:/var/log/irgsh/chief.log
 StandardError=append:/var/log/irgsh/chief.log
 

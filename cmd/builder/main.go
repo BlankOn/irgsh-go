@@ -17,6 +17,7 @@ import (
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 var (
@@ -50,6 +51,7 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = version
+	monitoring.Version = version
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -191,6 +193,7 @@ func serve() {
 		port = "8081"
 	}
 	fs := http.FileServer(http.Dir(irgshConfig.Builder.Workdir))
+	http.Handle("/api/v1/version", httputil.VersionHandler(app.Version))
 	http.Handle("/", fs)
 	log.Println("irgsh-go builder now live on port " + port + ", serving path : " + irgshConfig.Builder.Workdir)
 	log.Fatal(http.ListenAndServe(":"+port, nil))

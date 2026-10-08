@@ -17,6 +17,7 @@ import (
 	"github.com/blankon/irgsh-go/internal/config"
 	"github.com/blankon/irgsh-go/internal/logstream"
 	"github.com/blankon/irgsh-go/internal/monitoring"
+	"github.com/blankon/irgsh-go/pkg/httputil"
 )
 
 var (
@@ -49,6 +50,7 @@ func main() {
 	app.Author = "BlankOn Developer"
 	app.Email = "blankon-dev@googlegroups.com"
 	app.Version = version
+	monitoring.Version = version
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -196,6 +198,7 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func serve() {
+	http.Handle("/api/v1/version", httputil.VersionHandler(app.Version))
 	http.HandleFunc("/", IndexHandler)
 	http.Handle("/dev/",
 		http.StripPrefix("/dev/",
