@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/blankon/irgsh-go/internal/chief/domain"
+	"github.com/blankon/irgsh-go/internal/monitoring"
 	"github.com/blankon/irgsh-go/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,6 +136,68 @@ func TestCancelService_UnknownJob(t *testing.T) {
 	_, err := svc.CancelJob("2026-09-10-134726_46ef4607-d39e_ABCDEF_nano")
 	require.Error(t, err)
 	assert.Equal(t, http.StatusNotFound, statusCodeOf(t, err))
+}
+
+// Machinery expires task states, so a job whose worker died is unknown to the
+// queue while the store - and so the dashboard - still has it running.
+func TestCancelService_UntrackedJobStillRunningInStore(t *testing.T) {
+	const importUUID = "2026-09-10-134726_46ef4607-d39e_import"
+	const isoUUID = "2026-09-10-134726_46ef4607-d39e_iso"
+	const pkgUUID = "2026-09-10-134726_46ef4607-d39e_ABCDEF_nano"
+
+	signal := &mockCancelSignal{}
+	importStore := &mockImportJobStore{stored: map[string]string{importUUID: "STARTED"}}
+	isoStore := &mockISOJobStore{stored: map[string]string{isoUUID: "PENDING"}}
+	var persisted string
+	jobStore := &mockJobStore{
+		getJobFn: func(string) (*monitoring.JobInfo, error) {
+			return &monitoring.JobInfo{State: "BUILDING"}, nil
+		},
+		updateJobStateFn: func(_, state string) error {
+			persisted = state
+			return nil
+		},
+	}
+	svc := NewCancelService(&mockTaskQueue{}, signal, jobStore, isoStore, importStore)
+
+	for _, uuid := range []string{importUUID, isoUUID, pkgUUID} {
+		resp, err := svc.CancelJob(uuid)
+		require.NoError(t, err, uuid)
+		assert.Equal(t, domain.StateCanceled, resp.State)
+		// The task may still be sitting in the queue.
+		assert.True(t, signal.requested[uuid], uuid)
+	}
+	assert.Equal(t, domain.StateCanceled, importStore.updatedStates[importUUID])
+	assert.Equal(t, domain.StateCanceled, isoStore.updatedStates[isoUUID])
+	assert.Equal(t, domain.StateCanceled, persisted)
+}
+
+func TestCancelService_UntrackedJobFinishedInStore(t *testing.T) {
+	const uuid = "2026-09-10-134726_46ef4607-d39e_import"
+	signal := &mockCancelSignal{}
+	store := &mockImportJobStore{stored: map[string]string{uuid: "SUCCESS"}}
+	svc := NewCancelService(&mockTaskQueue{}, signal, nil, nil, store)
+
+	_, err := svc.CancelJob(uuid)
+	require.Error(t, err)
+	assert.Equal(t, http.StatusConflict, statusCodeOf(t, err))
+	assert.Empty(t, signal.requested)
+	assert.Empty(t, store.updatedStates)
+}
+
+// The mark can be set without going through chief, leaving the stored state
+// behind; cancelling again has to bring it along.
+func TestCancelService_AlreadyMarkedStillPersists(t *testing.T) {
+	const uuid = "2026-09-10-134726_46ef4607-d39e_import"
+	tq := &mockTaskQueue{getTaskStateFn: func(string, string) string { return "STARTED" }}
+	signal := &mockCancelSignal{requested: map[string]bool{uuid: true}}
+	store := &mockImportJobStore{}
+	svc := NewCancelService(tq, signal, nil, nil, store)
+
+	resp, err := svc.CancelJob(uuid)
+	require.NoError(t, err)
+	assert.Equal(t, domain.StateCanceled, resp.State)
+	assert.Equal(t, domain.StateCanceled, store.updatedStates[uuid])
 }
 
 func TestCancelService_InvalidID(t *testing.T) {

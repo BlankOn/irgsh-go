@@ -68,6 +68,7 @@ type JobStore interface {
 type ISOJobStore interface {
 	RecordISOJob(job monitoring.ISOJobInfo) error
 	GetRecentISOJobs(limit int) ([]*monitoring.ISOJobInfo, error)
+	GetISOJob(taskUUID string) (*monitoring.ISOJobInfo, error)
 	UpdateISOJobState(taskUUID string, state string) error
 }
 
@@ -75,6 +76,7 @@ type ISOJobStore interface {
 type ImportJobStore interface {
 	RecordImportJob(job monitoring.ImportJobInfo) error
 	GetRecentImportJobs(limit int) ([]*monitoring.ImportJobInfo, error)
+	GetImportJob(taskUUID string) (*monitoring.ImportJobInfo, error)
 	UpdateImportJobState(taskUUID string, state string) error
 }
 

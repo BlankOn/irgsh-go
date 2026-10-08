@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +17,17 @@ import (
 type mockImportJobStore struct {
 	recorded      []monitoring.ImportJobInfo
 	recent        []*monitoring.ImportJobInfo
+	stored        map[string]string
 	updatedStates map[string]string
 	err           error
+}
+
+func (m *mockImportJobStore) GetImportJob(taskUUID string) (*monitoring.ImportJobInfo, error) {
+	state, ok := m.stored[taskUUID]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return &monitoring.ImportJobInfo{TaskUUID: taskUUID, State: state}, nil
 }
 
 func (m *mockImportJobStore) RecordImportJob(job monitoring.ImportJobInfo) error {
