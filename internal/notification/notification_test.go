@@ -22,7 +22,7 @@ func captureNotification(t *testing.T, jobType, status string, jobInfo JobNotifi
 	}))
 	defer srv.Close()
 
-	SendJobNotification(srv.URL, jobType, "task-uuid", status, jobInfo)
+	SendJobNotification(srv.URL, "https://irgsh.example/irgsh", jobType, "task-uuid", status, jobInfo)
 	return got.Message
 }
 
@@ -80,5 +80,17 @@ func TestJobNotificationDistOnly(t *testing.T) {
 
 	if !strings.Contains(msg, "[verbeek]") {
 		t.Errorf("unexpected message: %s", msg)
+	}
+}
+
+func TestFailedJobNotificationLinksLogUnderBaseURL(t *testing.T) {
+	msg := captureNotification(t, "Build", "FAILED", JobNotificationInfo{
+		PackageName:    "blankres",
+		PackageVersion: "0.2.4",
+	})
+
+	want := "https://irgsh.example/irgsh/logs/task-uuid.build.log"
+	if !strings.HasSuffix(msg, want) {
+		t.Errorf("message does not end with %s: %s", want, msg)
 	}
 }

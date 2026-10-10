@@ -75,6 +75,7 @@ func describeArtifactDir(artifactDir string, taskUUID string) string {
 func sendRepoNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
 	notification.SendJobNotification(
 		irgshConfig.Notification.WebhookURL,
+		irgshConfig.FullBaseURL,
 		"Repo",
 		taskUUID,
 		status,

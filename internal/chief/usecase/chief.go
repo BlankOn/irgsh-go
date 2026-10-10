@@ -36,7 +36,7 @@ func NewChiefUsecase(
 ) (*ChiefUsecase, error) {
 	maintainerSvc := NewMaintainerService(gpg)
 	cancelSvc := newCancelSvc(taskQueue, cancelSignal, registry)
-	dashSvc, err := newDashboardSvc(version, taskQueue, maintainerSvc, registry)
+	dashSvc, err := newDashboardSvc(version, cfg.Chief.BaseURL, taskQueue, maintainerSvc, registry)
 	if err != nil {
 		return nil, fmt.Errorf("init dashboard service: %w", err)
 	}
@@ -84,7 +84,7 @@ func newCancelSvc(tq TaskQueue, signal CancelSignal, reg *monitoring.Registry) *
 	return NewCancelService(tq, signal, js, is, imp)
 }
 
-func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
+func newDashboardSvc(version string, baseURL string, tq TaskQueue, ms *MaintainerService, reg *monitoring.Registry) (*DashboardService, error) {
 	var ir InstanceRegistry
 	var js JobStore
 	var is ISOJobStore
@@ -95,7 +95,7 @@ func newDashboardSvc(version string, tq TaskQueue, ms *MaintainerService, reg *m
 		is = reg
 		imp = reg
 	}
-	return NewDashboardService(version, tq, ms, ir, js, is, imp)
+	return NewDashboardService(version, baseURL, tq, ms, ir, js, is, imp)
 }
 
 // GetVersion returns the version string for use by handlers.

@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	validator "gopkg.in/go-playground/validator.v9"
 )
+
+var baseURLRegex = regexp.MustCompile(`^/[A-Za-z0-9_\-/]*$`)
 
 type IrgshConfig struct {
 	Redis        string             `json:"redis" validate:"required"`
@@ -21,12 +24,15 @@ type IrgshConfig struct {
 	Storage      StorageConfig      `json:"storage"`
 	IsTest       bool               `json:"is_test"`
 	IsDev        bool               `json:"is_dev"`
+	FullBaseURL  string             `json:"-"`
 }
 
 type ChiefConfig struct {
-	Address  string `json:"address" validate:"required"`
-	Workdir  string `json:"workdir" validate:"required"`
-	GnupgDir string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
+	Address   string `json:"address" validate:"required"`
+	BaseURL   string `json:"base_url" validate:"baseurl"`
+	PublicURL string `json:"public_url"`
+	Workdir   string `json:"workdir" validate:"required"`
+	GnupgDir  string `json:"gnupg_dir" validate:"required"` // GNUPG dir path
 }
 
 type BuilderConfig struct {
@@ -244,6 +250,35 @@ func applyDefaults(cfg *IrgshConfig, component Component) error {
 		cfg.Monitoring.CleanupInterval = 3600
 	}
 
+	normalizeChiefConfig(&cfg.Chief)
+	cfg.FullBaseURL = computeFullBaseURL(&cfg.Chief)
+
 	validate := validator.New()
+	if err := validate.RegisterValidation("baseurl", func(fl validator.FieldLevel) bool {
+		return fl.Field().String() == "" || baseURLRegex.MatchString(fl.Field().String())
+	}); err != nil {
+		return err
+	}
+	if err := validate.Var(cfg.Chief.BaseURL, "baseurl"); err != nil {
+		return fmt.Errorf("invalid chief base_url %q: %w", cfg.Chief.BaseURL, err)
+	}
 	return validate.StructPartial(cfg, "Redis", string(component))
+}
+
+func normalizeChiefConfig(cfg *ChiefConfig) {
+	cfg.Address = strings.TrimSuffix(cfg.Address, "/")
+	cfg.PublicURL = strings.TrimSuffix(cfg.PublicURL, "/")
+
+	b := strings.TrimSuffix(cfg.BaseURL, "/")
+	if b != "" && !strings.HasPrefix(b, "/") {
+		b = "/" + b
+	}
+	cfg.BaseURL = b
+}
+
+func computeFullBaseURL(cfg *ChiefConfig) string {
+	if cfg.PublicURL != "" {
+		return cfg.PublicURL
+	}
+	return cfg.Address + cfg.BaseURL
 }
