@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -137,6 +138,7 @@ func (u *CLIUsecase) resolveImport(sandbox *importSandbox, targets *targetView, 
 	}
 
 	plan := &importPlan{Set: set}
+	probes := append([]string{}, names...)
 	for round := 0; round < maxResolveRounds; round++ {
 		if err := sandbox.allow(set.binaries()); err != nil {
 			return nil, err
@@ -144,15 +146,19 @@ func (u *CLIUsecase) resolveImport(sandbox *importSandbox, targets *targetView, 
 
 		var failures []string
 		var missing []unmetDependency
-		for _, name := range names {
+		resolved := true
+		for i, name := range probes {
 			out, ok := sandbox.installable(name)
 			if ok {
 				continue
 			}
+			if i < len(names) {
+				resolved = false
+			}
 			failures = append(failures, out)
 			missing = append(missing, parseUnmetDependencies(out)...)
 		}
-		if len(failures) == 0 {
+		if resolved {
 			plan.Blockers = nil
 			plan.Output = ""
 			return plan, nil
@@ -164,9 +170,16 @@ func (u *CLIUsecase) resolveImport(sandbox *importSandbox, targets *targetView, 
 		var added bool
 		for _, dep := range missing {
 			if set.hasBinary(dep.Package) {
+				if !slices.Contains(probes, dep.Package) {
+					probes = append(probes, dep.Package)
+					added = true
+				}
 				continue
 			}
 			if version, present := targets.version(dep.Package); present {
+				if u.satisfies(version, dep.Constraint) {
+					continue
+				}
 				plan.Blockers = append(plan.Blockers, blocker{
 					Package:       dep.Package,
 					Needed:        dep.Constraint,
@@ -198,6 +211,18 @@ func (u *CLIUsecase) resolveImport(sandbox *importSandbox, targets *targetView, 
 	}
 
 	return plan, nil
+}
+
+func (u *CLIUsecase) satisfies(version, constraint string) bool {
+	if constraint == "" {
+		return true
+	}
+	fields := strings.Fields(constraint)
+	if len(fields) != 2 {
+		return false
+	}
+	return u.shell.Run(fmt.Sprintf("dpkg --compare-versions %s %s %s",
+		sq(version), sq(fields[0]), sq(fields[1]))) == nil
 }
 
 // hasBinary reports whether a binary package is already part of the import.

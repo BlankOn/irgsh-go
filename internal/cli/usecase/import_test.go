@@ -317,6 +317,9 @@ type scriptedShell struct {
 	// targetPackages are the versions the target repository carries, keyed by
 	// binary name.
 	targetPackages map[string]string
+	// satisfied lists the "version op constraint" comparisons that hold;
+	// any other dpkg --compare-versions fails.
+	satisfied map[string]bool
 	// simulateSeq answers the installability test per package, one entry per
 	// round, so a test can describe a set that only resolves once more has
 	// been added to it. An exhausted entry means the package installs.
@@ -396,6 +399,13 @@ func (s *scriptedShell) result(cmd string) shellResult {
 			s.simulateSeq[name] = queued[1:]
 			return queued[0]
 		}
+	}
+	if strings.Contains(cmd, "dpkg --compare-versions") {
+		args := strings.ReplaceAll(strings.TrimPrefix(cmd, "dpkg --compare-versions "), "'", "")
+		if s.satisfied[args] {
+			return shellResult{}
+		}
+		return shellResult{err: errors.New("exit status 1")}
 	}
 	// Explicit scripting wins over the repository descriptions.
 	for key, result := range s.outputs {
