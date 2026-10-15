@@ -257,3 +257,121 @@ func TestImportCheck_DoesNotReadTheMachinesOwnSources(t *testing.T) {
 		assert.NotContains(t, line, "/etc/apt", "the sandbox must be self-contained")
 	}
 }
+
+// apt 3's solver lists every dependency of a package it cannot install, the
+// ones the target already satisfies included. Once shadow joins the import,
+// podman still fails because libsubid6 itself does not install; that has to
+// be reported, not conmon and the other dependencies the target satisfies.
+func TestImportCheck_Apt3ReportFindsTheDependencyThatIsReallyUnmet(t *testing.T) {
+	firstRound := `Unsatisfied dependencies:
+ podman : Depends: conmon but it is not going to be installed
+          Depends: crun but it is not going to be installed or
+                   runc but it is not going to be installed
+          Depends: golang-github-containers-common (>= 0.60) but it is not going to be installed
+          Depends: libsubid6 (>= 1:4.20.2) but it is not installable
+Error: Unable to satisfy dependencies. Reached two conflicting assignments:
+   1. podman:amd64=5.8.6+ds1-3 is selected for install
+   2. podman:amd64 Depends libsubid6 (>= 1:4.20.2)`
+	laterRounds := strings.Replace(firstRound,
+		"libsubid6 (>= 1:4.20.2) but it is not installable",
+		"libsubid6 (>= 1:4.20.2) but it is not going to be installed", 1)
+	libsubid := `Unsatisfied dependencies:
+ libsubid6 : Depends: libc6 (>= 2.42) but it is not going to be installed`
+
+	failing := errors.New("exit status 100")
+	shell := &scriptedShell{
+		srcPackages: map[string]scriptedSource{
+			"libpod": {version: "5.8.6+ds1-3", binaries: []string{"podman"}},
+			"shadow": {version: "1:4.20.2-1", binaries: []string{"libsubid6", "passwd", "uidmap"}},
+		},
+		simulateSeq: map[string][]shellResult{
+			"podman": {
+				{out: firstRound, err: failing},
+				{out: laterRounds, err: failing},
+				{out: laterRounds, err: failing},
+			},
+			"libsubid6": {{out: libsubid, err: failing}},
+		},
+		targetPackages: map[string]string{
+			"conmon":                          "2.1.13+ds1-2",
+			"crun":                            "1.21-1",
+			"golang-github-containers-common": "0.67.1-2",
+			"libc6":                           "2.41-1",
+		},
+		satisfied: map[string]bool{"0.67.1-2 >= 0.60": true},
+	}
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}, repoInfo: publishedTarget()}
+
+	params := strongswanParams()
+	params.PackageNames = []string{"podman"}
+	params.AssumeYes = true
+
+	_, err := newResolvingUsecase(t, chief, shell, &mockPrompter{}).SubmitImport(context.Background(), params)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "libc6 (>= 2.42)\n      needed by libsubid6; the target repository has 2.41-1")
+	for _, satisfied := range []string{"conmon", "crun", "golang-github-containers-common"} {
+		assert.NotContains(t, err.Error(), "  "+satisfied+"\n      needed by")
+		assert.NotContains(t, err.Error(), "  "+satisfied+" (>= 0.60)\n      needed by")
+	}
+	assert.Empty(t, chief.importSubmitted.PackageNames)
+}
+
+// When the only unmet dependency is one the target lacks, it is imported and
+// the dependencies the target already satisfies are left alone.
+func TestImportCheck_Apt3ReportOnlyPullsWhatIsMissing(t *testing.T) {
+	unmet := `Unsatisfied dependencies:
+ podman : Depends: conmon but it is not going to be installed
+          Depends: libsubid6 (>= 1:4.20.2) but it is not installable`
+
+	shell := &scriptedShell{
+		srcPackages: map[string]scriptedSource{
+			"libpod": {version: "5.8.6+ds1-3", binaries: []string{"podman"}},
+			"shadow": {version: "1:4.20.2-1", binaries: []string{"libsubid6", "passwd", "uidmap"}},
+		},
+		simulateSeq: map[string][]shellResult{
+			"podman": {{out: unmet, err: errors.New("exit status 100")}},
+		},
+		targetPackages: map[string]string{"conmon": "2.1.13+ds1-2"},
+	}
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}, repoInfo: publishedTarget()}
+
+	params := strongswanParams()
+	params.PackageNames = []string{"podman"}
+	params.AssumeYes = true
+
+	_, err := newResolvingUsecase(t, chief, shell, &mockPrompter{}).SubmitImport(context.Background(), params)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"podman", "libsubid6"}, chief.importSubmitted.PackageNames)
+}
+
+// A dependency the target has, satisfied, is not the culprit; but when nothing
+// else explains the failure, apt's report still blocks the import.
+func TestImportCheck_SatisfiedDependenciesStillFailWhenNothingIsMissing(t *testing.T) {
+	unmet := `Unsatisfied dependencies:
+ podman : Depends: conmon but it is not going to be installed`
+
+	shell := &scriptedShell{
+		srcPackages: map[string]scriptedSource{
+			"libpod": {version: "5.8.6+ds1-3", binaries: []string{"podman"}},
+		},
+		simulateSeq: map[string][]shellResult{
+			"podman": {
+				{out: unmet, err: errors.New("exit status 100")},
+				{out: unmet, err: errors.New("exit status 100")},
+			},
+		},
+		targetPackages: map[string]string{"conmon": "2.1.13+ds1-2"},
+	}
+	chief := &mockChiefAPI{importResp: domain.SubmitResponse{PipelineID: "id"}, repoInfo: publishedTarget()}
+
+	params := strongswanParams()
+	params.PackageNames = []string{"podman"}
+
+	_, err := newResolvingUsecase(t, chief, shell, &mockPrompter{confirmed: true}).
+		SubmitImport(context.Background(), params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "conmon")
+	assert.NotContains(t, err.Error(), "Importing it would replace")
+	assert.Empty(t, chief.importSubmitted.PackageNames)
+}
