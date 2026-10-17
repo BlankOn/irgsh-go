@@ -151,6 +151,7 @@ type LogViewerData struct {
 
 func NewDashboardService(
 	version string,
+	baseURL string,
 	taskQueue TaskQueue,
 	maintainerSvc *MaintainerService,
 	registry InstanceRegistry,
@@ -158,11 +159,16 @@ func NewDashboardService(
 	isoStore ISOJobStore,
 	importStore ImportJobStore,
 ) (*DashboardService, error) {
-	tmpl, err := template.New("dashboard").Parse(dashboardTmplStr)
+	funcs := template.FuncMap{
+		"baseurl": func(p string) string {
+			return baseURL + p
+		},
+	}
+	tmpl, err := template.New("dashboard").Funcs(funcs).Parse(dashboardTmplStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse dashboard template: %w", err)
 	}
-	logViewerTmpl, err := template.New("logviewer").Parse(logViewerTmplStr)
+	logViewerTmpl, err := template.New("logviewer").Funcs(funcs).Parse(logViewerTmplStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse log viewer template: %w", err)
 	}

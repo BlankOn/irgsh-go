@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.LogType}} log &mdash; {{.TaskUUID}}</title>
-    <link rel="icon" href="/favicon.ico">
+    <link rel="icon" href="{{baseurl "/favicon.ico"}}">
     <style>
         body {
             margin: 0;
@@ -65,8 +65,8 @@
     <span class="uuid">{{.TaskUUID}}</span>
     <span id="status" class="status">connecting&hellip;</span>
     <label><input type="checkbox" id="follow" checked> Follow</label>
-    <a href="/logs/{{.TaskUUID}}.{{.LogType}}.log" target="_blank">raw</a>
-    <a href="/">dashboard</a>
+    <a href="{{baseurl "/logs/"}}{{.TaskUUID}}.{{.LogType}}.log" target="_blank">raw</a>
+    <a href="{{baseurl "/"}}">dashboard</a>
 </header>
 <pre id="log"><span class="empty">Waiting for output&hellip;</span></pre>
 <script>
@@ -92,7 +92,7 @@
         }
     }
 
-    var url = '/api/v1/log-stream?id=' + encodeURIComponent({{.TaskUUID}}) +
+    var url = {{baseurl "/api/v1/log-stream"}} + '?id=' + encodeURIComponent({{.TaskUUID}}) +
               '&type=' + encodeURIComponent({{.LogType}});
     var source = new EventSource(url);
 

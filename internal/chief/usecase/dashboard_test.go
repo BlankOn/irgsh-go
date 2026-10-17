@@ -298,7 +298,7 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	}
 	maintainerSvc := NewMaintainerService(gpg)
 
-	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, maintainerSvc, nil, nil, nil, nil)
+	ds, err := NewDashboardService("1.0.0", "/irgsh", &mockTaskQueue{}, maintainerSvc, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -308,7 +308,8 @@ func TestDashboardService_RenderIndexHTML(t *testing.T) {
 	// The shared BlankOn top bar renders even with no jobs, and points at the
 	// logo route chief serves out of the binary.
 	assert.Contains(t, buf.String(), `id="nd-nav"`)
-	assert.Contains(t, buf.String(), `src="/assets/logo.png?version=2"`)
+	assert.Contains(t, buf.String(), `src="/irgsh/assets/logo.png?version=2"`)
+	assert.Contains(t, buf.String(), `href="/irgsh/favicon.ico"`)
 }
 
 func TestDashboardService_LogoPNG(t *testing.T) {
@@ -317,7 +318,7 @@ func TestDashboardService_LogoPNG(t *testing.T) {
 			return "", nil
 		},
 	}
-	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	ds, err := NewDashboardService("1.0.0", "", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	logo := ds.LogoPNG()
@@ -335,7 +336,7 @@ func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
 			return "", nil
 		},
 	}
-	ds, err := NewDashboardService("1.0.0", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	ds, err := NewDashboardService("1.0.0", "", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -345,8 +346,28 @@ func TestDashboardService_RenderLogViewerHTML(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "2026-09-02-143346_abc_base-files")
 	// The page must stream from the API and offer the uploaded file as "raw".
-	assert.Contains(t, out, "/api/v1/log-stream?id=")
+	assert.Contains(t, out, `"/api/v1/log-stream"`)
 	assert.Contains(t, out, "/logs/2026-09-02-143346_abc_base-files.repo.log")
+}
+
+func TestDashboardService_RenderLogViewerHTML_BaseURL(t *testing.T) {
+	gpg := &mockGPGVerifier{
+		listKeysWithColonsFn: func() (string, error) {
+			return "", nil
+		},
+	}
+	ds, err := NewDashboardService("1.0.0", "/irgsh", &mockTaskQueue{}, NewMaintainerService(gpg), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = ds.RenderLogViewerHTML(&buf, "2026-09-02-143346_abc_base-files", "repo")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, `"/irgsh/api/v1/log-stream"`)
+	assert.Contains(t, out, `href="/irgsh/logs/2026-09-02-143346_abc_base-files.repo.log"`)
+	assert.Contains(t, out, `href="/irgsh/"`)
+	assert.NotContains(t, out, `href="/logs/`)
 }
 
 func TestDashboardService_BuildJobViews_NilJobStore(t *testing.T) {

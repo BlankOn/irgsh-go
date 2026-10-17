@@ -201,6 +201,12 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	submissionFs := http.FileServer(http.Dir(cfg.Chief.Workdir + "/submissions"))
 	mux.Handle("/submissions/", http.StripPrefix("/submissions/", submissionFs))
 
+	rootMux := http.NewServeMux()
+	if cfg.Chief.BaseURL != "" {
+		rootMux.Handle(cfg.Chief.BaseURL+"/", http.StripPrefix(cfg.Chief.BaseURL, mux))
+	}
+	rootMux.Handle("/", mux)
+
 	// No ReadTimeout: it is a deadline on the whole request, body included,
 	// and submission-upload streams tarballs of tens or hundreds of MB. A
 	// maintainer on a slow link would have the read deadline fire mid-body,
@@ -208,7 +214,7 @@ func setupRoutes(cfg config.IrgshConfig, artifactEP *artifactEndpoint.ArtifactHT
 	// a timeout. ReadHeaderTimeout still caps a client that stalls before
 	// sending its headers.
 	return &http.Server{
-		Handler:           mux,
+		Handler:           rootMux,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       90 * time.Second,
 	}
