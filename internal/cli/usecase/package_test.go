@@ -123,16 +123,36 @@ func TestSubmitPackage_InvalidSourceURL(t *testing.T) {
 	assert.Contains(t, err.Error(), "--source must be a valid")
 }
 
-func TestSubmitPackage_UserCancelled(t *testing.T) {
+func TestSubmitPackage_IgnoreChecksRequiresExperimental(t *testing.T) {
+	// The rejection must happen before chief is contacted or the user is
+	// prompted, so mocks that would fail either step stay unused.
 	svc := usecase.NewCLIUsecase(
 		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
-		nil, nil, nil, nil, nil, nil, nil, nil,
-		&mockPrompter{confirmed: false},
+		nil,
+		&mockChiefAPI{versionErr: errors.New("connection refused")},
+		nil, nil, nil, nil, nil, nil,
+		&mockPrompter{err: errors.New("prompted")},
 		"",
 	)
 	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
 		Dist:           "verbeek",
 		IgnoreChecks:   true,
+		IsExperimental: false,
+		PackageURL:     "https://git.example.com/pkg",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--ignore-checks can only be used together with --experimental")
+}
+
+func TestSubmitPackage_UserCancelled(t *testing.T) {
+	svc := usecase.NewCLIUsecase(
+		&mockConfigStore{config: domain.Config{ChiefAddress: "http://chief", MaintainerSigningKey: "KEY"}},
+		nil, &mockChiefAPI{}, nil, nil, nil, nil, nil, nil,
+		&mockPrompter{confirmed: false},
+		"",
+	)
+	_, err := svc.SubmitPackage(context.Background(), domain.SubmitParams{
+		Dist:           "verbeek",
 		PackageURL:     "https://git.example.com/pkg",
 		IsExperimental: false,
 	})
