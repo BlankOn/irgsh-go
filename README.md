@@ -135,6 +135,14 @@ irgsh-cli package log 2019-04-01-174135_1ddbb9fe-0517-4cb0-9096-640f17532cf9
 
 Running `irgsh-cli package status` and `irgsh-cli package log` without argument will reference the latest submitted package build pipeline ID.
 
+A submission that is interrupted or fails can leave its working files in `~/.irgsh/tmp`. Remove them with:
+
+```
+irgsh-cli prune
+```
+
+Do not run it while another package submission is in progress.
+
 #### ISO Build
 
 Submit an ISO build job. The live-build repository is the ISO worker's own

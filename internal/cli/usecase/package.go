@@ -92,11 +92,10 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 	}
 
 	tmpID := uuid.New().String()
-	homeDir, err := os.UserHomeDir()
+	tmpBase, err := tmpBaseDir()
 	if err != nil {
 		return domain.SubmitResponse{}, err
 	}
-	tmpBase := filepath.Join(homeDir, ".irgsh", "tmp")
 	tmpDir := filepath.Join(tmpBase, tmpID)
 	defer os.RemoveAll(tmpDir)
 	defer os.Remove(filepath.Join(tmpBase, tmpID+".tar.gz"))
