@@ -234,6 +234,17 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		}
 	}
 
+	if !params.IgnoreChecks {
+		if err := checkChangelogSourceName(changelogPath, packageName); err != nil {
+			return domain.SubmitResponse{}, err
+		}
+		if downloadableTarballURL != "" {
+			if err := checkTarballVersion(downloadableTarballURL, packageVersion); err != nil {
+				return domain.SubmitResponse{}, err
+			}
+		}
+	}
+
 	// Determine package name with version
 	packageNameVersion := packageName + "-" + packageVersion
 	if packageExtendedVersion != "" {
