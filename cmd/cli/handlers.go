@@ -23,6 +23,7 @@ type CLIService interface {
 	ImportLog(ctx context.Context, pipelineID string) (string, error)
 	RetryPipeline(ctx context.Context, pipelineID string) (domain.RetryResponse, error)
 	CancelPipeline(ctx context.Context, pipelineID string) (domain.CancelResponse, error)
+	PruneTmp() (domain.PruneResult, error)
 	UpdateCLI(ctx context.Context) error
 }
 
@@ -228,6 +229,12 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 			},
 		},
 		{
+			Name: "prune",
+			Usage: "Remove leftover working files from ~/.irgsh/tmp. " +
+				"Do not run it while a package submission is in progress",
+			Action: pruneAction(svc),
+		},
+		{
 			Name:   "update",
 			Usage:  "Update the irgsh-cli tool",
 			Action: updateAction(ctx, svc),
@@ -248,6 +255,14 @@ func configAction(svc CLIService) cli.ActionFunc {
 		}
 		fmt.Println("irgsh-cli is successfully configured. Happy hacking!")
 		return nil
+	}
+}
+
+func pruneAction(svc CLIService) cli.ActionFunc {
+	return func(c *cli.Context) error {
+		result, err := svc.PruneTmp()
+		fmt.Printf("Removed %d item(s), freed %.1f MiB\n", result.Removed, float64(result.Bytes)/(1<<20))
+		return err
 	}
 }
 
