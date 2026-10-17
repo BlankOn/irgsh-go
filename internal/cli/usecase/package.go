@@ -68,6 +68,10 @@ func (u *CLIUsecase) SubmitPackage(ctx context.Context, params domain.SubmitPara
 		return domain.SubmitResponse{}, errors.New("--package must be a valid http or https URL")
 	}
 
+	if params.IgnoreChecks && !params.IsExperimental {
+		return domain.SubmitResponse{}, errors.New("--ignore-checks can only be used together with --experimental")
+	}
+
 	// Validate chief connectivity (unless ignoring checks)
 	if !params.IgnoreChecks {
 		versionResp, err := u.chief.GetVersion(ctx)

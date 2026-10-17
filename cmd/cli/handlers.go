@@ -84,7 +84,7 @@ func buildApp(ctx context.Context, svc CLIService, version string) *cli.App {
 				},
 				cli.BoolFlag{
 					Name:  "ignore-checks",
-					Usage: "Ignore all validation check and restriction",
+					Usage: "Ignore all validation check and restriction (requires --experimental)",
 				},
 				cli.BoolFlag{
 					Name:  "force-version",
