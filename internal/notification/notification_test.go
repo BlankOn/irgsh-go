@@ -82,3 +82,21 @@ func TestJobNotificationDistOnly(t *testing.T) {
 		t.Errorf("unexpected message: %s", msg)
 	}
 }
+
+func TestJobNotificationImport(t *testing.T) {
+	msg := captureNotification(t, "Import", "FAILED", JobNotificationInfo{
+		PackageName: "podman",
+		Maintainer:  "Herpiko Dwi Aguno <herpiko@gmail.com>",
+		Dist:        "sinambung",
+		Component:   "main",
+		SourceURL:   "https://kartolo.sby.datautama.net.id/debian/",
+	})
+
+	want := "📦 irgsh-repo: import podman_ [sinambung/main] by Herpiko Dwi Aguno <herpiko@gmail.com>, "
+	if !strings.HasPrefix(msg, want) {
+		t.Errorf("message = %q, want prefix %q", msg, want)
+	}
+	if !strings.HasSuffix(msg, "\n"+LogBaseURL+"/logs/task-uuid.import.log") {
+		t.Errorf("failure should link the import log: %s", msg)
+	}
+}

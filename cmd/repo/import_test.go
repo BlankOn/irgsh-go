@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blankon/irgsh-go/internal/chief/domain"
 )
 
 func TestCollectKeyrings_FindsKeyringsInEveryDirectory(t *testing.T) {
@@ -210,6 +212,25 @@ func TestImportSubmission_NormalizeLegacyPayload(t *testing.T) {
 	}
 	if submission.SourceDist != "sid" {
 		t.Errorf("sourceDist = %q, want the suite imported from", submission.SourceDist)
+	}
+}
+
+func TestImportSubmission_CarriesTheImporterFromChief(t *testing.T) {
+	payload, err := json.Marshal(domain.ImportSubmission{
+		PackageNames: []string{"podman"},
+		Maintainer:   "Herpiko Dwi Aguno <herpiko@gmail.com>",
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var submission importSubmission
+	if err := json.Unmarshal(payload, &submission); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if submission.Maintainer != "Herpiko Dwi Aguno <herpiko@gmail.com>" {
+		t.Errorf("maintainer = %q, want the importer chief sent", submission.Maintainer)
 	}
 }
 

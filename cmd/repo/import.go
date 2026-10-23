@@ -40,6 +40,7 @@ type importSubmission struct {
 	// KeyringPath is an optional keyring on the worker to verify the source
 	// repository against, for a repo whose key is not installed system wide.
 	KeyringPath string `json:"keyringPath"`
+	Maintainer  string `json:"maintainer"`
 	// DryRun fetches and checks the packages without injecting them.
 	DryRun bool `json:"dryRun"`
 	// IgnoreDependencies imports even when the dependency check fails.
@@ -91,6 +92,7 @@ func Import(payload string) (err error) {
 	// still reports itself rather than failing silently.
 	jobInfo := notification.JobNotificationInfo{
 		PackageName:    strings.Join(submission.PackageNames, " "),
+		Maintainer:     submission.Maintainer,
 		Dist:           irgshConfig.Repo.DistCodename,
 		Component:      submission.Component,
 		IsExperimental: submission.IsExperimental,
@@ -110,11 +112,11 @@ func Import(payload string) (err error) {
 	defer func() {
 		switch {
 		case canceled:
-			sendRepoNotification(taskUUID, "CANCELED", jobInfo)
+			sendImportNotification(taskUUID, "CANCELED", jobInfo)
 		case err != nil:
-			sendRepoNotification(taskUUID, "FAILED", jobInfo)
+			sendImportNotification(taskUUID, "FAILED", jobInfo)
 		default:
-			sendRepoNotification(taskUUID, "SUCCESS", jobInfo)
+			sendImportNotification(taskUUID, "SUCCESS", jobInfo)
 		}
 	}()
 
@@ -243,6 +245,10 @@ func Import(payload string) (err error) {
 	systemutil.WriteLog(logPath, "[ IMPORT DONE ]")
 	uploadImportLog(logPath, taskUUID)
 	return nil
+}
+
+func sendImportNotification(taskUUID, status string, jobInfo notification.JobNotificationInfo) {
+	notification.SendJobNotification(irgshConfig.Notification.WebhookURL, "Import", taskUUID, status, jobInfo)
 }
 
 func experimentalSuffix(isExperimental bool) string {
