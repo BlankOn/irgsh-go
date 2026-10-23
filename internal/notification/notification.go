@@ -178,6 +178,8 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 		componentPrefix = "📦 irgsh-builder: "
 	case "Repo":
 		componentPrefix = "📦 irgsh-repo: "
+	case "Import":
+		componentPrefix = "📦 irgsh-repo: import "
 	default:
 		componentPrefix = "📦 "
 	}
@@ -205,6 +207,8 @@ func SendJobNotification(webhookURL, jobType, taskUUID, status string, jobInfo J
 			logType = "build"
 		case "Repo":
 			logType = "repo"
+		case "Import":
+			logType = "import"
 		}
 		if logType != "" {
 			logURL := fmt.Sprintf("%s/logs/%s.%s.log", LogBaseURL, taskUUID, logType)
